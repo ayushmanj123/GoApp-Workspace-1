@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: goapps-platform-config
+  namespace: goapps-platform
+  labels:
+    app.kubernetes.io/part-of: goapps-platform
+data:
+  APP_ENV: production
+  LOG_LEVEL: info
+  # Infrastructure endpoints — override per environment via overlays.
+  DATABASE_URL: postgres://goapps:changeme@postgres:5432/goapps?sslmode=disable
+  REDIS_URL: redis://redis:6379
+  KEYCLOAK_URL: http://keycloak:8080
+  KEYCLOAK_REALM: goapps
+  MINIO_ENDPOINT: minio:9000

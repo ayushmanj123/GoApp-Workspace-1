@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: connector-service
+  namespace: goapps-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: connector-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: connector-service
+    spec:
+      containers:
+        - name: connector-service
+          image: ghcr.io/goapps-platform/connector-service:latest
+          ports:
+            - containerPort: 8084
+              name: http
+          envFrom:
+            - configMapRef:
+                name: goapps-platform-config
+          env:
+            - name: SERVICE_NAME
+              value: connector-service
+            - name: PORT
+              value: "8084"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: publish-service
+  namespace: goapps-platform
+spec:
+  selector:
+    app.kubernetes.io/name: publish-service
+  ports:
+    - port: 8085
+      targetPort: http

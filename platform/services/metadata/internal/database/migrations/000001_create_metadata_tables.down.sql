@@ -1,0 +1,37 @@
+DROP TRIGGER IF EXISTS trg_packages_modified_on ON packages;
+DROP TRIGGER IF EXISTS trg_audit_logs_modified_on ON audit_logs;
+DROP TRIGGER IF EXISTS trg_permissions_modified_on ON permissions;
+DROP TRIGGER IF EXISTS trg_connector_actions_modified_on ON connector_actions;
+DROP TRIGGER IF EXISTS trg_connectors_modified_on ON connectors;
+DROP TRIGGER IF EXISTS trg_collections_modified_on ON collections;
+DROP TRIGGER IF EXISTS trg_variables_modified_on ON variables;
+DROP TRIGGER IF EXISTS trg_events_modified_on ON events;
+DROP TRIGGER IF EXISTS trg_formulas_modified_on ON formulas;
+DROP TRIGGER IF EXISTS trg_control_properties_modified_on ON control_properties;
+DROP TRIGGER IF EXISTS trg_controls_modified_on ON controls;
+DROP TRIGGER IF EXISTS trg_screens_modified_on ON screens;
+DROP TRIGGER IF EXISTS trg_application_versions_modified_on ON application_versions;
+DROP TRIGGER IF EXISTS trg_environments_modified_on ON environments;
+DROP TRIGGER IF EXISTS trg_applications_modified_on ON applications;
+DROP TRIGGER IF EXISTS trg_users_modified_on ON users;
+DROP TRIGGER IF EXISTS trg_tenants_modified_on ON tenants;
+
+DROP TABLE IF EXISTS packages;
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS permissions;
+DROP TABLE IF EXISTS connector_actions;
+DROP TABLE IF EXISTS connectors;
+DROP TABLE IF EXISTS collections;
+DROP TABLE IF EXISTS variables;
+DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS formulas;
+DROP TABLE IF EXISTS control_properties;
+DROP TABLE IF EXISTS controls;
+DROP TABLE IF EXISTS screens;
+DROP TABLE IF EXISTS application_versions;
+DROP TABLE IF EXISTS environments;
+DROP TABLE IF EXISTS applications;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS tenants;
+
+DROP FUNCTION IF EXISTS set_modified_on();

@@ -1,0 +1,11 @@
+# Optional local overrides — copy to docker-compose.override.yml and customize.
+# docker-compose.override.yml is gitignored.
+
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  keycloak:
+    environment:
+      KC_LOG_LEVEL: debug

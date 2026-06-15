@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runtime-service
+  namespace: goapps-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: runtime-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: runtime-service
+    spec:
+      containers:
+        - name: runtime-service
+          image: ghcr.io/goapps-platform/runtime-service:latest
+          ports:
+            - containerPort: 8083
+              name: http
+          envFrom:
+            - configMapRef:
+                name: goapps-platform-config
+          env:
+            - name: SERVICE_NAME
+              value: runtime-service
+            - name: PORT
+              value: "8083"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http

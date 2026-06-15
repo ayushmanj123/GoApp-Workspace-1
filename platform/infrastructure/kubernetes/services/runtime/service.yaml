@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: runtime-service
+  namespace: goapps-platform
+spec:
+  selector:
+    app.kubernetes.io/name: runtime-service
+  ports:
+    - port: 8083
+      targetPort: http

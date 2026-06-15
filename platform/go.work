@@ -1,0 +1,13 @@
+go 1.22
+
+use (
+	./packages/shared/go
+	./services/audit
+	./services/auth
+	./services/connector
+	./services/environment
+	./services/metadata
+	./services/publish
+	./services/runtime
+	./services/search
+)

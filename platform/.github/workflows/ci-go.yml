@@ -1,0 +1,65 @@
+name: CI — Go
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/shared/go/**"
+      - "services/**"
+      - "go.work"
+      - ".github/workflows/ci-go.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/shared/go/**"
+      - "services/**"
+      - "go.work"
+      - ".github/workflows/ci-go.yml"
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: |
+            packages/shared/go/go.sum
+            services/*/go.sum
+
+      - name: Sync workspace
+        run: go work sync
+
+      - name: Download dependencies
+        run: |
+          cd packages/shared/go && go mod download
+          for svc in services/*/; do
+            (cd "$svc" && go mod download)
+          done
+
+      - name: Vet
+        run: |
+          cd packages/shared/go && go vet ./...
+          for svc in services/*/; do
+            (cd "$svc" && go vet ./...)
+          done
+
+      - name: Test
+        run: |
+          cd packages/shared/go && go test ./...
+          for svc in services/*/; do
+            (cd "$svc" && go test ./...)
+          done
+
+      - name: Build services
+        run: |
+          for svc in services/*/; do
+            echo "Building $svc"
+            (cd "$svc" && go build -o /dev/null ./cmd/server)
+          done

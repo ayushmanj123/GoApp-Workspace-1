@@ -1,0 +1,48 @@
+{
+  "realm": "goapps",
+  "enabled": true,
+  "displayName": "GoApps Platform",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "clients": [
+    {
+      "clientId": "goapps-platform",
+      "name": "GoApps Platform Client",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "changeme",
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "http://localhost:5174/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173",
+        "http://localhost:5174"
+      ],
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "protocol": "openid-connect"
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "platform-admin",
+        "description": "Platform administrator role"
+      },
+      {
+        "name": "app-builder",
+        "description": "Low-code app builder role"
+      },
+      {
+        "name": "app-user",
+        "description": "Published app end-user role"
+      }
+    ]
+  }
+}

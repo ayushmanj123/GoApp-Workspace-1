@@ -1,0 +1,29 @@
+{
+  "name": "@goapps/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TypeScript SDK for GoApps Platform API clients",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@goapps/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@goapps/config": "workspace:*",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0"
+  }
+}

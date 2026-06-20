@@ -13,6 +13,14 @@ import (
 // RuntimeService provides read-only runtime packages built from metadata.
 type RuntimeService struct{ store repositories.Store }
 
+type byFieldRepo[T any] interface {
+	ListByField(ctx context.Context, field string, value any, limit int, offset int) ([]T, error)
+}
+
+type byFieldInRepo[T any] interface {
+	ListByFieldIn(ctx context.Context, field string, values any, limit int, offset int) ([]T, error)
+}
+
 func NewRuntimeService(store repositories.Store) *RuntimeService {
 	return &RuntimeService{store: store}
 }
@@ -24,25 +32,33 @@ func (s *RuntimeService) GetApplicationPackage(ctx context.Context, tenantID, ap
 		return nil, nil, nil, nil, nil, fmt.Errorf("load application: %w", err)
 	}
 
-	// bulk load screens, controls, properties, formulas
-	screens, err := sess.Screens().ListByTenant(ctx, tenantID, 0, 0)
+	screens, err := s.loadScreens(ctx, sess, tenantID, appID)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("load screens: %w", err)
+		return nil, nil, nil, nil, nil, err
 	}
 
-	controls, err := sess.Controls().ListByTenant(ctx, tenantID, 0, 0)
-	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("load controls: %w", err)
+	screenIDs := collectScreenIDs(screens)
+	if len(screenIDs) == 0 {
+		return app, screens, nil, nil, nil, nil
 	}
 
-	props, err := sess.ControlProperties().ListByTenant(ctx, tenantID, 0, 0)
+	controls, err := s.loadControls(ctx, sess, tenantID, screenIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("load control properties: %w", err)
+		return nil, nil, nil, nil, nil, err
 	}
 
-	formulas, err := sess.Formulas().ListByTenant(ctx, tenantID, 0, 0)
+	controlIDs := collectControlIDs(controls)
+	if len(controlIDs) == 0 {
+		return app, screens, controls, nil, nil, nil
+	}
+
+	props, err := s.loadProperties(ctx, sess, tenantID, controlIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("load formulas: %w", err)
+		return nil, nil, nil, nil, nil, err
+	}
+	formulas, err := s.loadFormulas(ctx, sess, tenantID, controlIDs)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
 	}
 
 	return app, screens, controls, props, formulas, nil
@@ -54,42 +70,10 @@ func (s *RuntimeService) BuildRuntimePackage(ctx context.Context, tenantID, appI
 	if err != nil {
 		return nil, err
 	}
-	// filter screens for this application
-	var appScreens []models.Screen
-	for _, sc := range screens {
-		if sc.ApplicationID == appID {
-			appScreens = append(appScreens, sc)
-		}
+	pkg, err := assembleRuntimeApplication(app, screens, controls, props, formulas)
+	if err != nil {
+		return nil, err
 	}
-	// filter controls for these screens
-	var appControls []models.Control
-	screenIDs := map[string]struct{}{}
-	for _, sc := range appScreens {
-		screenIDs[sc.ID.String()] = struct{}{}
-	}
-	for _, c := range controls {
-		if _, ok := screenIDs[c.ScreenID.String()]; ok {
-			appControls = append(appControls, c)
-		}
-	}
-	// filter props & formulas for these controls
-	controlIDs := map[string]struct{}{}
-	for _, c := range appControls {
-		controlIDs[c.ID.String()] = struct{}{}
-	}
-	var appProps []models.ControlProperty
-	for _, p := range props {
-		if _, ok := controlIDs[p.ControlID.String()]; ok {
-			appProps = append(appProps, p)
-		}
-	}
-	var appFormulas []models.Formula
-	for _, f := range formulas {
-		if _, ok := controlIDs[f.ControlID.String()]; ok {
-			appFormulas = append(appFormulas, f)
-		}
-	}
-	pkg := assembleRuntimeApplication(app, appScreens, appControls, appProps, appFormulas)
 	return pkg, nil
 }
 
@@ -101,4 +85,116 @@ func (s *RuntimeService) FindScreenOwner(ctx context.Context, tenantID, screenID
 		return uuid.Nil, fmt.Errorf("find screen owner: %w", err)
 	}
 	return scr.ApplicationID, nil
+}
+
+func (s *RuntimeService) loadScreens(ctx context.Context, sess repositories.TenantSession, tenantID, appID uuid.UUID) ([]models.Screen, error) {
+	if repo, ok := any(sess.Screens()).(byFieldRepo[models.Screen]); ok {
+		items, err := repo.ListByField(ctx, "application_id", appID, 0, 0)
+		if err != nil {
+			return nil, fmt.Errorf("load screens: %w", err)
+		}
+		return items, nil
+	}
+	items, err := sess.Screens().ListByTenant(ctx, tenantID, 0, 0)
+	if err != nil {
+		return nil, fmt.Errorf("load screens: %w", err)
+	}
+	var filtered []models.Screen
+	for _, it := range items {
+		if it.ApplicationID == appID {
+			filtered = append(filtered, it)
+		}
+	}
+	return filtered, nil
+}
+
+func (s *RuntimeService) loadControls(ctx context.Context, sess repositories.TenantSession, tenantID uuid.UUID, screenIDs []uuid.UUID) ([]models.Control, error) {
+	if repo, ok := any(sess.Controls()).(byFieldInRepo[models.Control]); ok {
+		items, err := repo.ListByFieldIn(ctx, "screen_id", screenIDs, 0, 0)
+		if err != nil {
+			return nil, fmt.Errorf("load controls: %w", err)
+		}
+		return items, nil
+	}
+	items, err := sess.Controls().ListByTenant(ctx, tenantID, 0, 0)
+	if err != nil {
+		return nil, fmt.Errorf("load controls: %w", err)
+	}
+	screenSet := map[uuid.UUID]struct{}{}
+	for _, id := range screenIDs {
+		screenSet[id] = struct{}{}
+	}
+	var filtered []models.Control
+	for _, it := range items {
+		if _, ok := screenSet[it.ScreenID]; ok {
+			filtered = append(filtered, it)
+		}
+	}
+	return filtered, nil
+}
+
+func (s *RuntimeService) loadProperties(ctx context.Context, sess repositories.TenantSession, tenantID uuid.UUID, controlIDs []uuid.UUID) ([]models.ControlProperty, error) {
+	if repo, ok := any(sess.ControlProperties()).(byFieldInRepo[models.ControlProperty]); ok {
+		items, err := repo.ListByFieldIn(ctx, "control_id", controlIDs, 0, 0)
+		if err != nil {
+			return nil, fmt.Errorf("load control properties: %w", err)
+		}
+		return items, nil
+	}
+	items, err := sess.ControlProperties().ListByTenant(ctx, tenantID, 0, 0)
+	if err != nil {
+		return nil, fmt.Errorf("load control properties: %w", err)
+	}
+	controlSet := map[uuid.UUID]struct{}{}
+	for _, id := range controlIDs {
+		controlSet[id] = struct{}{}
+	}
+	var filtered []models.ControlProperty
+	for _, it := range items {
+		if _, ok := controlSet[it.ControlID]; ok {
+			filtered = append(filtered, it)
+		}
+	}
+	return filtered, nil
+}
+
+func (s *RuntimeService) loadFormulas(ctx context.Context, sess repositories.TenantSession, tenantID uuid.UUID, controlIDs []uuid.UUID) ([]models.Formula, error) {
+	if repo, ok := any(sess.Formulas()).(byFieldInRepo[models.Formula]); ok {
+		items, err := repo.ListByFieldIn(ctx, "control_id", controlIDs, 0, 0)
+		if err != nil {
+			return nil, fmt.Errorf("load formulas: %w", err)
+		}
+		return items, nil
+	}
+	items, err := sess.Formulas().ListByTenant(ctx, tenantID, 0, 0)
+	if err != nil {
+		return nil, fmt.Errorf("load formulas: %w", err)
+	}
+	controlSet := map[uuid.UUID]struct{}{}
+	for _, id := range controlIDs {
+		controlSet[id] = struct{}{}
+	}
+	var filtered []models.Formula
+	for _, it := range items {
+		if _, ok := controlSet[it.ControlID]; ok {
+			filtered = append(filtered, it)
+		}
+	}
+	return filtered, nil
+}
+
+func collectScreenIDs(items []models.Screen) []uuid.UUID {
+	ids := make([]uuid.UUID, 0, len(items))
+	for _, it := range items {
+		ids = append(ids, it.ID)
+	}
+	return ids
+}
+
+func collectControlIDs(items []models.Control) []uuid.UUID {
+	ids := make([]uuid.UUID, 0, len(items))
+	for _, it := range items {
+		ids = append(ids, it.ID)
+	}
+	return ids
 }

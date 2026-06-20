@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"reflect"
+	"regexp"
 	"runtime/debug"
 
 	"github.com/goapps-platform/metadata-service/internal/database"
@@ -20,6 +21,8 @@ type GormRepository[T any] struct {
 	tenantID *uuid.UUID
 	inTx     bool
 }
+
+var safeColumnPattern = regexp.MustCompile(`^[a-z_]+$`)
 
 func NewGormRepository[T any](db *gorm.DB) *GormRepository[T] {
 	return &GormRepository[T]{db: db}
@@ -127,6 +130,62 @@ func (r *GormRepository[T]) ListByTenant(ctx context.Context, tenantID uuid.UUID
 	if err != nil {
 		err := fmt.Errorf("repository: list by tenant: %w", err)
 		logRepositoryError(ctx, r.tenantID, err, "repository.ListByTenant failed")
+		return nil, err
+	}
+	return entities, nil
+}
+
+func (r *GormRepository[T]) ListByField(ctx context.Context, field string, value any, limit int, offset int) ([]T, error) {
+	if !safeColumnPattern.MatchString(field) {
+		err := fmt.Errorf("repository: invalid field name")
+		logRepositoryError(ctx, r.tenantID, err, "repository.ListByField failed: invalid field")
+		return nil, err
+	}
+	var entities []T
+	err := r.execute(ctx, func(db *gorm.DB) error {
+		query := db.Where(fmt.Sprintf("%s = ?", field), value).Order("created_on DESC")
+		if r.tenantID != nil {
+			query = query.Where("tenant_id = ?", *r.tenantID)
+		}
+		if limit > 0 {
+			query = query.Limit(limit)
+		}
+		if offset > 0 {
+			query = query.Offset(offset)
+		}
+		return query.Find(&entities).Error
+	})
+	if err != nil {
+		err := fmt.Errorf("repository: list by field: %w", err)
+		logRepositoryError(ctx, r.tenantID, err, "repository.ListByField failed")
+		return nil, err
+	}
+	return entities, nil
+}
+
+func (r *GormRepository[T]) ListByFieldIn(ctx context.Context, field string, values any, limit int, offset int) ([]T, error) {
+	if !safeColumnPattern.MatchString(field) {
+		err := fmt.Errorf("repository: invalid field name")
+		logRepositoryError(ctx, r.tenantID, err, "repository.ListByFieldIn failed: invalid field")
+		return nil, err
+	}
+	var entities []T
+	err := r.execute(ctx, func(db *gorm.DB) error {
+		query := db.Where(fmt.Sprintf("%s IN ?", field), values).Order("created_on DESC")
+		if r.tenantID != nil {
+			query = query.Where("tenant_id = ?", *r.tenantID)
+		}
+		if limit > 0 {
+			query = query.Limit(limit)
+		}
+		if offset > 0 {
+			query = query.Offset(offset)
+		}
+		return query.Find(&entities).Error
+	})
+	if err != nil {
+		err := fmt.Errorf("repository: list by field in: %w", err)
+		logRepositoryError(ctx, r.tenantID, err, "repository.ListByFieldIn failed")
 		return nil, err
 	}
 	return entities, nil
@@ -377,22 +436,24 @@ func newGormTenantSession(db *gorm.DB, tenantID uuid.UUID, inTx bool) *gormTenan
 	return session
 }
 
-func (s *gormTenantSession) Users() UserRepository                             { return s.users }
-func (s *gormTenantSession) Applications() ApplicationRepository               { return s.applications }
-func (s *gormTenantSession) Environments() EnvironmentRepository               { return s.environments }
-func (s *gormTenantSession) ApplicationVersions() ApplicationVersionRepository { return s.applicationVersions }
-func (s *gormTenantSession) Screens() ScreenRepository                         { return s.screens }
-func (s *gormTenantSession) Controls() ControlRepository                       { return s.controls }
-func (s *gormTenantSession) ControlProperties() ControlPropertyRepository      { return s.controlProperties }
-func (s *gormTenantSession) Formulas() FormulaRepository                       { return s.formulas }
-func (s *gormTenantSession) Events() EventRepository                           { return s.events }
-func (s *gormTenantSession) Variables() VariableRepository                     { return s.variables }
-func (s *gormTenantSession) Collections() CollectionRepository                 { return s.collections }
-func (s *gormTenantSession) Connectors() ConnectorRepository                   { return s.connectors }
-func (s *gormTenantSession) ConnectorActions() ConnectorActionRepository       { return s.connectorActions }
-func (s *gormTenantSession) Permissions() PermissionRepository                 { return s.permissions }
-func (s *gormTenantSession) AuditLogs() AuditLogRepository                     { return s.auditLogs }
-func (s *gormTenantSession) Packages() PackageRepository                       { return s.packages }
+func (s *gormTenantSession) Users() UserRepository               { return s.users }
+func (s *gormTenantSession) Applications() ApplicationRepository { return s.applications }
+func (s *gormTenantSession) Environments() EnvironmentRepository { return s.environments }
+func (s *gormTenantSession) ApplicationVersions() ApplicationVersionRepository {
+	return s.applicationVersions
+}
+func (s *gormTenantSession) Screens() ScreenRepository                    { return s.screens }
+func (s *gormTenantSession) Controls() ControlRepository                  { return s.controls }
+func (s *gormTenantSession) ControlProperties() ControlPropertyRepository { return s.controlProperties }
+func (s *gormTenantSession) Formulas() FormulaRepository                  { return s.formulas }
+func (s *gormTenantSession) Events() EventRepository                      { return s.events }
+func (s *gormTenantSession) Variables() VariableRepository                { return s.variables }
+func (s *gormTenantSession) Collections() CollectionRepository            { return s.collections }
+func (s *gormTenantSession) Connectors() ConnectorRepository              { return s.connectors }
+func (s *gormTenantSession) ConnectorActions() ConnectorActionRepository  { return s.connectorActions }
+func (s *gormTenantSession) Permissions() PermissionRepository            { return s.permissions }
+func (s *gormTenantSession) AuditLogs() AuditLogRepository                { return s.auditLogs }
+func (s *gormTenantSession) Packages() PackageRepository                  { return s.packages }
 func (s *gormTenantSession) ApplicationSnapshots() ApplicationSnapshotRepository {
 	return s.applicationSnapshots
 }

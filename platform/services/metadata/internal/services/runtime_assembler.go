@@ -2,13 +2,18 @@ package services
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/goapps-platform/metadata-service/internal/api/contracts"
 	"github.com/goapps-platform/metadata-service/internal/models"
 )
 
 // Assemble runtime DTOs from models
-func assembleRuntimeApplication(app *models.Application, screens []models.Screen, controls []models.Control, props []models.ControlProperty, formulas []models.Formula) *contracts.RuntimeApplication {
+func assembleRuntimeApplication(app *models.Application, screens []models.Screen, controls []models.Control, props []models.ControlProperty, formulas []models.Formula) (*contracts.RuntimeApplication, error) {
+	if app == nil {
+		return nil, fmt.Errorf("assemble runtime application: nil application")
+	}
 	ram := &contracts.RuntimeApplication{
 		ID:        app.ID,
 		TenantID:  app.TenantID,
@@ -26,14 +31,18 @@ func assembleRuntimeApplication(app *models.Application, screens []models.Screen
 			propMap[cid] = map[string]interface{}{}
 		}
 		var v interface{}
-		if err := json.Unmarshal(p.PropertyValue, &v); err == nil {
-			propMap[cid][p.PropertyName] = v
+		if err := json.Unmarshal(p.PropertyValue, &v); err != nil {
+			return nil, fmt.Errorf("assemble runtime application: invalid property value for control %s property %s: %w", cid, p.PropertyName, err)
 		}
+		propMap[cid][p.PropertyName] = v
 	}
 
 	// index formulas by control id
 	formulaMap := map[string][]contracts.RuntimeFormula{}
 	for _, f := range formulas {
+		if strings.TrimSpace(f.PropertyName) == "" || strings.TrimSpace(f.FormulaText) == "" || strings.TrimSpace(f.FormulaType) == "" {
+			return nil, fmt.Errorf("assemble runtime application: invalid formula %s", f.ID.String())
+		}
 		cf := contracts.RuntimeFormula{ID: f.ID, ControlID: f.ControlID, PropertyName: f.PropertyName, FormulaText: f.FormulaText, FormulaType: f.FormulaType}
 		formulaMap[f.ControlID.String()] = append(formulaMap[f.ControlID.String()], cf)
 	}
@@ -52,6 +61,9 @@ func assembleRuntimeApplication(app *models.Application, screens []models.Screen
 		// convert to runtime controls
 		runtimeCtrls := []contracts.RuntimeControl{}
 		for _, c := range ctrls {
+			if strings.TrimSpace(c.ControlType) == "" {
+				return nil, fmt.Errorf("assemble runtime application: control %s has empty control_type", c.ID.String())
+			}
 			rc := contracts.RuntimeControl{ID: c.ID, ScreenID: c.ScreenID, ParentControlID: c.ParentControlID, ControlType: c.ControlType, Name: c.Name, X: c.X, Y: c.Y, Width: c.Width, Height: c.Height, ZIndex: c.ZIndex}
 			if p, ok := propMap[c.ID.String()]; ok {
 				rc.Properties = p
@@ -62,10 +74,13 @@ func assembleRuntimeApplication(app *models.Application, screens []models.Screen
 			runtimeCtrls = append(runtimeCtrls, rc)
 		}
 		// build tree
-		runtimeTree := buildControlTree(runtimeCtrls)
+		runtimeTree, err := buildControlTree(runtimeCtrls)
+		if err != nil {
+			return nil, fmt.Errorf("assemble runtime application: build control tree for screen %s: %w", s.ID.String(), err)
+		}
 		rs.Controls = runtimeTree
 		ram.Screens = append(ram.Screens, rs)
 	}
 
-	return ram
+	return ram, nil
 }

@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/caarlos0/env/v11 v11.3.1
-	github.com/gofiber/fiber/v2 v2.52.6
+	github.com/gofiber/fiber/v2 v2.52.12
 	github.com/google/uuid v1.6.0
 )
 

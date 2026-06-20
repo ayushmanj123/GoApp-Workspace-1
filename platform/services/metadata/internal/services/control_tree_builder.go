@@ -1,11 +1,11 @@
 package services
 
-import "github.com/goapps-platform/metadata-service/internal/api"
+import "github.com/goapps-platform/metadata-service/internal/api/contracts"
 
 // buildControlTree builds hierarchical tree from flat controls
-func buildControlTree(flat []api.RuntimeControl) []api.RuntimeControl {
-	byID := map[string]*api.RuntimeControl{}
-	var roots []api.RuntimeControl
+func buildControlTree(flat []contracts.RuntimeControl) []contracts.RuntimeControl {
+	byID := map[string]*contracts.RuntimeControl{}
+	var roots []contracts.RuntimeControl
 	for i := range flat {
 		c := flat[i]
 		byID[c.ID.String()] = &c

@@ -2,7 +2,6 @@
   "extends": "@goapps/config/tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src",
     "noEmit": true,
     "paths": {
       "@goapps/shared": ["../../packages/shared/src/index.ts"],
@@ -10,8 +9,5 @@
     }
   },
   "include": ["src"],
-  "references": [
-    { "path": "../../packages/shared" },
-    { "path": "../../packages/sdk" }
-  ]
+  "exclude": ["src/**/__tests__/**"]
 }

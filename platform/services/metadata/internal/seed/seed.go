@@ -18,9 +18,12 @@ var (
 	AdminUserID         = uuid.MustParse("00000000-0000-4000-8000-000000000002")
 	DemoApplicationID   = uuid.MustParse("00000000-0000-4000-8000-000000000003")
 	DemoScreenID        = uuid.MustParse("00000000-0000-4000-8000-000000000004")
-	DemoButtonID        = uuid.MustParse("00000000-0000-4000-8000-000000000005")
-	DemoButtonTextID    = uuid.MustParse("00000000-0000-4000-8000-000000000006")
-	DemoAppVersionID    = uuid.MustParse("00000000-0000-4000-8000-000000000007")
+	DemoContainerID     = uuid.MustParse("00000000-0000-4000-8000-000000000005")
+	DemoLabelID         = uuid.MustParse("00000000-0000-4000-8000-000000000006")
+	DemoButtonID        = uuid.MustParse("00000000-0000-4000-8000-000000000007")
+	DemoButtonTextID    = uuid.MustParse("00000000-0000-4000-8000-000000000008")
+	DemoAppVersionID    = uuid.MustParse("00000000-0000-4000-8000-000000000009")
+	DemoPermissionID    = uuid.MustParse("00000000-0000-4000-8000-00000000000a")
 )
 
 // Run inserts the required development seed data.
@@ -55,7 +58,7 @@ func Run(ctx context.Context, db *gorm.DB) error {
 				ID:          DemoApplicationID,
 				TenantID:    DevelopmentTenantID,
 				Name:        "Demo Application",
-				Description: "Low-code platform demonstration application.",
+				Description: "Initial demo application",
 				Status:      "draft",
 			}
 			if err := upsert(scopedTx, &app, []string{"name", "description", "status", "modified_on"}); err != nil {
@@ -91,30 +94,84 @@ func Run(ctx context.Context, db *gorm.DB) error {
 				return err
 			}
 
+			container := models.Control{
+				ID:          DemoContainerID,
+				TenantID:    DevelopmentTenantID,
+				ScreenID:    DemoScreenID,
+				ControlType: "container",
+				Name:        "MainContainer",
+				X:           0,
+				Y:           0,
+				Width:       800,
+				Height:      600,
+				ZIndex:      0,
+			}
+			if err := upsert(scopedTx, &container, []string{"control_type", "name", "x", "y", "width", "height", "z_index", "modified_on"}); err != nil {
+				return err
+			}
+
+			label := models.Control{
+				ID:          DemoLabelID,
+				TenantID:    DevelopmentTenantID,
+				ScreenID:    DemoScreenID,
+				ControlType: "label",
+				Name:        "DemoLabel",
+				X:           40,
+				Y:           40,
+				Width:       320,
+				Height:      40,
+				ZIndex:      1,
+			}
+			if err := upsert(scopedTx, &label, []string{"control_type", "name", "x", "y", "width", "height", "z_index", "modified_on"}); err != nil {
+				return err
+			}
+
 			button := models.Control{
 				ID:          DemoButtonID,
 				TenantID:    DevelopmentTenantID,
 				ScreenID:    DemoScreenID,
 				ControlType: "button",
-				Name:        "DemoButton",
+				Name:        "SaveButton",
 				X:           32,
-				Y:           32,
+				Y:           120,
 				Width:       160,
 				Height:      44,
-				ZIndex:      1,
+				ZIndex:      2,
 			}
 			if err := upsert(scopedTx, &button, []string{"control_type", "name", "x", "y", "width", "height", "z_index", "modified_on"}); err != nil {
 				return err
 			}
 
-			property := models.ControlProperty{
+			labelProperty := models.ControlProperty{
 				ID:            DemoButtonTextID,
+				TenantID:      DevelopmentTenantID,
+				ControlID:     DemoLabelID,
+				PropertyName:  "text",
+				PropertyValue: datatypes.JSON([]byte(`{"value":"Hello World"}`)),
+			}
+			if err := upsert(scopedTx, &labelProperty, []string{"property_name", "property_value", "modified_on"}); err != nil {
+				return err
+			}
+
+			buttonProperty := models.ControlProperty{
+				ID:            uuid.MustParse("00000000-0000-4000-8000-00000000000b"),
 				TenantID:      DevelopmentTenantID,
 				ControlID:     DemoButtonID,
 				PropertyName:  "text",
-				PropertyValue: datatypes.JSON([]byte(`{"value":"Click me"}`)),
+				PropertyValue: datatypes.JSON([]byte(`{"value":"Save"}`)),
 			}
-			if err := upsert(scopedTx, &property, []string{"property_name", "property_value", "modified_on"}); err != nil {
+			if err := upsert(scopedTx, &buttonProperty, []string{"property_name", "property_value", "modified_on"}); err != nil {
+				return err
+			}
+
+			permission := models.Permission{
+				ID:             DemoPermissionID,
+				TenantID:       DevelopmentTenantID,
+				ApplicationID:  DemoApplicationID,
+				RoleName:       "PlatformAdmin",
+				PermissionName: "admin",
+			}
+			if err := upsert(scopedTx, &permission, []string{"role_name", "permission_name", "modified_on"}); err != nil {
 				return err
 			}
 

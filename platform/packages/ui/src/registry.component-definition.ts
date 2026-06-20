@@ -1,4 +1,4 @@
-import React, { ReactNode } from "react";
+import { ReactNode } from "react";
 import { PropertyDefinition } from "./registry.property-definition";
 import { EventDefinition } from "./registry.event-definition";
 import { ValidationDefinition } from "./registry.validation-definition";

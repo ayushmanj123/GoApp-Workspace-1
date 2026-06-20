@@ -1,4 +1,4 @@
-import React from "react";
+import { Suspense } from "react";
 import { useParams } from "react-router-dom";
 import { RuntimeProvider } from "../runtime-provider";
 import RuntimeRenderer from "../runtime-renderer";
@@ -8,24 +8,24 @@ import registerRuntime from "../registry-bridge";
 
 registerRuntime();
 
-export const ScreenPage: React.FC = () => {
+export const ScreenPage = () => {
   const { applicationId, screenId } = useParams();
   if (!applicationId || !screenId)
     return <ErrorState message="missing params" />;
   // Provide app package then navigate to screen
   return (
     <RuntimeProvider appId={applicationId}>
-      <ScreenLoader screenId={screenId} />
+      <ScreenLoader />
     </RuntimeProvider>
   );
 };
 
-const ScreenLoader: React.FC<{ screenId?: string }> = ({ screenId }) => {
+const ScreenLoader = () => {
   // navigate when provider loads
   return (
-    <React.Suspense fallback={<LoadingState />}>
+    <Suspense fallback={<LoadingState />}>
       <RuntimeRenderer />
-    </React.Suspense>
+    </Suspense>
   );
 };
 

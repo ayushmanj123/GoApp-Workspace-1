@@ -1,8 +1,7 @@
 package api
 
-// API standard response model
-type APIResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-}
+import "github.com/goapps-platform/metadata-service/internal/api/contracts"
+
+// alias for APIResponse
+
+type APIResponse = contracts.APIResponse

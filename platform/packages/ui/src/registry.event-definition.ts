@@ -1,4 +1,4 @@
-export interface EventDefinition<Payload = any> {
+export interface EventDefinition {
   name: string;
   title?: string;
   description?: string;

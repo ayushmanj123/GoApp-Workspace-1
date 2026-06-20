@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
+	"runtime/debug"
 
 	"github.com/goapps-platform/metadata-service/internal/database"
 	"github.com/goapps-platform/metadata-service/internal/models"
+	"github.com/goapps-platform/shared/logging"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -32,14 +35,19 @@ func newTenantTxGormRepository[T any](tx *gorm.DB, tenantID uuid.UUID) *GormRepo
 
 func (r *GormRepository[T]) Create(ctx context.Context, entity *T) error {
 	if entity == nil {
-		return fmt.Errorf("repository: nil entity")
+		err := fmt.Errorf("repository: nil entity")
+		logRepositoryError(ctx, r.tenantID, err, "repository.Create failed: nil entity")
+		return err
 	}
 	if err := r.bindTenant(entity); err != nil {
+		logRepositoryError(ctx, r.tenantID, err, "repository.Create failed: bind tenant")
 		return err
 	}
 	return r.execute(ctx, func(db *gorm.DB) error {
 		if err := db.Create(entity).Error; err != nil {
-			return fmt.Errorf("repository: create: %w", err)
+			err := fmt.Errorf("repository: create: %w", err)
+			logRepositoryError(ctx, r.tenantID, err, "repository.Create failed: db create")
+			return err
 		}
 		return nil
 	})
@@ -47,7 +55,9 @@ func (r *GormRepository[T]) Create(ctx context.Context, entity *T) error {
 
 func (r *GormRepository[T]) GetByID(ctx context.Context, id uuid.UUID) (*T, error) {
 	if id == uuid.Nil {
-		return nil, fmt.Errorf("repository: id is required")
+		err := fmt.Errorf("repository: id is required")
+		logRepositoryError(ctx, r.tenantID, err, "repository.GetByID failed: invalid id")
+		return nil, err
 	}
 	var entity T
 	err := r.execute(ctx, func(db *gorm.DB) error {
@@ -58,10 +68,13 @@ func (r *GormRepository[T]) GetByID(ctx context.Context, id uuid.UUID) (*T, erro
 		return query.First(&entity).Error
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
+		logRepositoryError(ctx, r.tenantID, err, "repository.GetByID failed: record not found")
 		return nil, err
 	}
 	if err != nil {
-		return nil, fmt.Errorf("repository: get by id: %w", err)
+		err := fmt.Errorf("repository: get by id: %w", err)
+		logRepositoryError(ctx, r.tenantID, err, "repository.GetByID failed: query")
+		return nil, err
 	}
 	return &entity, nil
 }
@@ -82,17 +95,23 @@ func (r *GormRepository[T]) List(ctx context.Context, limit int, offset int) ([]
 		return query.Find(&entities).Error
 	})
 	if err != nil {
-		return nil, fmt.Errorf("repository: list: %w", err)
+		err := fmt.Errorf("repository: list: %w", err)
+		logRepositoryError(ctx, r.tenantID, err, "repository.List failed")
+		return nil, err
 	}
 	return entities, nil
 }
 
 func (r *GormRepository[T]) ListByTenant(ctx context.Context, tenantID uuid.UUID, limit int, offset int) ([]T, error) {
 	if tenantID == uuid.Nil {
-		return nil, fmt.Errorf("repository: tenant id is required")
+		err := fmt.Errorf("repository: tenant id is required")
+		logRepositoryError(ctx, r.tenantID, err, "repository.ListByTenant failed: invalid tenant id")
+		return nil, err
 	}
 	if r.tenantID != nil && *r.tenantID != tenantID {
-		return nil, fmt.Errorf("repository: tenant mismatch")
+		err := fmt.Errorf("repository: tenant mismatch")
+		logRepositoryError(ctx, r.tenantID, err, "repository.ListByTenant failed: tenant mismatch")
+		return nil, err
 	}
 	var entities []T
 	err := r.execute(ctx, func(db *gorm.DB) error {
@@ -106,20 +125,26 @@ func (r *GormRepository[T]) ListByTenant(ctx context.Context, tenantID uuid.UUID
 		return query.Find(&entities).Error
 	})
 	if err != nil {
-		return nil, fmt.Errorf("repository: list by tenant: %w", err)
+		err := fmt.Errorf("repository: list by tenant: %w", err)
+		logRepositoryError(ctx, r.tenantID, err, "repository.ListByTenant failed")
+		return nil, err
 	}
 	return entities, nil
 }
 
 func (r *GormRepository[T]) Update(ctx context.Context, entity *T) error {
 	if entity == nil {
-		return fmt.Errorf("repository: nil entity")
+		err := fmt.Errorf("repository: nil entity")
+		logRepositoryError(ctx, r.tenantID, err, "repository.Update failed: nil entity")
+		return err
 	}
 	if err := r.bindTenant(entity); err != nil {
+		logRepositoryError(ctx, r.tenantID, err, "repository.Update failed: bind tenant")
 		return err
 	}
 	id, err := entityID(entity)
 	if err != nil {
+		logRepositoryError(ctx, r.tenantID, err, "repository.Update failed: entity id")
 		return err
 	}
 	return r.execute(ctx, func(db *gorm.DB) error {
@@ -129,9 +154,12 @@ func (r *GormRepository[T]) Update(ctx context.Context, entity *T) error {
 		}
 		result := query.Updates(entity)
 		if result.Error != nil {
-			return fmt.Errorf("repository: update: %w", result.Error)
+			err := fmt.Errorf("repository: update: %w", result.Error)
+			logRepositoryError(ctx, r.tenantID, err, "repository.Update failed: db update")
+			return err
 		}
 		if result.RowsAffected == 0 {
+			logRepositoryError(ctx, r.tenantID, gorm.ErrRecordNotFound, "repository.Update failed: record not found")
 			return gorm.ErrRecordNotFound
 		}
 		return nil
@@ -140,7 +168,9 @@ func (r *GormRepository[T]) Update(ctx context.Context, entity *T) error {
 
 func (r *GormRepository[T]) Delete(ctx context.Context, id uuid.UUID) error {
 	if id == uuid.Nil {
-		return fmt.Errorf("repository: id is required")
+		err := fmt.Errorf("repository: id is required")
+		logRepositoryError(ctx, r.tenantID, err, "repository.Delete failed: invalid id")
+		return err
 	}
 	return r.execute(ctx, func(db *gorm.DB) error {
 		var entity T
@@ -150,9 +180,12 @@ func (r *GormRepository[T]) Delete(ctx context.Context, id uuid.UUID) error {
 		}
 		result := query.Delete(&entity)
 		if result.Error != nil {
-			return fmt.Errorf("repository: delete: %w", result.Error)
+			err := fmt.Errorf("repository: delete: %w", result.Error)
+			logRepositoryError(ctx, r.tenantID, err, "repository.Delete failed: db delete")
+			return err
 		}
 		if result.RowsAffected == 0 {
+			logRepositoryError(ctx, r.tenantID, gorm.ErrRecordNotFound, "repository.Delete failed: record not found")
 			return gorm.ErrRecordNotFound
 		}
 		return nil
@@ -161,7 +194,9 @@ func (r *GormRepository[T]) Delete(ctx context.Context, id uuid.UUID) error {
 
 func (r *GormRepository[T]) execute(ctx context.Context, fn func(db *gorm.DB) error) error {
 	if r == nil || r.db == nil {
-		return fmt.Errorf("repository: nil database")
+		err := fmt.Errorf("repository: nil database")
+		logRepositoryError(ctx, r.tenantID, err, "repository.execute failed")
+		return err
 	}
 	if r.tenantID == nil {
 		return fn(r.db.WithContext(ctx))
@@ -180,7 +215,9 @@ func (r *GormRepository[T]) bindTenant(entity *T) error {
 	}
 	value := reflect.ValueOf(entity)
 	if value.Kind() != reflect.Pointer || value.IsNil() {
-		return fmt.Errorf("repository: entity must be a non-nil pointer")
+		err := fmt.Errorf("repository: entity must be a non-nil pointer")
+		logRepositoryError(context.Background(), r.tenantID, err, "repository.bindTenant failed: invalid entity")
+		return err
 	}
 	elem := value.Elem()
 	if elem.Kind() != reflect.Struct {
@@ -193,13 +230,17 @@ func (r *GormRepository[T]) bindTenant(entity *T) error {
 	current := field.Interface().(uuid.UUID)
 	if current == uuid.Nil {
 		if !field.CanSet() {
-			return fmt.Errorf("repository: tenant id is required")
+			err := fmt.Errorf("repository: tenant id is required")
+			logRepositoryError(context.Background(), r.tenantID, err, "repository.bindTenant failed: tenant id required")
+			return err
 		}
 		field.Set(reflect.ValueOf(*r.tenantID))
 		return nil
 	}
 	if current != *r.tenantID {
-		return fmt.Errorf("repository: tenant mismatch")
+		err := fmt.Errorf("repository: tenant mismatch")
+		logRepositoryError(context.Background(), r.tenantID, err, "repository.bindTenant failed: tenant mismatch")
+		return err
 	}
 	return nil
 }
@@ -207,19 +248,27 @@ func (r *GormRepository[T]) bindTenant(entity *T) error {
 func entityID[T any](entity *T) (uuid.UUID, error) {
 	value := reflect.ValueOf(entity)
 	if value.Kind() != reflect.Pointer || value.IsNil() {
-		return uuid.Nil, fmt.Errorf("repository: entity must be a non-nil pointer")
+		err := fmt.Errorf("repository: entity must be a non-nil pointer")
+		logRepositoryError(context.Background(), nil, err, "repository.entityID failed: invalid entity")
+		return uuid.Nil, err
 	}
 	elem := value.Elem()
 	if elem.Kind() != reflect.Struct {
-		return uuid.Nil, fmt.Errorf("repository: entity must point to a struct")
+		err := fmt.Errorf("repository: entity must point to a struct")
+		logRepositoryError(context.Background(), nil, err, "repository.entityID failed: not struct")
+		return uuid.Nil, err
 	}
 	field := elem.FieldByName("ID")
 	if !field.IsValid() || field.Type() != reflect.TypeOf(uuid.UUID{}) {
-		return uuid.Nil, fmt.Errorf("repository: entity id is required")
+		err := fmt.Errorf("repository: entity id is required")
+		logRepositoryError(context.Background(), nil, err, "repository.entityID failed: id required")
+		return uuid.Nil, err
 	}
 	id := field.Interface().(uuid.UUID)
 	if id == uuid.Nil {
-		return uuid.Nil, fmt.Errorf("repository: id is required")
+		err := fmt.Errorf("repository: id is required")
+		logRepositoryError(context.Background(), nil, err, "repository.entityID failed: id required")
+		return uuid.Nil, err
 	}
 	return id, nil
 }
@@ -227,6 +276,21 @@ func entityID[T any](entity *T) (uuid.UUID, error) {
 type GormStore struct {
 	db      *gorm.DB
 	tenants TenantRepository
+}
+
+func logRepositoryError(ctx context.Context, tenantID *uuid.UUID, err error, msg string) {
+	logger := logging.FromContext(ctx)
+	if logger == nil {
+		logger = slog.Default()
+	}
+	args := []any{
+		slog.String("error", err.Error()),
+		slog.String("stack", string(debug.Stack())),
+	}
+	if tenantID != nil {
+		args = append(args, slog.String("tenant_id", tenantID.String()))
+	}
+	logger.Error(msg, args...)
 }
 
 func NewGormStore(db *gorm.DB) *GormStore {

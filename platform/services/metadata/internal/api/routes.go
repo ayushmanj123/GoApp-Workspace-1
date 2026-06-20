@@ -1,10 +1,11 @@
 package api
 
 import (
+	"github.com/goapps-platform/metadata-service/internal/api/handlers"
+	"github.com/goapps-platform/metadata-service/internal/api/tenant"
+	"github.com/goapps-platform/metadata-service/internal/repositories"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/goapps-platform/metadata-service/internal/api/handlers"
-	"github.com/goapps-platform/metadata-service/internal/repositories"
 )
 
 // RegisterRoutes registers API routes. jwtMiddleware is passed in to allow using existing middleware.
@@ -48,18 +49,7 @@ func RegisterRoutes(app *fiber.App, store repositories.Store, jwtMiddleware fibe
 }
 
 // Helper to extract tenant id from Fiber context. It prefers Locals("tenant_id") then header.
+// GetTenantID is retained for compatibility, but moved to the api/tenant helper.
 func GetTenantID(c *fiber.Ctx) (uuid.UUID, error) {
-	if v := c.Locals("tenant_id"); v != nil {
-		switch t := v.(type) {
-		case uuid.UUID:
-			return t, nil
-		case string:
-			return uuid.Parse(t)
-		}
-	}
-	// fallback header
-	if hs := c.Get("X-Tenant-Id"); hs != "" {
-		return uuid.Parse(hs)
-	}
-	return uuid.Nil, fiber.ErrUnauthorized
+	return tenant.GetTenantID(c)
 }

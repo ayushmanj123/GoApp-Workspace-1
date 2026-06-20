@@ -3,6 +3,7 @@ package middleware
 
 import (
 	"log/slog"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -91,14 +92,27 @@ func RequireTenant() fiber.Handler {
 // ErrorHandler is the global Fiber error handler using the shared response format.
 func ErrorHandler(c *fiber.Ctx, err error) error {
 	requestID, _ := c.Locals("requestID").(string)
+	logger := logging.FromContext(c.UserContext())
+	if logger == nil {
+		logger = slog.Default()
+	}
 
 	if appErr := errors.AsAppError(err); appErr != nil {
+		logger.Error("application error",
+			slog.String("error", err.Error()),
+			slog.String("app_error_code", appErr.Code),
+			slog.String("request_id", requestID),
+		)
 		return c.Status(appErr.HTTPStatus).JSON(
 			response.Fail(appErr.Code, appErr.Message, requestID),
 		)
 	}
 
 	if err == fiber.ErrNotFound {
+		logger.Error("resource not found",
+			slog.String("error", err.Error()),
+			slog.String("request_id", requestID),
+		)
 		return c.Status(fiber.StatusNotFound).JSON(
 			response.Fail("NOT_FOUND", "resource not found", requestID),
 		)
@@ -113,6 +127,12 @@ func ErrorHandler(c *fiber.Ctx, err error) error {
 	if strings.EqualFold(c.App().Config().AppName, "development") {
 		message = err.Error()
 	}
+
+	logger.Error("unhandled error",
+		slog.String("error", err.Error()),
+		slog.String("request_id", requestID),
+		slog.String("stack", string(debug.Stack())),
+	)
 
 	return c.Status(status).JSON(
 		response.Fail("INTERNAL_ERROR", message, requestID),

@@ -74,7 +74,7 @@ func (h *screenHandler) Update(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: "invalid id"})
 	}
-	var req api.CreateScreenRequest
+	var req api.UpdateScreenRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: err.Error()})
 	}
@@ -85,7 +85,19 @@ func (h *screenHandler) Update(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(api.APIResponse{Success: false, Error: "tenant missing"})
 	}
-	updates := map[string]interface{}{"name": req.Name, "display_order": req.DisplayOrder, "layout_type": req.LayoutType}
+	updates := map[string]interface{}{}
+	if req.Name != nil {
+		updates["name"] = *req.Name
+	}
+	if req.DisplayOrder != nil {
+		updates["display_order"] = *req.DisplayOrder
+	}
+	if req.LayoutType != nil {
+		updates["layout_type"] = *req.LayoutType
+	}
+	if len(updates) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: "no fields to update"})
+	}
 	ctx := context.Background()
 	scr, err := h.svc.Update(ctx, tid, id, updates)
 	if err != nil {

@@ -8,12 +8,20 @@ import (
 	"github.com/goapps-platform/metadata-service/internal/repositories"
 	"github.com/goapps-platform/shared/server"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 )
 
 // New creates the metadata-service Fiber application.
 func New(cfg config.Config) *fiber.App {
 	logger := server.DefaultLogger(cfg.Base)
 	app := server.New(cfg.Base, logger)
+
+	// Allow browser clients (Studio, Runtime) to call the API during development.
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowHeaders: "Origin, Content-Type, Accept, X-Tenant-Id, Authorization, X-Request-ID",
+		AllowMethods: "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+	}))
 
 	db, err := database.Open(database.FromServiceConfig(cfg))
 	if err != nil {

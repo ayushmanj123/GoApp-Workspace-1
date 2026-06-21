@@ -33,6 +33,12 @@ type CreateScreenRequest struct {
 	LayoutType   string `json:"layout_type" validate:"required"`
 }
 
+type UpdateScreenRequest struct {
+	Name         *string `json:"name" validate:"omitempty,min=1,max=200"`
+	DisplayOrder *int    `json:"display_order" validate:"omitempty"`
+	LayoutType   *string `json:"layout_type" validate:"omitempty"`
+}
+
 // Control DTOs
 type CreateControlRequest struct {
 	Name            string  `json:"name" validate:"required"`

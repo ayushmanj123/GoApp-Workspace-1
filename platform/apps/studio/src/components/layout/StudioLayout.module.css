@@ -1,0 +1,18 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--color-bg-app);
+  overflow: hidden;
+}
+
+.workArea {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Override allotment sash colour to match theme */
+:global(.split-view-separator) {
+  background: var(--color-border) !important;
+}

@@ -1,0 +1,381 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg-panel);
+  border-right: 1px solid var(--color-border);
+  overflow: hidden;
+  transition: width var(--transition);
+  min-width: 32px;
+}
+
+.collapsed {
+  align-items: center;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  height: 32px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  flex: 1;
+}
+
+.collapseBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  transition:
+    background var(--transition),
+    color var(--transition);
+}
+
+.collapseBtn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* App node */
+.appNode {
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+/* Section header (Screens label + add btn) */
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 10px 3px 28px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.addBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  transition:
+    background var(--transition),
+    color var(--transition);
+}
+
+.addBtn:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.addBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.screensSection {
+  padding-bottom: 4px;
+}
+
+.treeList {
+  list-style: none;
+}
+
+/* App row */
+.treeItem {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  text-align: left;
+  transition:
+    background var(--transition),
+    color var(--transition);
+  white-space: nowrap;
+}
+
+.treeItem:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.treeItem.appSelected {
+  color: var(--color-text-primary);
+}
+
+.treeItemChevron {
+  width: 10px;
+  font-size: 9px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.treeItemLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Screen row */
+.screenItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  transition: background var(--transition);
+}
+
+.screenItem:hover {
+  background: var(--color-bg-hover);
+}
+
+.screenItem.active {
+  background: var(--color-bg-selected);
+}
+
+.screenItem.active .screenBtn {
+  color: var(--color-text-accent);
+}
+
+.screenBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 10px 4px 28px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  text-align: left;
+  transition: color var(--transition);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.screenBtn:hover {
+  color: var(--color-text-primary);
+}
+
+/* Hover action buttons */
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding-right: 6px;
+  flex-shrink: 0;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  transition:
+    background var(--transition),
+    color var(--transition);
+}
+
+.actionBtn:hover {
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+}
+
+.actionBtn.danger:hover {
+  background: rgba(243, 139, 168, 0.15);
+  color: var(--color-danger);
+}
+
+/* Inline rename input */
+.renameInput {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-accent);
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+
+/* States */
+.loadingMsg {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.errorMsg {
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--color-danger);
+  background: rgba(243, 139, 168, 0.08);
+  border-radius: var(--radius);
+  margin: 4px 8px;
+}
+
+.emptyScreens {
+  padding: 4px 10px 4px 28px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.collapsed {
+  align-items: center;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  height: 32px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  flex: 1;
+}
+
+.collapseBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  transition:
+    background var(--transition),
+    color var(--transition);
+}
+
+.collapseBtn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.section {
+  padding: 4px 0;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.addBtn {
+  font-size: 14px;
+  line-height: 1;
+  color: var(--color-text-muted);
+  padding: 0 2px;
+  border-radius: var(--radius);
+  transition: color var(--transition);
+}
+
+.addBtn:hover {
+  color: var(--color-text-primary);
+}
+
+.treeList {
+  list-style: none;
+}
+
+.treeItem {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  text-align: left;
+  border-radius: 0;
+  transition:
+    background var(--transition),
+    color var(--transition);
+  white-space: nowrap;
+}
+
+.treeItem:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.treeItem.active {
+  background: var(--color-bg-selected);
+  color: var(--color-text-accent);
+}
+
+.child {
+  padding-left: 28px;
+}
+
+.treeItemChevron {
+  width: 10px;
+  font-size: 9px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.treeItemLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

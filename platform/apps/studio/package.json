@@ -14,16 +14,21 @@
   "dependencies": {
     "@goapps/sdk": "workspace:*",
     "@goapps/shared": "workspace:*",
+    "@tanstack/react-query": "^5.101.0",
+    "allotment": "^1.20.5",
     "konva": "^9.3.16",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-konva": "^18.2.10"
+    "react-konva": "^18.2.10",
+    "react-router-dom": "^6.14.0",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@goapps/config": "workspace:*",
+    "@types/node": "^22.10.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@types/node": "^22.10.2",
+    "@types/react-router-dom": "^5.3.3",
     "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.1.0",

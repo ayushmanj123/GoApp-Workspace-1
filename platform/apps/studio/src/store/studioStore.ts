@@ -1,0 +1,53 @@
+import { create } from "zustand";
+
+export interface StudioState {
+  // Panel visibility
+  explorerCollapsed: boolean;
+  propertiesCollapsed: boolean;
+
+  // Selection state
+  activeAppId: string | null;
+  activeScreenId: string | null;
+  selectedControlId: string | null;
+
+  // App display meta
+  appName: string;
+  screenName: string;
+
+  // Zoom
+  zoom: number;
+
+  // Actions
+  toggleExplorer: () => void;
+  toggleProperties: () => void;
+  setActiveApp: (appId: string, appName: string) => void;
+  setActiveScreen: (screenId: string, screenName: string) => void;
+  selectControl: (controlId: string | null) => void;
+  setZoom: (zoom: number) => void;
+}
+
+export const useStudioStore = create<StudioState>((set) => ({
+  explorerCollapsed: false,
+  propertiesCollapsed: false,
+  activeAppId: null,
+  activeScreenId: null,
+  selectedControlId: null,
+  appName: "Untitled Application",
+  screenName: "Screen1",
+  zoom: 100,
+
+  toggleExplorer: () =>
+    set((s) => ({ explorerCollapsed: !s.explorerCollapsed })),
+
+  toggleProperties: () =>
+    set((s) => ({ propertiesCollapsed: !s.propertiesCollapsed })),
+
+  setActiveApp: (appId, appName) => set({ activeAppId: appId, appName }),
+
+  setActiveScreen: (screenId, screenName) =>
+    set({ activeScreenId: screenId, screenName, selectedControlId: null }),
+
+  selectControl: (controlId) => set({ selectedControlId: controlId }),
+
+  setZoom: (zoom) => set({ zoom }),
+}));

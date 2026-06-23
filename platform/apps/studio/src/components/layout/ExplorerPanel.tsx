@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useStudioStore } from "../../store/studioStore";
 import { useApplicationStore } from "../../store/applicationStore";
+import { ToolboxPanel } from "./ToolboxPanel";
 import styles from "./ExplorerPanel.module.css";
 
 // ── Icons ────────────────────────────────────────────────────────────────────
@@ -409,6 +410,7 @@ export function ExplorerPanel() {
                 </div>
               );
             })}
+          <ToolboxPanel />
         </div>
       )}
     </aside>

@@ -53,8 +53,29 @@
 }
 
 .controlBadge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 8px 10px;
   border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.deleteBtn {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  font-size: 11px;
+  color: var(--color-danger);
+  background: transparent;
+  transition:
+    background var(--transition),
+    color var(--transition);
+}
+
+.deleteBtn:hover {
+  background: rgba(243, 139, 168, 0.12);
 }
 
 .controlName {
@@ -96,6 +117,10 @@
 }
 
 /* Property rows */
+.propBlock {
+  padding-bottom: 2px;
+}
+
 .propRow {
   display: flex;
   align-items: center;
@@ -135,6 +160,66 @@
   padding: 1px 3px;
   height: 22px;
   cursor: pointer;
+}
+
+.propModeRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 4px 96px;
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.modeOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.modeOption input {
+  margin: 0;
+}
+
+.formulaModeBadge {
+  flex: 1;
+  font-size: 11px;
+  color: var(--color-text-accent);
+}
+
+.formulaSummaryRow {
+  padding: 0 10px 4px 96px;
+}
+
+.formulaSummary {
+  display: block;
+  font-size: 11px;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.formulaEditorRow {
+  padding: 2px 10px 6px 96px;
+}
+
+.formulaEditorBtn {
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  transition: background var(--transition);
+}
+
+.formulaEditorBtn:hover {
+  background: var(--color-bg-hover);
 }
 
 /* Empty state */

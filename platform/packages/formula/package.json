@@ -1,0 +1,35 @@
+{
+  "name": "@goapps/formula",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Formula engine abstraction and Power Fx integration for GoApps Platform",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/power-fx-engine.d.ts",
+      "import": "./dist/power-fx-engine.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm build && pnpm test:dotnet && pnpm test:node && pnpm test:remote",
+    "test:dotnet": "node ./scripts/run-dotnet-test.mjs",
+    "test:node": "node --test dist/tests/power-fx-engine.test.js dist/tests/resolve-property-value.test.js",
+    "test:remote": "node ./scripts/run-remote-tests.mjs",
+    "lint": "eslint src/"
+  },
+  "devDependencies": {
+    "@goapps/config": "workspace:*",
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0"
+  }
+}

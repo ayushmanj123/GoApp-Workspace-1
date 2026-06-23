@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Stage, Layer, Rect, Transformer } from "react-konva";
 import Konva from "konva";
 import { CanvasGrid } from "./CanvasGrid";
+import { StudioControlRenderer } from "./StudioControlRenderer";
+import { FormulaProvider } from "../../../../runtime/src/formula/formula-context";
 import { useStudioStore } from "../../store/studioStore";
 import { useApplicationStore } from "../../store/applicationStore";
+import { supportsStudioRegistryRendering } from "../../utils/registry-type";
 import styles from "./CanvasPanel.module.css";
 
 // Default artboard dimensions (1366×768 — standard canvas size)
@@ -19,6 +22,7 @@ export function CanvasPanel() {
   const transformerRef = useRef<Konva.Transformer>(null);
   const controlNodeRefs = useRef(new Map<string, Konva.Rect>());
   const screenName = useStudioStore((s) => s.screenName);
+  const appName = useStudioStore((s) => s.appName);
   const selectedControlId = useStudioStore((s) => s.selectedControlId);
   const selectControl = useStudioStore((s) => s.selectControl);
 
@@ -27,6 +31,7 @@ export function CanvasPanel() {
   const controlsLoading = useApplicationStore((s) => s.controlsLoading);
   const controlsError = useApplicationStore((s) => s.controlsError);
   const loadControls = useApplicationStore((s) => s.loadControls);
+  const updateControl = useApplicationStore((s) => s.updateControl);
 
   const [size, setSize] = useState({ width: 800, height: 600 });
 
@@ -52,26 +57,6 @@ export function CanvasPanel() {
     loadControls(selectedScreenId);
   }, [selectedScreenId, loadControls]);
 
-  // Log controls to console when they change (Phase 4.3.2 — no Konva shapes yet)
-  useEffect(() => {
-    if (!selectedScreenId) return;
-    if (controlsLoading) {
-      console.log(
-        "[CanvasPanel] Loading controls for screen:",
-        selectedScreenId,
-      );
-      return;
-    }
-    if (controlsError) {
-      console.error("[CanvasPanel] Controls error:", controlsError);
-      return;
-    }
-    console.log(
-      `[CanvasPanel] Controls loaded for screen "${screenName}" (${selectedScreenId}):`,
-      JSON.stringify(controls, null, 2),
-    );
-  }, [controls, controlsLoading, controlsError, selectedScreenId, screenName]);
-
   // Centre the artboard inside the stage
   const offsetX = (size.width - ARTBOARD_W) / 2;
   const offsetY = (size.height - ARTBOARD_H) / 2;
@@ -80,34 +65,24 @@ export function CanvasPanel() {
   const sortedControls = [...controls].sort((a, b) => a.z_index - b.z_index);
   const updateControlPosition = useCallback(
     (controlId: string, nextX: number, nextY: number) => {
-      useApplicationStore.setState((state) => ({
-        controls: state.controls.map((control) =>
-          control.id === controlId
-            ? { ...control, x: Math.round(nextX), y: Math.round(nextY) }
-            : control,
-        ),
-      }));
+      updateControl(controlId, {
+        x: Math.round(nextX),
+        y: Math.round(nextY),
+      });
     },
-    [],
+    [updateControl],
   );
 
   const updateControlBounds = useCallback(
     (controlId: string, nextX: number, nextY: number, nextWidth: number, nextHeight: number) => {
-      useApplicationStore.setState((state) => ({
-        controls: state.controls.map((control) =>
-          control.id === controlId
-            ? {
-                ...control,
-                x: Math.round(nextX),
-                y: Math.round(nextY),
-                width: Math.max(1, Math.round(nextWidth)),
-                height: Math.max(1, Math.round(nextHeight)),
-              }
-            : control,
-        ),
-      }));
+      updateControl(controlId, {
+        x: Math.round(nextX),
+        y: Math.round(nextY),
+        width: Math.max(1, Math.round(nextWidth)),
+        height: Math.max(1, Math.round(nextHeight)),
+      });
     },
-    [],
+    [updateControl],
   );
 
   useEffect(() => {
@@ -141,6 +116,9 @@ export function CanvasPanel() {
       <div className={styles.toolbar}>
         <span className={styles.screenLabel}>{screenName}</span>
         <div className={styles.toolbarRight}>
+          {controlsError && (
+            <span className={styles.errorBadge}>controls error</span>
+          )}
           {controlsLoading && (
             <span className={styles.loadingBadge}>loading controls…</span>
           )}
@@ -207,6 +185,9 @@ export function CanvasPanel() {
               const controlWidth = Math.max(control.width, 1);
               const controlHeight = Math.max(control.height, 1);
               const isSelected = selectedControlId === control.id;
+              const usesRegistryRendering = supportsStudioRegistryRendering(
+                control.control_type,
+              );
 
               return (
                 <Rect
@@ -223,7 +204,11 @@ export function CanvasPanel() {
                   y={controlY}
                   width={controlWidth}
                   height={controlHeight}
-                  fill="rgba(137, 180, 250, 0.10)"
+                  fill={
+                    usesRegistryRendering
+                      ? "transparent"
+                      : "rgba(137, 180, 250, 0.10)"
+                  }
                   stroke={isSelected ? "#89b4fa" : "#6c7086"}
                   strokeWidth={isSelected ? 2 : 1}
                   draggable
@@ -291,6 +276,31 @@ export function CanvasPanel() {
             />
           </Layer>
         </Stage>
+
+        <FormulaProvider appName={appName} controls={controls}>
+          <div className={styles.controlOverlay}>
+            {sortedControls.map((control) => {
+              if (!supportsStudioRegistryRendering(control.control_type)) {
+                return null;
+              }
+
+              return (
+                <div
+                  key={control.id}
+                  className={styles.controlPreview}
+                  style={{
+                    left: stageX + control.x,
+                    top: stageY + control.y,
+                    width: Math.max(control.width, 1),
+                    height: Math.max(control.height, 1),
+                  }}
+                >
+                  <StudioControlRenderer control={control} />
+                </div>
+              );
+            })}
+          </div>
+        </FormulaProvider>
       </div>
     </div>
   );

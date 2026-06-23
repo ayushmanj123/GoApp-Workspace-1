@@ -56,10 +56,29 @@
   font-style: italic;
 }
 
+.errorBadge {
+  font-size: 10px;
+  color: #f38ba8;
+}
+
 /* The div that Konva's canvas fills entirely */
 .stageContainer {
   flex: 1;
   min-height: 0;
   overflow: hidden;
   position: relative;
+}
+
+.controlOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.controlPreview {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
 }

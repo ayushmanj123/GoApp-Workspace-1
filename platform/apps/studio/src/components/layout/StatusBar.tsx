@@ -5,6 +5,10 @@ export function StatusBar() {
   const zoom = useStudioStore((s) => s.zoom);
   const screenName = useStudioStore((s) => s.screenName);
   const selectedControlId = useStudioStore((s) => s.selectedControlId);
+  const dirty = useStudioStore((s) => s.dirty);
+  const saveMessage = useStudioStore((s) => s.saveMessage);
+
+  const statusText = saveMessage ?? (dirty ? "Unsaved changes" : "Ready");
 
   return (
     <footer className={styles.statusbar}>
@@ -12,10 +16,10 @@ export function StatusBar() {
       <div className={styles.section}>
         <span
           className={styles.indicator}
-          data-status="ok"
+          data-status={saveMessage === "Save failed" ? "error" : "ok"}
           title="Metadata service connected"
         />
-        <span className={styles.text}>Ready</span>
+        <span className={styles.text}>{statusText}</span>
       </div>
 
       <div className={styles.divider} />

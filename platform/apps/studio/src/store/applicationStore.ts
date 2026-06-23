@@ -2,7 +2,21 @@ import { create } from "zustand";
 import { applicationsApi, type Application } from "../api/applications-api";
 import { screensApi, type Screen } from "../api/screens-api";
 import { controlsApi, type Control } from "../api/controls-api";
+import { propertiesApi } from "../api/properties-api";
+import { TENANT_ID } from "../api/metadata-client";
+import {
+  buildControlName,
+  getControlDefaults,
+  type ToolboxControlType,
+} from "../control-defaults";
+import { buildPropertiesPayload } from "../utils/control-properties";
+import { createLocalControlId, isLocalControlId } from "../utils/control-ids";
 import { useStudioStore } from "./studioStore";
+
+export interface SaveScreenResult {
+  success: boolean;
+  errors: string[];
+}
 
 export interface ApplicationState {
   // Data
@@ -26,12 +40,15 @@ export interface ApplicationState {
   loadApplications: () => Promise<void>;
   loadScreens: (applicationId: string) => Promise<void>;
   loadControls: (screenId: string) => Promise<void>;
+  saveScreen: () => Promise<SaveScreenResult>;
   selectApplication: (id: string) => void;
   selectScreen: (id: string) => void;
   updateControl: (
     controlId: string,
     updates: Partial<Pick<Control, "name" | "x" | "y" | "width" | "height" | "properties">>,
   ) => void;
+  createControl: (controlType: ToolboxControlType) => void;
+  deleteControl: (controlId: string) => Promise<void>;
 
   // CRUD
   createScreen: (applicationId: string, name: string) => Promise<Screen>;
@@ -88,18 +105,34 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
       controls: [],
     });
     useStudioStore.getState().selectControl(null);
+    useStudioStore.getState().setDirty(false);
+    useStudioStore.getState().setSaveMessage(null);
   },
 
   selectScreen: (id: string) => {
     set({ selectedScreenId: id, controls: [] });
     useStudioStore.getState().selectControl(null);
+    useStudioStore.getState().setDirty(false);
+    useStudioStore.getState().setSaveMessage(null);
   },
 
   loadControls: async (screenId: string) => {
     set({ controlsLoading: true, controlsError: null });
     try {
       const data = await controlsApi.list(screenId);
-      set({ controls: data.items, controlsLoading: false });
+      const controlsWithProperties = await Promise.all(
+        data.items.map(async (control) => {
+          try {
+            const properties = await propertiesApi.get(control.id);
+            return { ...control, properties };
+          } catch {
+            return { ...control, properties: control.properties ?? null };
+          }
+        }),
+      );
+      set({ controls: controlsWithProperties, controlsLoading: false });
+      useStudioStore.getState().setDirty(false);
+      useStudioStore.getState().setSaveMessage(null);
     } catch (err) {
       set({
         controlsLoading: false,
@@ -107,6 +140,78 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
           err instanceof Error ? err.message : "Failed to load controls",
       });
     }
+  },
+
+  saveScreen: async () => {
+    const { controls, selectedScreenId } = get();
+    if (!selectedScreenId) {
+      return { success: false, errors: ["No screen selected"] };
+    }
+
+    const errors: string[] = [];
+    const idReplacements = new Map<string, string>();
+    const selectedControlId = useStudioStore.getState().selectedControlId;
+
+    await Promise.all(
+      controls.map(async (control) => {
+        const payload = {
+          name: control.name,
+          control_type: control.control_type,
+          x: control.x,
+          y: control.y,
+          width: control.width,
+          height: control.height,
+          z_index: control.z_index,
+          parent_control_id: control.parent_control_id,
+        };
+
+        try {
+          if (isLocalControlId(control.id)) {
+            const created = await controlsApi.create(selectedScreenId, payload);
+            idReplacements.set(control.id, created.id);
+          } else {
+            await controlsApi.update(control.id, payload);
+          }
+        } catch (err) {
+          errors.push(
+            `${control.name}: ${err instanceof Error ? err.message : "control save failed"}`,
+          );
+          return;
+        }
+
+        const propertiesPayload = buildPropertiesPayload(
+          control.properties,
+          control.control_type,
+        );
+        if (!propertiesPayload) {
+          return;
+        }
+
+        const targetId = idReplacements.get(control.id) ?? control.id;
+
+        try {
+          await propertiesApi.update(targetId, {
+            properties: propertiesPayload,
+          });
+        } catch (err) {
+          errors.push(
+            `${control.name} properties: ${err instanceof Error ? err.message : "property update failed"}`,
+          );
+        }
+      }),
+    );
+
+    if (errors.length === 0) {
+      await get().loadControls(selectedScreenId);
+      if (selectedControlId) {
+        const nextSelectedId =
+          idReplacements.get(selectedControlId) ?? selectedControlId;
+        useStudioStore.getState().selectControl(nextSelectedId);
+      }
+      useStudioStore.getState().setDirty(false);
+    }
+
+    return { success: errors.length === 0, errors };
   },
 
   updateControl: (controlId, updates) => {
@@ -133,6 +238,61 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
         };
       }),
     }));
+    useStudioStore.getState().setDirty(true);
+    useStudioStore.getState().setSaveMessage(null);
+  },
+
+  createControl: (controlType) => {
+    const { controls, selectedScreenId } = get();
+    if (!selectedScreenId) {
+      return;
+    }
+
+    const defaults = getControlDefaults(controlType);
+    const nextZIndex =
+      controls.length > 0
+        ? Math.max(...controls.map((control) => control.z_index)) + 1
+        : 1;
+    const now = new Date().toISOString();
+    const control: Control = {
+      id: createLocalControlId(),
+      tenant_id: TENANT_ID,
+      screen_id: selectedScreenId,
+      parent_control_id: null,
+      control_type: defaults.control_type,
+      name: buildControlName(
+        controlType,
+        controls.map((item) => item.name),
+      ),
+      x: defaults.x,
+      y: defaults.y,
+      width: defaults.width,
+      height: defaults.height,
+      z_index: nextZIndex,
+      properties: { ...defaults.properties },
+      deleted_at: null,
+      CreatedOn: now,
+      ModifiedOn: now,
+    };
+
+    set((state) => ({ controls: [...state.controls, control] }));
+    useStudioStore.getState().selectControl(control.id);
+    useStudioStore.getState().setDirty(true);
+    useStudioStore.getState().setSaveMessage(null);
+  },
+
+  deleteControl: async (controlId) => {
+    if (!isLocalControlId(controlId)) {
+      await controlsApi.delete(controlId);
+    }
+
+    set((state) => ({
+      controls: state.controls.filter((control) => control.id !== controlId),
+    }));
+
+    if (useStudioStore.getState().selectedControlId === controlId) {
+      useStudioStore.getState().selectControl(null);
+    }
   },
 
   createScreen: async (applicationId: string, name: string) => {

@@ -1,11 +1,14 @@
 # Dependencies
 node_modules/
 .pnpm-store/
+.dotnet/
+dotnet-install.ps1
 
 # Build outputs
 dist/
 build/
 bin/
+obj/
 *.exe
 *.dll
 *.so
@@ -39,6 +42,9 @@ logs/
 # Coverage
 coverage/
 *.coverprofile
+
+# Phase validation artifacts
+.validation-*/
 
 # Docker
 docker-compose.override.yml

@@ -10,6 +10,9 @@ importers:
 
   apps/runtime:
     dependencies:
+      '@goapps/formula':
+        specifier: workspace:*
+        version: link:../../packages/formula
       '@goapps/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -68,6 +71,9 @@ importers:
 
   apps/studio:
     dependencies:
+      '@goapps/formula':
+        specifier: workspace:*
+        version: link:../../packages/formula
       '@goapps/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -150,6 +156,24 @@ importers:
       eslint-plugin-react-refresh:
         specifier: ^0.4.16
         version: 0.4.26(eslint@9.39.4)
+      typescript-eslint:
+        specifier: ^8.18.0
+        version: 8.61.1(eslint@9.39.4)(typescript@5.9.3)
+
+  packages/formula:
+    devDependencies:
+      '@goapps/config':
+        specifier: workspace:*
+        version: link:../config
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.21
+      eslint:
+        specifier: ^9.17.0
+        version: 9.39.4
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
       typescript-eslint:
         specifier: ^8.18.0
         version: 8.61.1(eslint@9.39.4)(typescript@5.9.3)

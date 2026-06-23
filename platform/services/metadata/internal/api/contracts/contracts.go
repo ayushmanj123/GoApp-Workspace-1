@@ -43,11 +43,11 @@ type UpdateScreenRequest struct {
 type CreateControlRequest struct {
 	Name            string  `json:"name" validate:"required"`
 	ControlType     string  `json:"control_type" validate:"required"`
-	X               float64 `json:"x" validate:"required"`
-	Y               float64 `json:"y" validate:"required"`
-	Width           float64 `json:"width" validate:"required"`
-	Height          float64 `json:"height" validate:"required"`
-	ZIndex          int     `json:"z_index" validate:"required"`
+	X               float64 `json:"x" validate:"gte=0"`
+	Y               float64 `json:"y" validate:"gte=0"`
+	Width           float64 `json:"width" validate:"gt=0"`
+	Height          float64 `json:"height" validate:"gt=0"`
+	ZIndex          int     `json:"z_index" validate:"gte=0"`
 	ParentControlID *string `json:"parent_control_id" validate:"omitempty,uuid4"`
 }
 

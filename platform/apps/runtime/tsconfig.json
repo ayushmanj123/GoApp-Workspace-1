@@ -5,7 +5,8 @@
     "noEmit": true,
     "paths": {
       "@goapps/shared": ["../../packages/shared/src/index.ts"],
-      "@goapps/sdk": ["../../packages/sdk/src/index.ts"]
+      "@goapps/sdk": ["../../packages/sdk/src/index.ts"],
+      "@goapps/formula": ["../../packages/formula/src/index.ts"]
     }
   },
   "include": ["src"],

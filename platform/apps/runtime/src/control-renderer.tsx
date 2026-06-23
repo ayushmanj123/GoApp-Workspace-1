@@ -6,14 +6,27 @@ interface Props {
   control: ControlPackage;
 }
 
+function resolveRegistryType(rawType: string): string {
+  const key = rawType.trim().toLowerCase().replace(/_/g, "");
+  const aliases: Record<string, string> = {
+    button: "Button",
+    label: "Label",
+    textinput: "TextInput",
+    dropdown: "Dropdown",
+    container: "Container",
+  };
+  return aliases[key] ?? rawType;
+}
+
 export const ControlRenderer: React.FC<Props> = ({ control }) => {
-  const typeKey =
+  const rawType =
     (control as any).control_type || (control as any).controlType || "";
+  const typeKey = resolveRegistryType(rawType);
   const def = registry.get(typeKey);
   if (!def) {
     return (
       <div data-testid={`unknown-${(control as any).id}`}>
-        Unknown: {typeKey}
+        Unknown: {rawType}
       </div>
     );
   }

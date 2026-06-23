@@ -17,6 +17,11 @@ export interface StudioState {
   // Zoom
   zoom: number;
 
+  // Persistence UI state
+  dirty: boolean;
+  saving: boolean;
+  saveMessage: string | null;
+
   // Actions
   toggleExplorer: () => void;
   toggleProperties: () => void;
@@ -24,6 +29,9 @@ export interface StudioState {
   setActiveScreen: (screenId: string, screenName: string) => void;
   selectControl: (controlId: string | null) => void;
   setZoom: (zoom: number) => void;
+  setDirty: (dirty: boolean) => void;
+  setSaving: (saving: boolean) => void;
+  setSaveMessage: (message: string | null) => void;
 }
 
 export const useStudioStore = create<StudioState>((set) => ({
@@ -35,6 +43,9 @@ export const useStudioStore = create<StudioState>((set) => ({
   appName: "Untitled Application",
   screenName: "Screen1",
   zoom: 100,
+  dirty: false,
+  saving: false,
+  saveMessage: null,
 
   toggleExplorer: () =>
     set((s) => ({ explorerCollapsed: !s.explorerCollapsed })),
@@ -50,4 +61,10 @@ export const useStudioStore = create<StudioState>((set) => ({
   selectControl: (controlId) => set({ selectedControlId: controlId }),
 
   setZoom: (zoom) => set({ zoom }),
+
+  setDirty: (dirty) => set({ dirty }),
+
+  setSaving: (saving) => set({ saving }),
+
+  setSaveMessage: (saveMessage) => set({ saveMessage }),
 }));

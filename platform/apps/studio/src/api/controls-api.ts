@@ -29,12 +29,19 @@ export interface UpdateControlPayload {
   parent_control_id?: string | null;
 }
 
+export type CreateControlPayload = UpdateControlPayload;
+
 export const controlsApi = {
   list: (screenId: string, limit = 200, offset = 0) =>
     apiClient.get<PagedData<Control>>(
       `/screens/${screenId}/controls?limit=${limit}&offset=${offset}`,
     ),
 
+  create: (screenId: string, payload: CreateControlPayload) =>
+    apiClient.post<Control>(`/screens/${screenId}/controls`, payload),
+
   update: (controlId: string, payload: UpdateControlPayload) =>
     apiClient.put<Control>(`/controls/${controlId}`, payload),
+
+  delete: (controlId: string) => apiClient.delete(`/controls/${controlId}`),
 };

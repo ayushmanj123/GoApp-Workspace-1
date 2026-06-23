@@ -12,6 +12,7 @@
     "lint": "eslint src/"
   },
   "dependencies": {
+    "@goapps/formula": "workspace:*",
     "@goapps/sdk": "workspace:*",
     "@goapps/shared": "workspace:*",
     "@tanstack/react-query": "^5.101.0",

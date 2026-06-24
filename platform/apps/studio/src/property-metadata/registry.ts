@@ -1,4 +1,4 @@
-export type PropertyFieldType = "text" | "boolean" | "number" | "color";
+export type PropertyFieldType = "text" | "boolean" | "number" | "color" | "formula";
 
 export type PropertyMode = "static" | "formula";
 
@@ -12,9 +12,15 @@ export function supportsFormulaMode(definition: PropertyFieldDefinition): boolea
   return definition.type === "text" || definition.type === "color";
 }
 
+/** Properties of type "formula" are always formula-only — no static mode. */
+export function isFormulaOnly(definition: PropertyFieldDefinition): boolean {
+  return definition.type === "formula";
+}
+
 const BUTTON_PROPERTIES: PropertyFieldDefinition[] = [
   { name: "text", label: "Text", type: "text" },
   { name: "disabled", label: "Disabled", type: "boolean" },
+  { name: "onSelect", label: "OnSelect", type: "formula" },
 ];
 
 const LABEL_PROPERTIES: PropertyFieldDefinition[] = [

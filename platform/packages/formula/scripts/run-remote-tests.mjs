@@ -40,6 +40,8 @@ function runNodeTests() {
         "dist/tests/remote-formula-engine.test.js",
         "dist/tests/formula-context.test.js",
         "dist/tests/control-reference.test.js",
+        "dist/tests/formula-variables.test.js",
+        "dist/tests/formula-functions.test.js",
       ],
       {
         cwd: packageRoot,

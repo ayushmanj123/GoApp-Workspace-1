@@ -1,6 +1,13 @@
-import React, { createContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useEffect, useMemo, useRef, useState } from "react";
 import type { AppPackage } from "./runtime-types";
-import { FormulaProvider } from "./formula/formula-context";
+import {
+  FormulaProvider,
+  useFormulaEngine,
+  useFormulaEvaluationContext,
+  useVariableStore,
+} from "./formula/formula-context";
+import { InMemoryVariableStore } from "./formula/runtime-variable-store";
+import { executeAction } from "./formula/execute-action";
 const TENANT_ID =
   (import.meta.env.VITE_TENANT_ID as string | undefined) ??
   "00000000-0000-4000-8000-000000000001";
@@ -21,6 +28,33 @@ export const RuntimeContext = createContext<RuntimeContextValue>({
   collections: {},
 });
 
+/**
+ * Dev-only test helper. Exposes window.__executeAction so that headless
+ * acceptance tests can drive action execution without a click event system.
+ * Has no effect in production builds.
+ */
+function DevActionRunner() {
+  const engine = useFormulaEngine();
+  const context = useFormulaEvaluationContext();
+  const store = useVariableStore();
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    (window as unknown as Record<string, unknown>).__executeAction = async (
+      formula: string,
+    ) => {
+      try {
+        await executeAction({ formula }, { store, engine, context });
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    };
+  }, [store, engine, context]);
+
+  return null;
+}
+
 export const RuntimeProvider: React.FC<{
   appId: string;
   children: React.ReactNode;
@@ -33,6 +67,15 @@ export const RuntimeProvider: React.FC<{
   );
   const [variables] = useState<Record<string, any>>({});
   const [collections] = useState<Record<string, any[]>>({});
+
+  const variableStoreRef = useRef(new InMemoryVariableStore());
+
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__variableStore =
+        variableStoreRef.current;
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -76,7 +119,8 @@ export const RuntimeProvider: React.FC<{
   }, [pkg, currentScreen]);
 
   return (
-    <FormulaProvider appName={pkg?.name} controls={screenControls}>
+    <FormulaProvider appName={pkg?.name} controls={screenControls} variableStore={variableStoreRef.current}>
+      <DevActionRunner />
       <RuntimeContext.Provider
         value={{ pkg, loading, currentScreen, navigate, variables, collections }}
       >

@@ -3,6 +3,7 @@ import type { Control } from "../../api/controls-api";
 import { FormulaEditorModal } from "../formula/FormulaEditorModal";
 import {
   getPropertyDefinitions,
+  isFormulaOnly,
   supportsFormulaMode,
   type PropertyFieldDefinition,
   type PropertyMode,
@@ -127,6 +128,48 @@ function MetadataPropRow({
     }
     onChange(writePropertyValue(type, readPropertyValue(type, value)));
   };
+
+  if (isFormulaOnly(definition)) {
+    const formula = readPropertyFormula(value);
+    const summary = truncateFormula(formula);
+    return (
+      <div className={styles.propBlock}>
+        <div className={styles.propRow}>
+          <span className={styles.propLabel}>{label}</span>
+          <span className={styles.formulaModeBadge}>Action</span>
+        </div>
+        <div className={styles.formulaSummaryRow}>
+          <span
+            className={styles.formulaSummary}
+            title={formula || undefined}
+            data-testid={`${definition.name}-formula-summary`}
+          >
+            {summary || "(empty)"}
+          </span>
+        </div>
+        <div className={styles.formulaEditorRow}>
+          <button
+            type="button"
+            className={styles.formulaEditorBtn}
+            data-testid={`${definition.name}-open-formula-editor`}
+            onClick={() => setEditorOpen(true)}
+          >
+            Open Formula Editor
+          </button>
+        </div>
+        <FormulaEditorModal
+          open={editorOpen}
+          propertyLabel={label}
+          initialFormula={formula}
+          onSave={(nextFormula) => {
+            onChange(writePropertyFormula(nextFormula));
+            setEditorOpen(false);
+          }}
+          onCancel={() => setEditorOpen(false)}
+        />
+      </div>
+    );
+  }
 
   if (type === "boolean") {
     const checked = Boolean(readPropertyValue("boolean", value));

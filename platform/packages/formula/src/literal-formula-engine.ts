@@ -68,6 +68,13 @@ export class LiteralFormulaEngine implements FormulaEngine {
       return readContextPath(context, expression);
     }
 
+    if (/^[A-Za-z][A-Za-z0-9]*$/.test(expression)) {
+      if (!context || !(expression in context)) {
+        throw new Error(`Unknown variable: ${expression}`);
+      }
+      return context[expression];
+    }
+
     throw new Error(`Unsupported literal formula: ${formula}`);
   }
 }

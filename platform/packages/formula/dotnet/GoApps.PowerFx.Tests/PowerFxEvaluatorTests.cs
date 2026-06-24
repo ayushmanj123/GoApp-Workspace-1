@@ -94,4 +94,99 @@ public class PowerFxEvaluatorTests
     {
         Assert.ThrowsAny<Exception>(() => _evaluator.Evaluate("MissingControl.Text"));
     }
+
+    [Fact]
+    public void Evaluate_VarTitle_ReturnsHelloWorld()
+    {
+        var context = Context(("varTitle", "Hello World"));
+        var result = _evaluator.Evaluate("varTitle", context);
+        Assert.Equal("Hello World", result);
+    }
+
+    [Fact]
+    public void Evaluate_VarCount_Returns10()
+    {
+        var context = Context(("varCount", 10));
+        var result = _evaluator.Evaluate("varCount", context);
+        Assert.Equal(10, Convert.ToDecimal(result));
+    }
+
+    [Fact]
+    public void Evaluate_VarStatus_ReturnsApproved()
+    {
+        var context = Context(("varStatus", "Approved"));
+        var result = _evaluator.Evaluate("varStatus", context);
+        Assert.Equal("Approved", result);
+    }
+
+    [Fact]
+    public void Evaluate_UnknownVariable_Throws()
+    {
+        Assert.ThrowsAny<Exception>(() => _evaluator.Evaluate("varUnknown"));
+    }
+
+    private static Dictionary<string, JsonElement> FullContext() =>
+        Context(
+            ("User", new { FullName = "Test User", Email = "test@example.com" }),
+            ("App", new { Name = "Demo Application" }),
+            ("TextInput1", new { Value = "Hello" }),
+            ("Label1", new { Text = "Approved" }),
+            ("varTitle", "Hello World"),
+            ("varCount", 10),
+            ("varStatus", "Approved"));
+
+    [Fact]
+    public void Evaluate_UpperUserFullName_ReturnsTestUser()
+    {
+        var result = _evaluator.Evaluate("Upper(User.FullName)", FullContext());
+        Assert.Equal("TEST USER", result);
+    }
+
+    [Fact]
+    public void Evaluate_LowerUserEmail_ReturnsLowercaseEmail()
+    {
+        var result = _evaluator.Evaluate("Lower(User.Email)", FullContext());
+        Assert.Equal("test@example.com", result);
+    }
+
+    [Fact]
+    public void Evaluate_ConcatenateHelloUser_ReturnsGreeting()
+    {
+        var result = _evaluator.Evaluate(
+            "Concatenate(\"Hello \", User.FullName)",
+            FullContext());
+        Assert.Equal("Hello Test User", result);
+    }
+
+    [Fact]
+    public void Evaluate_LenVarTitle_Returns11()
+    {
+        var result = _evaluator.Evaluate("Len(varTitle)", FullContext());
+        Assert.Equal(11, Convert.ToDecimal(result));
+    }
+
+    [Fact]
+    public void Evaluate_IfTrue_ReturnsApproved()
+    {
+        var result = _evaluator.Evaluate(
+            "If(true, \"Approved\", \"Rejected\")",
+            FullContext());
+        Assert.Equal("Approved", result);
+    }
+
+    [Fact]
+    public void Evaluate_IfFalse_ReturnsRejected()
+    {
+        var result = _evaluator.Evaluate(
+            "If(false, \"Approved\", \"Rejected\")",
+            FullContext());
+        Assert.Equal("Rejected", result);
+    }
+
+    [Fact]
+    public void Evaluate_UnknownFunction_Throws()
+    {
+        Assert.ThrowsAny<Exception>(
+            () => _evaluator.Evaluate("SomeUnknownFunction()", FullContext()));
+    }
 }

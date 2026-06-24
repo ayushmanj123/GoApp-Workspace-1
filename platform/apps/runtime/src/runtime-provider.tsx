@@ -1,4 +1,12 @@
-import React, { createContext, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { AppPackage } from "./runtime-types";
 import {
   FormulaProvider,
@@ -6,13 +14,34 @@ import {
   useFormulaEvaluationContext,
   useVariableStore,
   useScreenContextStore,
+  useCollectionStore,
+  useGallerySelectionStore,
+  useFormUpdatesStore,
+  useRecordStore,
 } from "./formula/formula-context";
 import { InMemoryVariableStore } from "./formula/runtime-variable-store";
 import { InMemoryScreenContextStore } from "./formula/runtime-screen-context-store";
+import { InMemoryCollectionStore } from "./formula/runtime-collection-store";
+import { InMemoryGallerySelectionStore } from "./formula/runtime-gallery-selection-store";
+import { InMemoryFormUpdatesStore } from "./formula/runtime-form-updates-store";
+import { InMemoryRecordStore } from "./formula/runtime-record-store";
+import { InMemoryControlValueStore } from "./formula/runtime-control-value-store";
+import {
+  InMemoryNavigationStore,
+  type RuntimeNavigationStore,
+} from "./formula/runtime-navigation-store";
 import { executeAction } from "./formula/execute-action";
+
 const TENANT_ID =
   (import.meta.env.VITE_TENANT_ID as string | undefined) ??
   "00000000-0000-4000-8000-000000000001";
+
+const NavigationStoreContext = createContext<RuntimeNavigationStore | null>(
+  null,
+);
+const ScreenResolverContext = createContext<
+  ((name: string) => string | undefined) | null
+>(null);
 
 export interface RuntimeContextValue {
   pkg?: AppPackage;
@@ -30,16 +59,112 @@ export const RuntimeContext = createContext<RuntimeContextValue>({
   collections: {},
 });
 
-/**
- * Dev-only test helper. Exposes window.__executeAction so that headless
- * acceptance tests can drive action execution without a click event system.
- * Has no effect in production builds.
- */
-function DevActionRunner() {
+function ActionRunner({
+  navigationStore,
+  resolveScreenId,
+  pkg,
+}: {
+  navigationStore: RuntimeNavigationStore;
+  resolveScreenId: (name: string) => string | undefined;
+  pkg: AppPackage | undefined;
+}) {
   const engine = useFormulaEngine();
   const context = useFormulaEvaluationContext();
   const store = useVariableStore();
   const screenContextStore = useScreenContextStore();
+  const collectionStore = useCollectionStore();
+  const gallerySelectionStore = useGallerySelectionStore();
+  const formUpdatesStore = useFormUpdatesStore();
+  const recordStore = useRecordStore();
+
+  // Keep mutable refs so nav-store subscription always sees the latest values.
+  const pkgRef = useRef(pkg);
+  pkgRef.current = pkg;
+  const currentScreenId = navigationStore.getCurrentScreenId();
+  const currentControls =
+    pkg?.screens?.find((screen) => screen.id === currentScreenId)?.controls ?? [];
+  const servicesRef = useRef({
+    store,
+    screenContextStore,
+    collectionStore,
+    formUpdatesStore,
+    recordStore,
+    controls: currentControls,
+    gallerySelectionStore,
+    navigationStore,
+    resolveScreenId,
+    engine,
+    context,
+  });
+  servicesRef.current = {
+    store,
+    screenContextStore,
+    collectionStore,
+    formUpdatesStore,
+    recordStore,
+    controls: currentControls,
+    gallerySelectionStore,
+    navigationStore,
+    resolveScreenId,
+    engine,
+    context,
+  };
+
+  // Tracks the last screenId for which OnVisible was attempted (pkg was available).
+  const lastOnVisibleScreenRef = useRef<string | undefined>(undefined);
+  const onStartExecutedRef = useRef(false);
+  const onStartCompletedRef = useRef(false);
+
+  function runOnVisible(screenId: string, screens: AppPackage["screens"]) {
+    const screen = screens?.find((s) => s.id === screenId);
+    const formula = screen?.on_visible?.trim();
+    if (formula) {
+      executeAction({ formula }, servicesRef.current).catch((err) => {
+        console.error("[OnVisible Error]", err);
+      });
+    }
+  }
+
+  function runInitialOnVisible(screens: AppPackage["screens"]) {
+    const screenId = navigationStore.getCurrentScreenId();
+    if (!screenId) return;
+    lastOnVisibleScreenRef.current = screenId;
+    runOnVisible(screenId, screens);
+  }
+
+  // App.OnStart runs once per package load, before the initial Screen.OnVisible.
+  useEffect(() => {
+    if (!pkg || onStartExecutedRef.current) return;
+    onStartExecutedRef.current = true;
+
+    const formula = pkg.on_start?.trim();
+    if (formula) {
+      void executeAction({ formula }, servicesRef.current)
+        .catch((err) => {
+          console.error("[OnStart Error]", err);
+        })
+        .finally(() => {
+          onStartCompletedRef.current = true;
+          runInitialOnVisible(pkg.screens);
+        });
+      return;
+    }
+
+    onStartCompletedRef.current = true;
+    runInitialOnVisible(pkg.screens);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pkg]);
+
+  // Subscribe to every navigate() call after OnStart has completed.
+  useEffect(() => {
+    return navigationStore.subscribe(() => {
+      const screenId = navigationStore.getCurrentScreenId();
+      if (!screenId || !pkgRef.current || !onStartCompletedRef.current) return;
+      lastOnVisibleScreenRef.current = screenId;
+      runOnVisible(screenId, pkgRef.current.screens);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigationStore]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -47,16 +172,16 @@ function DevActionRunner() {
       formula: string,
     ) => {
       try {
-        await executeAction(
-          { formula },
-          { store, screenContextStore, engine, context },
-        );
+        await executeAction({ formula }, servicesRef.current);
         return { ok: true };
       } catch (err) {
         return { ok: false, error: String(err) };
       }
     };
-  }, [store, screenContextStore, engine, context]);
+    (window as unknown as Record<string, unknown>).__getCurrentScreenId = () =>
+      navigationStore.getCurrentScreenId();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigationStore]);
 
   return null;
 }
@@ -68,14 +193,21 @@ export const RuntimeProvider: React.FC<{
 }> = ({ appId, children, baseUrl }) => {
   const [pkg, setPkg] = useState<AppPackage | undefined>();
   const [loading, setLoading] = useState(true);
-  const [currentScreen, setCurrentScreen] = useState<string | undefined>(
-    undefined,
-  );
+  const [navTick, setNavTick] = useState(0);
   const [variables] = useState<Record<string, any>>({});
-  const [collections] = useState<Record<string, any[]>>({});
 
   const variableStoreRef = useRef(new InMemoryVariableStore());
   const screenContextStoreRef = useRef(new InMemoryScreenContextStore());
+  const collectionStoreRef = useRef(new InMemoryCollectionStore());
+  const gallerySelectionStoreRef = useRef(new InMemoryGallerySelectionStore());
+  const formUpdatesStoreRef = useRef(new InMemoryFormUpdatesStore());
+  const recordStoreRef = useRef(new InMemoryRecordStore());
+  const controlValueStoreRef = useRef(new InMemoryControlValueStore());
+  const navigationStoreRef = useRef(new InMemoryNavigationStore());
+
+  useEffect(() => {
+    return navigationStoreRef.current.subscribe(() => setNavTick((v) => v + 1));
+  }, []);
 
   useEffect(() => {
     if (import.meta.env.DEV) {
@@ -83,6 +215,18 @@ export const RuntimeProvider: React.FC<{
         variableStoreRef.current;
       (window as unknown as Record<string, unknown>).__screenContextStore =
         screenContextStoreRef.current;
+      (window as unknown as Record<string, unknown>).__navigationStore =
+        navigationStoreRef.current;
+      (window as unknown as Record<string, unknown>).__collectionStore =
+        collectionStoreRef.current;
+      (window as unknown as Record<string, unknown>).__gallerySelectionStore =
+        gallerySelectionStoreRef.current;
+      (window as unknown as Record<string, unknown>).__formUpdatesStore =
+        formUpdatesStoreRef.current;
+      (window as unknown as Record<string, unknown>).__recordStore =
+        recordStoreRef.current;
+      (window as unknown as Record<string, unknown>).__controlValueStore =
+        controlValueStoreRef.current;
     }
   }, []);
 
@@ -95,19 +239,16 @@ export const RuntimeProvider: React.FC<{
         "Content-Type": "application/json",
         "X-Tenant-Id": TENANT_ID,
       },
+      cache: "no-store",
     })
       .then((res) => res.json())
       .then((body) => {
         if (!mounted) return;
-        if (body && body.success && body.data) {
-          setPkg(body.data);
-          if (body.data.screens && body.data.screens.length > 0) {
-            setCurrentScreen(body.data.screens[0].id);
-          }
-        } else if (body && body.data) {
-          setPkg(body.data);
-          if (body.data.screens && body.data.screens.length > 0) {
-            setCurrentScreen(body.data.screens[0].id);
+        const data = body?.success ? body.data : body?.data;
+        if (data) {
+          setPkg(data);
+          if (data.screens?.length > 0) {
+            navigationStoreRef.current.navigate(data.screens[0].id);
           }
         }
       })
@@ -118,9 +259,21 @@ export const RuntimeProvider: React.FC<{
     };
   }, [appId, baseUrl]);
 
-  const navigate = (screenId: string) => {
-    setCurrentScreen(screenId);
-  };
+  const resolveScreenId = useCallback(
+    (name: string) => pkg?.screens?.find((screen) => screen.name === name)?.id,
+    [pkg],
+  );
+
+  const navigate = useCallback((screenId: string) => {
+    screenContextStoreRef.current.clear();
+    gallerySelectionStoreRef.current.clear();
+    formUpdatesStoreRef.current.clear();
+    controlValueStoreRef.current.clear();
+    navigationStoreRef.current.navigate(screenId);
+  }, []);
+
+  const currentScreen = navigationStoreRef.current.getCurrentScreenId();
+  void navTick;
 
   const screenControls = useMemo(() => {
     const screen = pkg?.screens?.find((item) => item.id === currentScreen);
@@ -133,12 +286,41 @@ export const RuntimeProvider: React.FC<{
       controls={screenControls}
       variableStore={variableStoreRef.current}
       screenContextStore={screenContextStoreRef.current}
+      collectionStore={collectionStoreRef.current}
+      gallerySelectionStore={gallerySelectionStoreRef.current}
+      formUpdatesStore={formUpdatesStoreRef.current}
+      recordStore={recordStoreRef.current}
+      controlValueStore={controlValueStoreRef.current}
     >
-      <DevActionRunner />
-      <RuntimeContext.Provider
-        value={{ pkg, loading, currentScreen, navigate, variables, collections }}
-      >
-        {children}
-      </RuntimeContext.Provider>
+      <NavigationStoreContext.Provider value={navigationStoreRef.current}>
+        <ScreenResolverContext.Provider value={resolveScreenId}>
+          <ActionRunner
+            navigationStore={navigationStoreRef.current}
+            resolveScreenId={resolveScreenId}
+            pkg={pkg}
+          />
+          <RuntimeContext.Provider
+            value={{
+              pkg,
+              loading,
+              currentScreen,
+              navigate,
+              variables,
+              collections: collectionStoreRef.current.getAll(),
+            }}
+          >
+            {children}
+          </RuntimeContext.Provider>
+        </ScreenResolverContext.Provider>
+      </NavigationStoreContext.Provider>
     </FormulaProvider>
-  );};
+  );
+};
+
+export function useNavigationStore(): RuntimeNavigationStore | null {
+  return useContext(NavigationStoreContext);
+}
+
+export function useScreenResolver(): ((name: string) => string | undefined) | null {
+  return useContext(ScreenResolverContext);
+}

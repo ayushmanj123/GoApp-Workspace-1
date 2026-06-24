@@ -130,6 +130,7 @@ func (h *applicationHandler) Update(c *fiber.Ctx) error {
 	if req.Name != nil { updates["name"] = *req.Name }
 	if req.Description != nil { updates["description"] = *req.Description }
 	if req.Status != nil { updates["status"] = *req.Status }
+	if req.OnStart != nil { updates["on_start"] = *req.OnStart }
 	if req.CurrentVersionID != nil { updates["current_version_id"] = *req.CurrentVersionID }
 	ctx := context.Background()
 	app, err := h.svc.Update(ctx, tid, id, updates)

@@ -30,6 +30,15 @@ function buildContext() {
   };
 }
 
+function buildContextWithCustomers(
+  rows: Array<{ Name: string }> = [],
+) {
+  return {
+    ...buildContext(),
+    Customers: rows,
+  };
+}
+
 describe("Power Fx built-in functions", () => {
   it("evaluates Upper(User.FullName)", async () => {
     const engine = new RemoteFormulaEngine(API_URL);
@@ -94,5 +103,70 @@ describe("Power Fx built-in functions", () => {
     assert.equal(await engine.evaluate("App.Name", context), "Demo Application");
     assert.equal(await engine.evaluate("TextInput1.Value", context), "Hello");
     assert.equal(await engine.evaluate("varTitle", context), "Hello World");
+  });
+});
+
+describe("Power Fx collection functions", () => {
+  it("evaluates CountRows(Customers) for one row", async () => {
+    const engine = new RemoteFormulaEngine(API_URL);
+    assert.equal(
+      await engine.evaluate(
+        "CountRows(Customers)",
+        buildContextWithCustomers([{ Name: "John" }]),
+      ),
+      1,
+    );
+  });
+
+  it("evaluates CountRows(Customers) for two rows", async () => {
+    const engine = new RemoteFormulaEngine(API_URL);
+    assert.equal(
+      await engine.evaluate(
+        "CountRows(Customers)",
+        buildContextWithCustomers([{ Name: "John" }, { Name: "Jane" }]),
+      ),
+      2,
+    );
+  });
+
+  it("evaluates First(Customers).Name", async () => {
+    const engine = new RemoteFormulaEngine(API_URL);
+    assert.equal(
+      await engine.evaluate(
+        "First(Customers).Name",
+        buildContextWithCustomers([{ Name: "John" }, { Name: "Jane" }]),
+      ),
+      "John",
+    );
+  });
+
+  it("evaluates Last(Customers).Name", async () => {
+    const engine = new RemoteFormulaEngine(API_URL);
+    assert.equal(
+      await engine.evaluate(
+        "Last(Customers).Name",
+        buildContextWithCustomers([{ Name: "John" }, { Name: "Jane" }]),
+      ),
+      "Jane",
+    );
+  });
+
+  it("evaluates IsEmpty(Customers) as false when rows exist", async () => {
+    const engine = new RemoteFormulaEngine(API_URL);
+    assert.equal(
+      await engine.evaluate(
+        "IsEmpty(Customers)",
+        buildContextWithCustomers([{ Name: "John" }]),
+      ),
+      false,
+    );
+  });
+
+  it("evaluates IsEmpty(Customers) as true for empty collection", async () => {
+    const engine = new RemoteFormulaEngine(API_URL);
+    assert.equal(
+      await engine.evaluate("IsEmpty(Customers)", buildContextWithCustomers()),
+      true,
+    );
   });
 });

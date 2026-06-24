@@ -2,12 +2,15 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/goapps-platform/metadata-service/internal/models"
 	"github.com/goapps-platform/metadata-service/internal/repositories"
 	"github.com/google/uuid"
 )
+
+var ErrDuplicateScreenName = errors.New("duplicate screen name")
 
 type ScreenService struct {
 	store repositories.Store
@@ -55,6 +58,9 @@ func (s *ScreenService) Update(ctx context.Context, tenantID, id uuid.UUID, upda
 	}
 	if v, ok := updates["display_order"].(int); ok {
 		scr.DisplayOrder = v
+	}
+	if v, ok := updates["on_visible"].(string); ok {
+		scr.OnVisible = &v
 	}
 	if err := session.Screens().Update(ctx, scr); err != nil {
 		return nil, fmt.Errorf("update screen: %w", err)

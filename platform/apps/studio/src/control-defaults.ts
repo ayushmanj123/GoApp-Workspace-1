@@ -1,6 +1,6 @@
 import { normalizeControlType } from "./property-metadata/registry";
 
-export type ToolboxControlType = "button" | "label" | "textinput";
+export type ToolboxControlType = "button" | "label" | "textinput" | "gallery" | "form" | "timer";
 
 export interface ControlDefaults {
   name: string;
@@ -9,7 +9,7 @@ export interface ControlDefaults {
   y: number;
   width: number;
   height: number;
-  properties: Record<string, { value: string | boolean | number }>;
+  properties: Record<string, { value?: string | boolean | number; formula?: string }>;
 }
 
 const TOOLBOX_DEFAULTS: Record<ToolboxControlType, ControlDefaults> = {
@@ -47,6 +47,39 @@ const TOOLBOX_DEFAULTS: Record<ToolboxControlType, ControlDefaults> = {
       placeholder: { value: "Enter text" },
     },
   },
+  gallery: {
+    name: "Gallery",
+    control_type: "gallery",
+    x: 100,
+    y: 250,
+    width: 280,
+    height: 200,
+    properties: {
+      items: { formula: "Customers" },
+    },
+  },
+  form: {
+    name: "Form",
+    control_type: "form",
+    x: 420,
+    y: 250,
+    width: 280,
+    height: 200,
+    properties: {
+      item: { formula: "Gallery1.Selected" },
+    },
+  },
+  timer: {
+    name: "Timer",
+    control_type: "timer",
+    x: 100,
+    y: 320,
+    width: 120,
+    height: 32,
+    properties: {
+      duration: { value: 1000 },
+    },
+  },
 };
 
 export function getControlDefaults(
@@ -75,5 +108,5 @@ export function isToolboxControlType(
   controlType: string,
 ): controlType is ToolboxControlType {
   const key = normalizeControlType(controlType);
-  return key === "button" || key === "label" || key === "textinput";
+  return key === "button" || key === "label" || key === "textinput" || key === "gallery" || key === "form" || key === "timer";
 }

@@ -1,5 +1,9 @@
 import { useContext } from "react";
-import { RuntimeContext } from "./runtime-provider";
+import {
+  RuntimeContext,
+  useNavigationStore,
+  useScreenResolver,
+} from "./runtime-provider";
 
 export function useRuntime() {
   return useContext(RuntimeContext);
@@ -11,3 +15,5 @@ export function useCurrentScreen() {
 export function useNavigate() {
   return useContext(RuntimeContext).navigate;
 }
+
+export { useNavigationStore, useScreenResolver };

@@ -69,16 +69,35 @@
   position: relative;
 }
 
+.backgroundStage {
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.interactionStage {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: auto;
+}
+
 .controlOverlay {
   position: absolute;
   inset: 0;
   z-index: 1;
-  pointer-events: none;
+  pointer-events: none !important;
   overflow: hidden;
 }
 
 .controlPreview {
   position: absolute;
   overflow: hidden;
+  pointer-events: none;
+}
+
+.controlPreview,
+.controlPreview * {
   pointer-events: none;
 }

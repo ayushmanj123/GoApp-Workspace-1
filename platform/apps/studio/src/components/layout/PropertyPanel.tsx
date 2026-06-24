@@ -18,6 +18,7 @@ import {
 } from "../../utils/control-properties";
 import { useStudioStore } from "../../store/studioStore";
 import { useApplicationStore } from "../../store/applicationStore";
+import { buildStudioFormulaContext } from "../../utils/build-studio-formula-context";
 import styles from "./PropertyPanel.module.css";
 
 const ChevronLeftIcon = () => (
@@ -73,6 +74,7 @@ function PropRow({ label, type = "text", value, onChange }: PropRowProps) {
 interface MetadataPropRowProps {
   definition: PropertyFieldDefinition;
   value: unknown;
+  evaluationContext: Record<string, unknown>;
   onChange: (entry: Record<string, unknown>) => void;
 }
 
@@ -114,6 +116,7 @@ function PropertyModeSelector({
 function MetadataPropRow({
   definition,
   value,
+  evaluationContext,
   onChange,
 }: MetadataPropRowProps) {
   const { label, type } = definition;
@@ -161,6 +164,8 @@ function MetadataPropRow({
           open={editorOpen}
           propertyLabel={label}
           initialFormula={formula}
+          validationMode="action"
+          evaluationContext={evaluationContext}
           onSave={(nextFormula) => {
             onChange(writePropertyFormula(nextFormula));
             setEditorOpen(false);
@@ -244,6 +249,8 @@ function MetadataPropRow({
           open={editorOpen}
           propertyLabel={label}
           initialFormula={formula}
+          validationMode="expression"
+          evaluationContext={evaluationContext}
           onSave={(nextFormula) => {
             onChange(writePropertyFormula(nextFormula));
             setEditorOpen(false);
@@ -281,16 +288,25 @@ export function PropertyPanel() {
   const collapsed = useStudioStore((s) => s.propertiesCollapsed);
   const toggleProperties = useStudioStore((s) => s.toggleProperties);
   const selectedControlId = useStudioStore((s) => s.selectedControlId);
+  const appName = useStudioStore((s) => s.appName);
+  const screenName = useStudioStore((s) => s.screenName);
   const controls = useApplicationStore((s) => s.controls);
+  const selectedScreenId = useApplicationStore((s) => s.selectedScreenId);
+  const screens = useApplicationStore((s) => s.screens);
   const updateControl = useApplicationStore((s) => s.updateControl);
+  const updateScreenOnVisible = useApplicationStore((s) => s.updateScreenOnVisible);
   const deleteControl = useApplicationStore((s) => s.deleteControl);
+  const [onVisibleEditorOpen, setOnVisibleEditorOpen] = useState(false);
 
   const selectedControl = controls.find(
     (control) => control.id === selectedControlId,
   );
+  const selectedScreen = screens.find((screen) => screen.id === selectedScreenId);
+  const onVisibleFormula = selectedScreen?.on_visible ?? "";
   const propertyDefinitions = selectedControl
     ? getPropertyDefinitions(selectedControl.control_type)
     : [];
+  const evaluationContext = buildStudioFormulaContext(appName, controls);
 
   const updateNumericField = (
     field: "x" | "y" | "width" | "height",
@@ -394,15 +410,62 @@ export function PropertyPanel() {
                   key={definition.name}
                   definition={definition}
                   value={selectedControl.properties?.[definition.name]}
+                  evaluationContext={evaluationContext}
                   onChange={(entry) =>
                     updateMetadataProperty(definition, entry)
                   }
                 />
               ))}
             </>
+          ) : selectedScreenId ? (
+            <>
+              <div className={styles.controlBadge}>
+                <span className={styles.controlName}>{screenName}</span>
+              </div>
+              <div className={styles.propBlock}>
+                <div className={styles.propRow}>
+                  <span className={styles.propLabel}>OnVisible</span>
+                  <span className={styles.formulaModeBadge}>Action</span>
+                </div>
+                <div className={styles.formulaSummaryRow}>
+                  <span
+                    className={styles.formulaSummary}
+                    title={onVisibleFormula || undefined}
+                    data-testid="on_visible-formula-summary"
+                  >
+                    {truncateFormula(onVisibleFormula) || "(empty)"}
+                  </span>
+                </div>
+                <div className={styles.formulaEditorRow}>
+                  <button
+                    type="button"
+                    className={styles.formulaEditorBtn}
+                    data-testid="on_visible-open-formula-editor"
+                    onClick={() => setOnVisibleEditorOpen(true)}
+                  >
+                    Open Formula Editor
+                  </button>
+                </div>
+                <FormulaEditorModal
+                  open={onVisibleEditorOpen}
+                  propertyLabel="OnVisible"
+                  initialFormula={onVisibleFormula}
+                  validationMode="action"
+                  evaluationContext={evaluationContext}
+                  onSave={(nextFormula) => {
+                    updateScreenOnVisible(selectedScreenId, nextFormula);
+                    setOnVisibleEditorOpen(false);
+                  }}
+                  onCancel={() => setOnVisibleEditorOpen(false)}
+                />
+              </div>
+              <div className={styles.emptyHint}>
+                <p>Select a control on the canvas to view its properties.</p>
+              </div>
+            </>
           ) : (
             <div className={styles.emptyHint}>
-              <p>Select a control on the canvas to view its properties.</p>
+              <p>Select a screen to view screen properties.</p>
             </div>
           )}
         </div>

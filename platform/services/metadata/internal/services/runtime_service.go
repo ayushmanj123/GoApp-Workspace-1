@@ -25,52 +25,62 @@ func NewRuntimeService(store repositories.Store) *RuntimeService {
 	return &RuntimeService{store: store}
 }
 
-func (s *RuntimeService) GetApplicationPackage(ctx context.Context, tenantID, appID uuid.UUID) (*models.Application, []models.Screen, []models.Control, []models.ControlProperty, []models.Formula, error) {
+func (s *RuntimeService) GetApplicationPackage(ctx context.Context, tenantID, appID uuid.UUID) (*models.Application, []models.Screen, []models.Control, []models.ControlProperty, []models.Formula, []models.ComponentDefinition, error) {
 	sess := s.store.WithTenant(ctx, tenantID)
 	app, err := sess.Applications().GetByID(ctx, appID)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("load application: %w", err)
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("load application: %w", err)
 	}
 
 	screens, err := s.loadScreens(ctx, sess, tenantID, appID)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
+	}
+
+	componentDefs, err := s.loadComponentDefinitions(ctx, sess, tenantID, appID)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, err
 	}
 
 	screenIDs := collectScreenIDs(screens)
 	if len(screenIDs) == 0 {
-		return app, screens, nil, nil, nil, nil
+		return app, screens, nil, nil, nil, componentDefs, nil
 	}
 
 	controls, err := s.loadControls(ctx, sess, tenantID, screenIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
 
 	controlIDs := collectControlIDs(controls)
 	if len(controlIDs) == 0 {
-		return app, screens, controls, nil, nil, nil
+		return app, screens, controls, nil, nil, componentDefs, nil
 	}
 
 	props, err := s.loadProperties(ctx, sess, tenantID, controlIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
 	formulas, err := s.loadFormulas(ctx, sess, tenantID, controlIDs)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
 
-	return app, screens, controls, props, formulas, nil
+	return app, screens, controls, props, formulas, componentDefs, nil
 }
 
 // Convenience for assembler
 func (s *RuntimeService) BuildRuntimePackage(ctx context.Context, tenantID, appID uuid.UUID) (*contracts.RuntimeApplication, error) {
-	app, screens, controls, props, formulas, err := s.GetApplicationPackage(ctx, tenantID, appID)
+	app, screens, controls, props, formulas, componentDefs, err := s.GetApplicationPackage(ctx, tenantID, appID)
 	if err != nil {
 		return nil, err
 	}
-	pkg, err := assembleRuntimeApplication(app, screens, controls, props, formulas)
+	entitySvc := NewEntityService(s.store)
+	entities, entityFields, err := entitySvc.LoadEntitiesWithFields(ctx, tenantID, appID)
+	if err != nil {
+		return nil, err
+	}
+	pkg, err := assembleRuntimeApplication(app, screens, controls, props, formulas, componentDefs, entities, entityFields)
 	if err != nil {
 		return nil, err
 	}
@@ -197,4 +207,25 @@ func collectControlIDs(items []models.Control) []uuid.UUID {
 		ids = append(ids, it.ID)
 	}
 	return ids
+}
+
+func (s *RuntimeService) loadComponentDefinitions(ctx context.Context, sess repositories.TenantSession, tenantID, appID uuid.UUID) ([]models.ComponentDefinition, error) {
+	if repo, ok := any(sess.ComponentDefinitions()).(byFieldRepo[models.ComponentDefinition]); ok {
+		items, err := repo.ListByField(ctx, "application_id", appID, 0, 0)
+		if err != nil {
+			return nil, fmt.Errorf("load component definitions: %w", err)
+		}
+		return items, nil
+	}
+	items, err := sess.ComponentDefinitions().ListByTenant(ctx, tenantID, 0, 0)
+	if err != nil {
+		return nil, fmt.Errorf("load component definitions: %w", err)
+	}
+	var filtered []models.ComponentDefinition
+	for _, it := range items {
+		if it.ApplicationID == appID {
+			filtered = append(filtered, it)
+		}
+	}
+	return filtered, nil
 }

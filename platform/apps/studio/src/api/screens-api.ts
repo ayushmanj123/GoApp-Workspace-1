@@ -7,6 +7,7 @@ export interface Screen {
   name: string;
   display_order: number;
   layout_type: string;
+  on_visible?: string | null;
   deleted_at: string | null;
   CreatedOn: string;
   ModifiedOn: string;
@@ -22,6 +23,7 @@ export interface UpdateScreenPayload {
   name?: string;
   display_order?: number;
   layout_type?: string;
+  on_visible?: string;
 }
 
 export const screensApi = {

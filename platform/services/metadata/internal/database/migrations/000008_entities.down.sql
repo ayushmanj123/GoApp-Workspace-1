@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS entity_fields;
+DROP TABLE IF EXISTS entities;

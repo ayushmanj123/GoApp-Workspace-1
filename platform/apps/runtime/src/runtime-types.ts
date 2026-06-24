@@ -29,6 +29,7 @@ export interface RuntimeScreen {
   name?: string
   display_order?: number
   layout_type?: string
+  on_visible?: string
   controls: RuntimeControl[]
 }
 
@@ -37,8 +38,20 @@ export interface RuntimeApplication {
   tenant_id?: string
   name?: string
   status?: string
+  on_start?: string
   screens: RuntimeScreen[]
+  entities?: RuntimeEntity[]
   created_on?: string
+}
+
+export interface RuntimeEntity {
+  name: string
+  fields: RuntimeEntityField[]
+}
+
+export interface RuntimeEntityField {
+  name: string
+  field_type: string
 }
 
 export type AppPackage = RuntimeApplication

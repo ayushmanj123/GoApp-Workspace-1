@@ -17,6 +17,7 @@
     }
   },
   "scripts": {
+    "serve": "node ./scripts/serve-formula-api.mjs",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "pnpm build && pnpm test:dotnet && pnpm test:node && pnpm test:remote",

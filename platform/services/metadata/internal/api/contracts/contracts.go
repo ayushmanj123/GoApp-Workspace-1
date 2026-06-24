@@ -24,6 +24,7 @@ type UpdateApplicationRequest struct {
 	Description      *string `json:"description" validate:"omitempty"`
 	Status           *string `json:"status" validate:"omitempty,oneof=draft published archived"`
 	CurrentVersionID *string `json:"current_version_id" validate:"omitempty,uuid4"`
+	OnStart          *string `json:"on_start" validate:"omitempty"`
 }
 
 // Screen DTOs
@@ -37,6 +38,7 @@ type UpdateScreenRequest struct {
 	Name         *string `json:"name" validate:"omitempty,min=1,max=200"`
 	DisplayOrder *int    `json:"display_order" validate:"omitempty"`
 	LayoutType   *string `json:"layout_type" validate:"omitempty"`
+	OnVisible    *string `json:"on_visible" validate:"omitempty"`
 }
 
 // Control DTOs
@@ -69,6 +71,35 @@ type UpdateFormulaRequest struct {
 	FormulaType  *string `json:"formula_type" validate:"omitempty"`
 }
 
+// Component definition DTOs
+type CreateComponentDefinitionRequest struct {
+	Name       string                 `json:"name" validate:"required,min=1,max=200"`
+	Definition map[string]interface{} `json:"definition" validate:"required"`
+}
+
+// Entity DTOs
+type CreateEntityRequest struct {
+	Name        string `json:"name" validate:"required,min=1,max=200"`
+	DisplayName string `json:"display_name" validate:"required,min=1,max=200"`
+}
+
+type UpdateEntityRequest struct {
+	Name        *string `json:"name" validate:"omitempty,min=1,max=200"`
+	DisplayName *string `json:"display_name" validate:"omitempty,min=1,max=200"`
+}
+
+type CreateEntityFieldRequest struct {
+	Name        string `json:"name" validate:"required,min=1,max=200"`
+	DisplayName string `json:"display_name" validate:"required,min=1,max=200"`
+	FieldType   string `json:"field_type" validate:"required,oneof=text number boolean date"`
+}
+
+type UpdateEntityFieldRequest struct {
+	Name        *string `json:"name" validate:"omitempty,min=1,max=200"`
+	DisplayName *string `json:"display_name" validate:"omitempty,min=1,max=200"`
+	FieldType   *string `json:"field_type" validate:"omitempty,oneof=text number boolean date"`
+}
+
 // Pagination
 type ListOptions struct {
 	Limit  int `query:"limit"`
@@ -98,12 +129,24 @@ func NowUTC() time.Time { return time.Now().UTC() }
 // Runtime DTOs for the runtime package
 
 type RuntimeApplication struct {
-	ID        uuid.UUID       `json:"id"`
-	TenantID  uuid.UUID       `json:"tenant_id"`
-	Name      string          `json:"name"`
-	Status    string          `json:"status"`
-	Screens   []RuntimeScreen `json:"screens"`
-	CreatedOn time.Time       `json:"created_on"`
+	ID        uuid.UUID        `json:"id"`
+	TenantID  uuid.UUID        `json:"tenant_id"`
+	Name      string           `json:"name"`
+	Status    string           `json:"status"`
+	OnStart   *string          `json:"on_start,omitempty"`
+	Screens   []RuntimeScreen  `json:"screens"`
+	Entities  []RuntimeEntity  `json:"entities,omitempty"`
+	CreatedOn time.Time        `json:"created_on"`
+}
+
+type RuntimeEntity struct {
+	Name   string              `json:"name"`
+	Fields []RuntimeEntityField `json:"fields"`
+}
+
+type RuntimeEntityField struct {
+	Name      string `json:"name"`
+	FieldType string `json:"field_type"`
 }
 
 type RuntimeScreen struct {
@@ -112,6 +155,7 @@ type RuntimeScreen struct {
 	Name          string           `json:"name"`
 	DisplayOrder  int              `json:"display_order"`
 	LayoutType    string           `json:"layout_type"`
+	OnVisible     *string          `json:"on_visible,omitempty"`
 	Controls      []RuntimeControl `json:"controls"`
 }
 

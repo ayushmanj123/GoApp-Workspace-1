@@ -46,6 +46,37 @@ func RegisterRoutes(app *fiber.App, store repositories.Store, jwtMiddleware fibe
 	v1.Get("/runtime/applications/:id/screens", func(c *fiber.Ctx) error { return handlers.NewRuntimeHandler(store).GetApplicationScreens(c) })
 	v1.Get("/runtime/screens/:id", func(c *fiber.Ctx) error { return handlers.NewRuntimeHandler(store).GetScreen(c) })
 	v1.Get("/runtime/screens/:id/tree", func(c *fiber.Ctx) error { return handlers.NewRuntimeHandler(store).GetScreenTree(c) })
+
+	// Component definitions
+	v1.Post("/applications/:appId/component-definitions", func(c *fiber.Ctx) error {
+		return handlers.NewComponentDefinitionHandler(store).Create(c)
+	})
+	v1.Get("/applications/:appId/component-definitions", func(c *fiber.Ctx) error {
+		return handlers.NewComponentDefinitionHandler(store).List(c)
+	})
+	v1.Get("/component-definitions/:id", func(c *fiber.Ctx) error {
+		return handlers.NewComponentDefinitionHandler(store).Get(c)
+	})
+
+	// Entities
+	v1.Post("/applications/:appId/entities", func(c *fiber.Ctx) error {
+		return handlers.NewEntityHandler(store).Create(c)
+	})
+	v1.Get("/applications/:appId/entities", func(c *fiber.Ctx) error {
+		return handlers.NewEntityHandler(store).List(c)
+	})
+	v1.Put("/entities/:id", func(c *fiber.Ctx) error {
+		return handlers.NewEntityHandler(store).Update(c)
+	})
+	v1.Post("/entities/:entityId/fields", func(c *fiber.Ctx) error {
+		return handlers.NewEntityHandler(store).CreateField(c)
+	})
+	v1.Get("/entities/:entityId/fields", func(c *fiber.Ctx) error {
+		return handlers.NewEntityHandler(store).ListFields(c)
+	})
+	v1.Put("/entity-fields/:id", func(c *fiber.Ctx) error {
+		return handlers.NewEntityHandler(store).UpdateField(c)
+	})
 }
 
 // Helper to extract tenant id from Fiber context. It prefers Locals("tenant_id") then header.

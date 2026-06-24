@@ -67,6 +67,9 @@ func (s *ApplicationService) Update(ctx context.Context, tenantID uuid.UUID, id 
 	if v, ok := updates["name"].(string); ok { app.Name = v }
 	if v, ok := updates["description"].(string); ok { app.Description = v }
 	if v, ok := updates["status"].(string); ok { app.Status = v }
+	if v, ok := updates["on_start"].(string); ok {
+		app.OnStart = &v
+	}
 	if v, ok := updates["current_version_id"].(string); ok {
 		if v == "" { app.CurrentVersionID = nil } else { if uid, err := uuid.Parse(v); err == nil { app.CurrentVersionID = &uid } }
 	}

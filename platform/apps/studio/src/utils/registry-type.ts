@@ -2,9 +2,13 @@ const REGISTRY_ALIASES: Record<string, string> = {
   button: "Button",
   label: "Label",
   textinput: "TextInput",
+  gallery: "Gallery",
+  form: "Form",
+  timer: "Timer",
+  component: "Component",
 };
 
-const STUDIO_REGISTRY_TYPES = new Set(["Button", "Label", "TextInput"]);
+const STUDIO_REGISTRY_TYPES = new Set(["Button", "Label", "TextInput", "Gallery", "Form", "Timer", "Component"]);
 
 export function resolveRegistryType(rawType: string): string {
   const key = rawType.trim().toLowerCase().replace(/_/g, "");

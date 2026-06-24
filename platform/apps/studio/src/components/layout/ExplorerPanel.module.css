@@ -102,6 +102,11 @@
   padding-bottom: 4px;
 }
 
+.controlsSection {
+  border-top: 1px solid var(--color-border-subtle);
+  padding-bottom: 4px;
+}
+
 .treeList {
   list-style: none;
 }
@@ -255,6 +260,172 @@
   font-size: 11px;
   color: var(--color-text-muted);
   font-style: italic;
+}
+
+.controlTree {
+  list-style: none;
+  padding: 2px 0 6px;
+}
+
+.controlItem {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 22px;
+  transition: background var(--transition);
+}
+
+.controlItem:hover {
+  background: var(--color-bg-hover);
+}
+
+.controlSelected {
+  background: var(--color-bg-selected);
+}
+
+.controlSelected .controlName {
+  color: var(--color-text-accent);
+}
+
+.controlChevronBtn,
+.controlChevronSpacer {
+  width: 12px;
+  flex-shrink: 0;
+  font-size: 9px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.controlChevronBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  border-radius: var(--radius);
+}
+
+.controlChevronBtn:hover {
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+}
+
+.controlBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 8px 2px 0;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  text-align: left;
+}
+
+.controlName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.controlZIndex {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.emptyControls {
+  padding: 4px 10px 4px 42px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.layerActions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 10px 6px 28px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.layerActionBtn {
+  width: 100%;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  text-align: left;
+  border-radius: var(--radius);
+  transition:
+    background var(--transition),
+    color var(--transition);
+}
+
+.layerActionBtn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.componentCreateRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 10px 6px 28px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.componentList {
+  list-style: none;
+  margin: 0;
+  padding: 0 10px 8px 28px;
+}
+
+.componentItem {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  padding: 2px 0;
+}
+
+.entityNode {
+  margin-bottom: 4px;
+}
+
+.entityRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.entityFieldList {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0 0 0 16px;
+}
+
+.entityFieldItem {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  padding: 1px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.entityFieldType {
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  opacity: 0.8;
+}
+
+.componentBadge {
+  flex-shrink: 0;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #cba6f7;
+  border: 1px solid rgba(203, 166, 247, 0.35);
+  border-radius: 999px;
+  padding: 0 5px;
 }
 
 .collapsed {

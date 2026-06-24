@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/go-playground/validator/v10"
 	api "github.com/goapps-platform/metadata-service/internal/api/contracts"
@@ -42,9 +44,26 @@ func (h *screenHandler) Create(c *fiber.Ctx) error {
 	ctx := context.Background()
 	scr, err := h.svc.Create(ctx, tid, appID, req.Name, req.DisplayOrder, req.LayoutType)
 	if err != nil {
+		if isDuplicateScreenNameError(err) {
+			return c.Status(fiber.StatusConflict).JSON(api.APIResponse{
+				Success: false,
+				Error:   "screen name already exists",
+			})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(api.APIResponse{Success: false, Error: err.Error()})
 	}
 	return c.Status(fiber.StatusCreated).JSON(api.APIResponse{Success: true, Data: scr})
+}
+
+func isDuplicateScreenNameError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "duplicate key") ||
+		strings.Contains(msg, "unique constraint") ||
+		strings.Contains(msg, "screens_app_name_unique") ||
+		errors.Is(err, services.ErrDuplicateScreenName)
 }
 
 func (h *screenHandler) List(c *fiber.Ctx) error {
@@ -94,6 +113,9 @@ func (h *screenHandler) Update(c *fiber.Ctx) error {
 	}
 	if req.LayoutType != nil {
 		updates["layout_type"] = *req.LayoutType
+	}
+	if req.OnVisible != nil {
+		updates["on_visible"] = *req.OnVisible
 	}
 	if len(updates) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: "no fields to update"})

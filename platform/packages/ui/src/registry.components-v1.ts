@@ -106,8 +106,19 @@ const Form: ComponentDefinition = {
   renderDesigner: noop,
 };
 
+const Timer: ComponentDefinition = {
+  type: "Timer",
+  category: "input",
+  properties: makeProps([
+    { name: "duration", title: "Duration", type: "number", default: 1000 },
+  ]),
+  events: [],
+  renderRuntime: noop,
+  renderDesigner: noop,
+};
+
 // Register v1 components
-[Button, Label, TextInput, Dropdown, Container, Gallery, Form].forEach((c) =>
+[Button, Label, TextInput, Dropdown, Container, Gallery, Form, Timer].forEach((c) =>
   registry.register(c),
 );
 
@@ -119,4 +130,5 @@ export const V1 = {
   Container,
   Gallery,
   Form,
+  Timer,
 };

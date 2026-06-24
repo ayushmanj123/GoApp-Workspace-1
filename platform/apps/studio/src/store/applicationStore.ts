@@ -3,14 +3,30 @@ import { applicationsApi, type Application } from "../api/applications-api";
 import { screensApi, type Screen } from "../api/screens-api";
 import { controlsApi, type Control } from "../api/controls-api";
 import { propertiesApi } from "../api/properties-api";
-import { TENANT_ID } from "../api/metadata-client";
+import {
+  componentDefinitionsApi,
+  type ComponentDefinitionRecord,
+} from "../api/component-definitions-api";
+import {
+  entitiesApi,
+  type EntityFieldRecord,
+  type EntityFieldType,
+  type EntityRecord,
+} from "../api/entities-api";
+import { TENANT_ID, ApiError } from "../api/metadata-client";
 import {
   buildControlName,
   getControlDefaults,
   type ToolboxControlType,
 } from "../control-defaults";
 import { buildPropertiesPayload } from "../utils/control-properties";
+import { computeLayerUpdates, type LayerAction } from "../utils/layer-actions";
+import {
+  computeComponentBounds,
+  snapshotControlSubtree,
+} from "../utils/component-definition";
 import { createLocalControlId, isLocalControlId } from "../utils/control-ids";
+import { buildUniqueScreenName, buildFallbackScreenName } from "../utils/screen-names";
 import { useStudioStore } from "./studioStore";
 
 export interface SaveScreenResult {
@@ -23,15 +39,22 @@ export interface ApplicationState {
   applications: Application[];
   screens: Screen[];
   controls: Control[];
+  componentDefinitions: ComponentDefinitionRecord[];
+  entities: EntityRecord[];
+  entityFieldsByEntityId: Record<string, EntityFieldRecord[]>;
 
   // Selection
   selectedApplicationId: string | null;
   selectedScreenId: string | null;
+  selectedEntityId: string | null;
 
   // Loading / error
   appsLoading: boolean;
   screensLoading: boolean;
+  createScreenLoading: boolean;
   controlsLoading: boolean;
+  componentDefinitionsLoading: boolean;
+  entitiesLoading: boolean;
   appsError: string | null;
   screensError: string | null;
   controlsError: string | null;
@@ -40,18 +63,37 @@ export interface ApplicationState {
   loadApplications: () => Promise<void>;
   loadScreens: (applicationId: string) => Promise<void>;
   loadControls: (screenId: string) => Promise<void>;
+  loadComponentDefinitions: (applicationId: string) => Promise<void>;
+  loadEntities: (applicationId: string) => Promise<void>;
+  createEntity: (name: string, displayName: string) => Promise<void>;
+  addEntityField: (
+    entityId: string,
+    name: string,
+    displayName: string,
+    fieldType: EntityFieldType,
+  ) => Promise<void>;
+  selectEntity: (entityId: string | null) => void;
+  createComponentFromSelection: (controlId: string, name: string) => Promise<void>;
+  insertComponentInstance: (definitionId: string) => void;
   saveScreen: () => Promise<SaveScreenResult>;
   selectApplication: (id: string) => void;
   selectScreen: (id: string) => void;
   updateControl: (
     controlId: string,
-    updates: Partial<Pick<Control, "name" | "x" | "y" | "width" | "height" | "properties">>,
+    updates: Partial<
+      Pick<
+        Control,
+        "name" | "x" | "y" | "width" | "height" | "properties" | "parent_control_id"
+      >
+    >,
   ) => void;
+  applyLayerAction: (controlId: string, action: LayerAction) => void;
+  updateScreenOnVisible: (screenId: string, onVisible: string) => void;
   createControl: (controlType: ToolboxControlType) => void;
   deleteControl: (controlId: string) => Promise<void>;
 
   // CRUD
-  createScreen: (applicationId: string, name: string) => Promise<Screen>;
+  createScreen: (applicationId: string, name?: string) => Promise<Screen>;
   renameScreen: (screenId: string, name: string) => Promise<void>;
   deleteScreen: (screenId: string) => Promise<void>;
 }
@@ -60,11 +102,18 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
   applications: [],
   screens: [],
   controls: [],
+  componentDefinitions: [],
+  entities: [],
+  entityFieldsByEntityId: {},
   selectedApplicationId: null,
   selectedScreenId: null,
+  selectedEntityId: null,
   appsLoading: false,
   screensLoading: false,
+  createScreenLoading: false,
   controlsLoading: false,
+  componentDefinitionsLoading: false,
+  entitiesLoading: false,
   appsError: null,
   screensError: null,
   controlsError: null,
@@ -103,10 +152,16 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
       selectedScreenId: null,
       screens: [],
       controls: [],
+      componentDefinitions: [],
+      entities: [],
+      entityFieldsByEntityId: {},
+      selectedEntityId: null,
     });
     useStudioStore.getState().selectControl(null);
     useStudioStore.getState().setDirty(false);
     useStudioStore.getState().setSaveMessage(null);
+    void get().loadComponentDefinitions(id);
+    void get().loadEntities(id);
   },
 
   selectScreen: (id: string) => {
@@ -142,8 +197,137 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     }
   },
 
+  loadComponentDefinitions: async (applicationId) => {
+    set({ componentDefinitionsLoading: true });
+    try {
+      const data = await componentDefinitionsApi.list(applicationId);
+      set({
+        componentDefinitions: data.items,
+        componentDefinitionsLoading: false,
+      });
+    } catch {
+      set({ componentDefinitionsLoading: false, componentDefinitions: [] });
+    }
+  },
+
+  loadEntities: async (applicationId) => {
+    set({ entitiesLoading: true });
+    try {
+      const data = await entitiesApi.list(applicationId);
+      const fieldsByEntity: Record<string, EntityFieldRecord[]> = {};
+      await Promise.all(
+        data.items.map(async (entity) => {
+          const fields = await entitiesApi.listFields(entity.id);
+          fieldsByEntity[entity.id] = fields.items;
+        }),
+      );
+      set({
+        entities: data.items,
+        entityFieldsByEntityId: fieldsByEntity,
+        entitiesLoading: false,
+      });
+    } catch {
+      set({ entitiesLoading: false, entities: [], entityFieldsByEntityId: {} });
+    }
+  },
+
+  createEntity: async (name, displayName) => {
+    const { selectedApplicationId } = get();
+    if (!selectedApplicationId) {
+      throw new Error("No application selected");
+    }
+    await entitiesApi.create(selectedApplicationId, { name, display_name: displayName });
+    await get().loadEntities(selectedApplicationId);
+  },
+
+  addEntityField: async (entityId, name, displayName, fieldType) => {
+    const { selectedApplicationId } = get();
+    if (!selectedApplicationId) {
+      throw new Error("No application selected");
+    }
+    await entitiesApi.createField(entityId, {
+      name,
+      display_name: displayName,
+      field_type: fieldType,
+    });
+    await get().loadEntities(selectedApplicationId);
+  },
+
+  selectEntity: (entityId) => {
+    set({ selectedEntityId: entityId });
+  },
+
+  createComponentFromSelection: async (controlId, name) => {
+    const { controls, selectedApplicationId } = get();
+    if (!selectedApplicationId) {
+      return;
+    }
+    const snapshots = snapshotControlSubtree(controls, controlId);
+    if (snapshots.length === 0) {
+      return;
+    }
+    await componentDefinitionsApi.create(selectedApplicationId, {
+      name,
+      definition: { controls: snapshots },
+    });
+    await get().loadComponentDefinitions(selectedApplicationId);
+  },
+
+  insertComponentInstance: (definitionId) => {
+    const { controls, selectedScreenId, componentDefinitions, selectedApplicationId } = get();
+    if (!selectedScreenId) {
+      return;
+    }
+    const definition = componentDefinitions.find((item) => item.id === definitionId);
+    if (!definition) {
+      return;
+    }
+    const bounds = computeComponentBounds(definition.definition_json?.controls ?? []);
+    const nextZIndex =
+      controls.length > 0
+        ? Math.max(...controls.map((control) => control.z_index)) + 1
+        : 1;
+    const existingNames = controls.map((item) => item.name);
+    let instanceName = definition.name;
+    if (existingNames.includes(instanceName)) {
+      let index = 2;
+      while (existingNames.includes(`${definition.name}${index}`)) {
+        index += 1;
+      }
+      instanceName = `${definition.name}${index}`;
+    }
+    const now = new Date().toISOString();
+    const control: Control = {
+      id: createLocalControlId(),
+      tenant_id: TENANT_ID,
+      screen_id: selectedScreenId,
+      parent_control_id: null,
+      control_type: "component",
+      name: instanceName,
+      x: 120,
+      y: 120,
+      width: bounds.width,
+      height: bounds.height,
+      z_index: nextZIndex,
+      properties: {
+        definition_id: { value: definition.id },
+        definition_name: { value: definition.name },
+      },
+      deleted_at: null,
+      CreatedOn: now,
+      ModifiedOn: now,
+    };
+    set((state) => ({ controls: [...state.controls, control] }));
+    useStudioStore.getState().selectControl(control.id);
+    useStudioStore.getState().setDirty(true);
+    useStudioStore.getState().setSaveMessage(null);
+    if (selectedApplicationId) {
+      void get().loadComponentDefinitions(selectedApplicationId);
+    }
+  },
+
   saveScreen: async () => {
-    const { controls, selectedScreenId } = get();
+    const { controls, selectedScreenId, screens } = get();
     if (!selectedScreenId) {
       return { success: false, errors: ["No screen selected"] };
     }
@@ -151,10 +335,87 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     const errors: string[] = [];
     const idReplacements = new Map<string, string>();
     const selectedControlId = useStudioStore.getState().selectedControlId;
+    const currentScreen = screens.find((screen) => screen.id === selectedScreenId);
+    const needsParentRemap: Array<{ controlId: string; parentLocalId: string }> = [];
 
-    await Promise.all(
-      controls.map(async (control) => {
-        const payload = {
+    const orderedControls = [...controls].sort((a, b) => {
+      const aHasParent = a.parent_control_id ? 1 : 0;
+      const bHasParent = b.parent_control_id ? 1 : 0;
+      return aHasParent - bHasParent;
+    });
+
+    for (const control of orderedControls) {
+      let parentControlId: string | null = null;
+      if (control.parent_control_id) {
+        const remapped =
+          idReplacements.get(control.parent_control_id) ?? control.parent_control_id;
+        if (isLocalControlId(remapped)) {
+          needsParentRemap.push({
+            controlId: control.id,
+            parentLocalId: control.parent_control_id,
+          });
+        } else {
+          parentControlId = remapped;
+        }
+      }
+
+      const payload = {
+        name: control.name,
+        control_type: control.control_type,
+        x: control.x,
+        y: control.y,
+        width: control.width,
+        height: control.height,
+        z_index: control.z_index,
+        parent_control_id: parentControlId,
+      };
+
+      try {
+        if (isLocalControlId(control.id)) {
+          const created = await controlsApi.create(selectedScreenId, payload);
+          idReplacements.set(control.id, created.id);
+        } else {
+          await controlsApi.update(control.id, payload);
+        }
+      } catch (err) {
+        errors.push(
+          `${control.name}: ${err instanceof Error ? err.message : "control save failed"}`,
+        );
+        continue;
+      }
+
+      const propertiesPayload = buildPropertiesPayload(
+        control.properties,
+        control.control_type,
+      );
+      if (!propertiesPayload) {
+        continue;
+      }
+
+      const targetId = idReplacements.get(control.id) ?? control.id;
+
+      try {
+        await propertiesApi.update(targetId, {
+          properties: propertiesPayload,
+        });
+      } catch (err) {
+        errors.push(
+          `${control.name} properties: ${err instanceof Error ? err.message : "property update failed"}`,
+        );
+      }
+    }
+
+    for (const { controlId, parentLocalId } of needsParentRemap) {
+      const targetId = idReplacements.get(controlId) ?? controlId;
+      const parentId = idReplacements.get(parentLocalId);
+      const control = controls.find((item) => item.id === controlId);
+      if (!control || !parentId) {
+        errors.push(`${control?.name ?? controlId}: parent control mapping failed`);
+        continue;
+      }
+
+      try {
+        await controlsApi.update(targetId, {
           name: control.name,
           control_type: control.control_type,
           x: control.x,
@@ -162,44 +423,26 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
           width: control.width,
           height: control.height,
           z_index: control.z_index,
-          parent_control_id: control.parent_control_id,
-        };
-
-        try {
-          if (isLocalControlId(control.id)) {
-            const created = await controlsApi.create(selectedScreenId, payload);
-            idReplacements.set(control.id, created.id);
-          } else {
-            await controlsApi.update(control.id, payload);
-          }
-        } catch (err) {
-          errors.push(
-            `${control.name}: ${err instanceof Error ? err.message : "control save failed"}`,
-          );
-          return;
-        }
-
-        const propertiesPayload = buildPropertiesPayload(
-          control.properties,
-          control.control_type,
+          parent_control_id: parentId,
+        });
+      } catch (err) {
+        errors.push(
+          `${control.name} parent: ${err instanceof Error ? err.message : "parent update failed"}`,
         );
-        if (!propertiesPayload) {
-          return;
-        }
+      }
+    }
 
-        const targetId = idReplacements.get(control.id) ?? control.id;
-
-        try {
-          await propertiesApi.update(targetId, {
-            properties: propertiesPayload,
-          });
-        } catch (err) {
-          errors.push(
-            `${control.name} properties: ${err instanceof Error ? err.message : "property update failed"}`,
-          );
-        }
-      }),
-    );
+    if (currentScreen && currentScreen.on_visible !== undefined) {
+      try {
+        await screensApi.update(selectedScreenId, {
+          on_visible: currentScreen.on_visible ?? "",
+        });
+      } catch (err) {
+        errors.push(
+          `Screen OnVisible: ${err instanceof Error ? err.message : "screen save failed"}`,
+        );
+      }
+    }
 
     if (errors.length === 0) {
       await get().loadControls(selectedScreenId);
@@ -242,6 +485,36 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     useStudioStore.getState().setSaveMessage(null);
   },
 
+  applyLayerAction: (controlId, action) => {
+    const { controls } = get();
+    const updates = computeLayerUpdates(controls, controlId, action);
+    if (updates.size === 0) {
+      return;
+    }
+
+    set((state) => ({
+      controls: state.controls.map((control) => {
+        const nextZ = updates.get(control.id);
+        if (nextZ === undefined) {
+          return control;
+        }
+        return { ...control, z_index: nextZ };
+      }),
+    }));
+    useStudioStore.getState().setDirty(true);
+    useStudioStore.getState().setSaveMessage(null);
+  },
+
+  updateScreenOnVisible: (screenId, onVisible) => {
+    set((state) => ({
+      screens: state.screens.map((screen) =>
+        screen.id === screenId ? { ...screen, on_visible: onVisible } : screen,
+      ),
+    }));
+    useStudioStore.getState().setDirty(true);
+    useStudioStore.getState().setSaveMessage(null);
+  },
+
   createControl: (controlType) => {
     const { controls, selectedScreenId } = get();
     if (!selectedScreenId) {
@@ -249,6 +522,7 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     }
 
     const defaults = getControlDefaults(controlType);
+    const positionOffset = (controls.length % 5) * 24;
     const nextZIndex =
       controls.length > 0
         ? Math.max(...controls.map((control) => control.z_index)) + 1
@@ -264,8 +538,8 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
         controlType,
         controls.map((item) => item.name),
       ),
-      x: defaults.x,
-      y: defaults.y,
+      x: defaults.x + positionOffset,
+      y: defaults.y + positionOffset,
       width: defaults.width,
       height: defaults.height,
       z_index: nextZIndex,
@@ -295,21 +569,64 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     }
   },
 
-  createScreen: async (applicationId: string, name: string) => {
+  createScreen: async (applicationId: string, name?: string) => {
     const existing = get().screens;
+    const screenName = name ?? buildUniqueScreenName(existing);
     const nextOrder =
       existing.length > 0
         ? Math.max(...existing.map((s) => s.display_order)) + 1
         : 1;
 
-    const screen = await screensApi.create(applicationId, {
-      name,
-      display_order: nextOrder,
-      layout_type: "responsive",
-    });
+    set({ createScreenLoading: true, screensError: null });
 
-    set((s) => ({ screens: [...s.screens, screen] }));
-    return screen;
+    const attemptCreate = async (candidateName: string) =>
+      screensApi.create(applicationId, {
+        name: candidateName,
+        display_order: nextOrder,
+        layout_type: "responsive",
+      });
+
+    const isDuplicateNameError = (err: unknown): boolean => {
+      if (!(err instanceof ApiError)) return false;
+      const msg = err.message.toLowerCase();
+      return (
+        err.status === 409 ||
+        msg.includes("already exists") ||
+        msg.includes("duplicate key") ||
+        msg.includes("unique constraint")
+      );
+    };
+
+    try {
+      let screen;
+      let candidateName = screenName;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          screen = await attemptCreate(candidateName);
+          break;
+        } catch (firstError) {
+          if (isDuplicateNameError(firstError) && attempt < 2) {
+            candidateName = buildFallbackScreenName();
+            continue;
+          }
+          throw firstError;
+        }
+      }
+      if (!screen) {
+        throw new Error("Failed to create screen");
+      }
+
+      set((s) => ({
+        screens: [...s.screens, screen],
+        createScreenLoading: false,
+      }));
+      return screen;
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to create screen";
+      set({ createScreenLoading: false, screensError: message });
+      throw err;
+    }
   },
 
   renameScreen: async (screenId: string, name: string) => {

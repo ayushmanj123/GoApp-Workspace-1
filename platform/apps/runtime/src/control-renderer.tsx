@@ -14,6 +14,10 @@ function resolveRegistryType(rawType: string): string {
     textinput: "TextInput",
     dropdown: "Dropdown",
     container: "Container",
+    component: "Component",
+    gallery: "Gallery",
+    form: "Form",
+    timer: "Timer",
   };
   return aliases[key] ?? rawType;
 }
@@ -32,18 +36,49 @@ export const ControlRenderer: React.FC<Props> = ({ control }) => {
   }
   // base props from metadata
   const props = { ...((control as any).properties || {}) };
+  const controlName = (control as any).name;
+  if (controlName) {
+    props.controlName = controlName;
+  }
   // formulas not executed yet — expose no-op
   if ((control as any).formulas && (control as any).formulas.length > 0) {
     props["onFormula"] = () => null;
   }
   // build child controls recursively and sort by z_index ascending
-  const children = ((control as any).children || [])
+  const childControls = ((control as any).children || [])
     .slice()
     .sort((a: any, b: any) => (a.z_index || 0) - (b.z_index || 0));
-  const childrenElements = children.map((ch: any) => (
-    <ControlRenderer control={ch} key={ch.id} />
-  ));
-  if (childrenElements.length > 0) props["children"] = childrenElements;
+
+  if (typeKey === "Gallery") {
+    props.templateControls = childControls;
+    props.name = (control as any).name;
+  } else if (typeKey === "Form") {
+    props.templateControls = childControls;
+    props.name = (control as any).name;
+  } else if (typeKey === "Component") {
+    const childrenElements = childControls.map((ch: any) => (
+      <div
+        key={ch.id}
+        style={{
+          position: "absolute",
+          left: ch.x,
+          top: ch.y,
+          width: ch.width,
+          height: ch.height,
+        }}
+      >
+        <ControlRenderer control={ch} />
+      </div>
+    ));
+    if (childrenElements.length > 0) {
+      props.children = childrenElements;
+    }
+  } else {
+    const childrenElements = childControls.map((ch: any) => (
+      <ControlRenderer control={ch} key={ch.id} />
+    ));
+    if (childrenElements.length > 0) props.children = childrenElements;
+  }
 
   return <>{def.renderRuntime(props)}</>;
 };

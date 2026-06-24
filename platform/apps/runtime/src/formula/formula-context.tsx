@@ -21,6 +21,26 @@ import {
   type RuntimeScreenContextStore,
 } from "./runtime-screen-context-store";
 import {
+  defaultCollectionStore,
+  type RuntimeCollectionStore,
+} from "./runtime-collection-store";
+import {
+  defaultGallerySelectionStore,
+  type RuntimeGallerySelectionStore,
+} from "./runtime-gallery-selection-store";
+import {
+  defaultFormUpdatesStore,
+  type RuntimeFormUpdatesStore,
+} from "./runtime-form-updates-store";
+import {
+  defaultRecordStore,
+  type RuntimeRecordStore,
+} from "./runtime-record-store";
+import {
+  defaultControlValueStore,
+  type RuntimeControlValueStore,
+} from "./runtime-control-value-store";
+import {
   defaultVariableStore,
   type RuntimeVariableStore,
 } from "./runtime-variable-store";
@@ -36,12 +56,34 @@ const VariableStoreContext =
 const ScreenContextStoreContext =
   createContext<RuntimeScreenContextStore>(defaultScreenContextStore);
 
+const CollectionStoreContext =
+  createContext<RuntimeCollectionStore>(defaultCollectionStore);
+
+const GallerySelectionStoreContext = createContext<RuntimeGallerySelectionStore>(
+  defaultGallerySelectionStore,
+);
+
+const FormUpdatesStoreContext = createContext<RuntimeFormUpdatesStore>(
+  defaultFormUpdatesStore,
+);
+
+const RecordStoreContext = createContext<RuntimeRecordStore>(defaultRecordStore);
+
+const ControlValueStoreContext = createContext<RuntimeControlValueStore>(
+  defaultControlValueStore,
+);
+
 interface FormulaProviderProps {
   engine?: FormulaEngine;
   appName?: string;
   controls?: FormulaControlContextInput[];
   variableStore?: RuntimeVariableStore;
   screenContextStore?: RuntimeScreenContextStore;
+  collectionStore?: RuntimeCollectionStore;
+  gallerySelectionStore?: RuntimeGallerySelectionStore;
+  formUpdatesStore?: RuntimeFormUpdatesStore;
+  recordStore?: RuntimeRecordStore;
+  controlValueStore?: RuntimeControlValueStore;
   children: ReactNode;
 }
 
@@ -51,10 +93,21 @@ export function FormulaProvider({
   controls = [],
   variableStore,
   screenContextStore,
+  collectionStore,
+  gallerySelectionStore,
+  formUpdatesStore,
+  recordStore,
+  controlValueStore,
   children,
 }: FormulaProviderProps) {
   const resolvedStore = variableStore ?? defaultVariableStore;
   const resolvedScreenStore = screenContextStore ?? defaultScreenContextStore;
+  const resolvedCollectionStore = collectionStore ?? defaultCollectionStore;
+  const resolvedGallerySelectionStore =
+    gallerySelectionStore ?? defaultGallerySelectionStore;
+  const resolvedFormUpdatesStore = formUpdatesStore ?? defaultFormUpdatesStore;
+  const resolvedRecordStore = recordStore ?? defaultRecordStore;
+  const resolvedControlValueStore = controlValueStore ?? defaultControlValueStore;
 
   const formulaEngine = useMemo(
     () => engine ?? createDefaultFormulaEngine(),
@@ -72,7 +125,30 @@ export function FormulaProvider({
   }, [resolvedScreenStore]);
 
   useEffect(() => {
-    void formulaEngine.initialize();
+    return resolvedCollectionStore.subscribe(() => setContextVersion((v) => v + 1));
+  }, [resolvedCollectionStore]);
+
+  useEffect(() => {
+    return resolvedGallerySelectionStore.subscribe(() =>
+      setContextVersion((v) => v + 1),
+    );
+  }, [resolvedGallerySelectionStore]);
+
+  useEffect(() => {
+    return resolvedFormUpdatesStore.subscribe(() => setContextVersion((v) => v + 1));
+  }, [resolvedFormUpdatesStore]);
+
+  useEffect(() => {
+    return resolvedControlValueStore.subscribe(() => setContextVersion((v) => v + 1));
+  }, [resolvedControlValueStore]);
+
+  useEffect(() => {
+    void formulaEngine.initialize().catch((error) => {
+      console.warn(
+        "[formula] engine initialization failed — is the formula API running on port 8085?",
+        error,
+      );
+    });
   }, [formulaEngine]);
 
   const evaluationContext = useMemo(
@@ -82,8 +158,22 @@ export function FormulaProvider({
         controls,
         resolvedStore,
         resolvedScreenStore,
+        resolvedCollectionStore,
+        resolvedGallerySelectionStore,
+        resolvedFormUpdatesStore,
+        resolvedControlValueStore,
       ),
-    [appName, controls, resolvedStore, resolvedScreenStore, contextVersion],
+    [
+      appName,
+      controls,
+      resolvedStore,
+      resolvedScreenStore,
+      resolvedCollectionStore,
+      resolvedGallerySelectionStore,
+      resolvedFormUpdatesStore,
+      resolvedControlValueStore,
+      contextVersion,
+    ],
   );
 
   return (
@@ -91,7 +181,19 @@ export function FormulaProvider({
       <FormulaEvaluationContext.Provider value={evaluationContext}>
         <VariableStoreContext.Provider value={resolvedStore}>
           <ScreenContextStoreContext.Provider value={resolvedScreenStore}>
-            {children}
+            <CollectionStoreContext.Provider value={resolvedCollectionStore}>
+              <GallerySelectionStoreContext.Provider
+                value={resolvedGallerySelectionStore}
+              >
+                <FormUpdatesStoreContext.Provider value={resolvedFormUpdatesStore}>
+                  <RecordStoreContext.Provider value={resolvedRecordStore}>
+                    <ControlValueStoreContext.Provider value={resolvedControlValueStore}>
+                      {children}
+                    </ControlValueStoreContext.Provider>
+                  </RecordStoreContext.Provider>
+                </FormUpdatesStoreContext.Provider>
+              </GallerySelectionStoreContext.Provider>
+            </CollectionStoreContext.Provider>
           </ScreenContextStoreContext.Provider>
         </VariableStoreContext.Provider>
       </FormulaEvaluationContext.Provider>
@@ -111,12 +213,74 @@ export function useFormulaEvaluationContext(): Record<string, unknown> {
   return useContext(FormulaEvaluationContext);
 }
 
+/** Scopes formula evaluation to a single gallery row via ThisItem. */
+export function GalleryRowProvider({
+  thisItem,
+  children,
+}: {
+  thisItem: Record<string, unknown>;
+  children: ReactNode;
+}) {
+  const parentContext = useFormulaEvaluationContext();
+  const rowContext = useMemo(
+    () => ({ ...parentContext, ThisItem: thisItem }),
+    [parentContext, thisItem],
+  );
+
+  return (
+    <FormulaEvaluationContext.Provider value={rowContext}>
+      {children}
+    </FormulaEvaluationContext.Provider>
+  );
+}
+
 export function useVariableStore(): RuntimeVariableStore {
   return useContext(VariableStoreContext);
 }
 
 export function useScreenContextStore(): RuntimeScreenContextStore {
   return useContext(ScreenContextStoreContext);
+}
+
+export function useCollectionStore(): RuntimeCollectionStore {
+  return useContext(CollectionStoreContext);
+}
+
+/** Scopes formula evaluation to a form item via Parent.Item. */
+export function FormItemProvider({
+  item,
+  children,
+}: {
+  item: Record<string, unknown>;
+  children: ReactNode;
+}) {
+  const parentContext = useFormulaEvaluationContext();
+  const formContext = useMemo(
+    () => ({ ...parentContext, Parent: { Item: item } }),
+    [parentContext, item],
+  );
+
+  return (
+    <FormulaEvaluationContext.Provider value={formContext}>
+      {children}
+    </FormulaEvaluationContext.Provider>
+  );
+}
+
+export function useGallerySelectionStore(): RuntimeGallerySelectionStore {
+  return useContext(GallerySelectionStoreContext);
+}
+
+export function useFormUpdatesStore(): RuntimeFormUpdatesStore {
+  return useContext(FormUpdatesStoreContext);
+}
+
+export function useRecordStore(): RuntimeRecordStore {
+  return useContext(RecordStoreContext);
+}
+
+export function useControlValueStore(): RuntimeControlValueStore {
+  return useContext(ControlValueStoreContext);
 }
 
 /**
@@ -137,4 +301,12 @@ export function useSet(): (formula: string) => Promise<void> {
 }
 
 export { HARDCODED_USER, buildFormulaRuntimeContext };
-export type { RuntimeVariableStore, RuntimeScreenContextStore };
+export type {
+  RuntimeVariableStore,
+  RuntimeScreenContextStore,
+  RuntimeCollectionStore,
+  RuntimeGallerySelectionStore,
+  RuntimeFormUpdatesStore,
+  RuntimeRecordStore,
+  RuntimeControlValueStore,
+};

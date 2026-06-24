@@ -10,7 +10,7 @@ import (
 )
 
 // Assemble runtime DTOs from models
-func assembleRuntimeApplication(app *models.Application, screens []models.Screen, controls []models.Control, props []models.ControlProperty, formulas []models.Formula) (*contracts.RuntimeApplication, error) {
+func assembleRuntimeApplication(app *models.Application, screens []models.Screen, controls []models.Control, props []models.ControlProperty, formulas []models.Formula, componentDefs []models.ComponentDefinition, entities []models.Entity, entityFields []models.EntityField) (*contracts.RuntimeApplication, error) {
 	if app == nil {
 		return nil, fmt.Errorf("assemble runtime application: nil application")
 	}
@@ -19,6 +19,7 @@ func assembleRuntimeApplication(app *models.Application, screens []models.Screen
 		TenantID:  app.TenantID,
 		Name:      app.Name,
 		Status:    app.Status,
+		OnStart:   app.OnStart,
 		Screens:   []contracts.RuntimeScreen{},
 		CreatedOn: app.CreatedOn,
 	}
@@ -55,7 +56,7 @@ func assembleRuntimeApplication(app *models.Application, screens []models.Screen
 
 	// build screens
 	for _, s := range screens {
-		rs := contracts.RuntimeScreen{ID: s.ID, ApplicationID: s.ApplicationID, Name: s.Name, DisplayOrder: s.DisplayOrder, LayoutType: s.LayoutType}
+		rs := contracts.RuntimeScreen{ID: s.ID, ApplicationID: s.ApplicationID, Name: s.Name, DisplayOrder: s.DisplayOrder, LayoutType: s.LayoutType, OnVisible: s.OnVisible}
 		// build controls for this screen
 		ctrls := controlsByScreen[s.ID.String()]
 		// convert to runtime controls
@@ -73,8 +74,12 @@ func assembleRuntimeApplication(app *models.Application, screens []models.Screen
 			}
 			runtimeCtrls = append(runtimeCtrls, rc)
 		}
+		expandedCtrls, err := expandComponentInstances(runtimeCtrls, componentDefs)
+		if err != nil {
+			return nil, fmt.Errorf("assemble runtime application: expand components for screen %s: %w", s.ID.String(), err)
+		}
 		// build tree
-		runtimeTree, err := buildControlTree(runtimeCtrls)
+		runtimeTree, err := buildControlTree(expandedCtrls)
 		if err != nil {
 			return nil, fmt.Errorf("assemble runtime application: build control tree for screen %s: %w", s.ID.String(), err)
 		}
@@ -82,5 +87,24 @@ func assembleRuntimeApplication(app *models.Application, screens []models.Screen
 		ram.Screens = append(ram.Screens, rs)
 	}
 
+	ram.Entities = assembleRuntimeEntities(entities, entityFields)
+
 	return ram, nil
+}
+
+func assembleRuntimeEntities(entities []models.Entity, fields []models.EntityField) []contracts.RuntimeEntity {
+	fieldsByEntity := map[string][]models.EntityField{}
+	for _, f := range fields {
+		eid := f.EntityID.String()
+		fieldsByEntity[eid] = append(fieldsByEntity[eid], f)
+	}
+	out := make([]contracts.RuntimeEntity, 0, len(entities))
+	for _, e := range entities {
+		re := contracts.RuntimeEntity{Name: e.Name, Fields: []contracts.RuntimeEntityField{}}
+		for _, f := range fieldsByEntity[e.ID.String()] {
+			re.Fields = append(re.Fields, contracts.RuntimeEntityField{Name: f.Name, FieldType: f.FieldType})
+		}
+		out = append(out, re)
+	}
+	return out
 }

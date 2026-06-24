@@ -1,5 +1,6 @@
 import {
   getPropertyDefinitions,
+  normalizeControlType,
   type PropertyFieldType,
   type PropertyMode,
 } from "../property-metadata/registry";
@@ -121,6 +122,13 @@ export function buildPropertiesPayload(
 
   const definitions = controlType ? getPropertyDefinitions(controlType) : [];
   const payload: Record<string, unknown> = {};
+
+  if (controlType && normalizeControlType(controlType) === "component") {
+    for (const [key, value] of Object.entries(properties)) {
+      payload[key] = value;
+    }
+    return Object.keys(payload).length > 0 ? payload : null;
+  }
 
   if (definitions.length > 0) {
     for (const def of definitions) {

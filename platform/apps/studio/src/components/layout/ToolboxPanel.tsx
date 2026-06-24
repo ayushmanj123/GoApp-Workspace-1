@@ -7,6 +7,9 @@ const TOOLBOX_ITEMS: Array<{ type: ToolboxControlType; label: string; icon: stri
     { type: "button", label: "Button", icon: "B" },
     { type: "label", label: "Label", icon: "L" },
     { type: "textinput", label: "Text Input", icon: "T" },
+    { type: "gallery", label: "Gallery", icon: "G" },
+    { type: "form", label: "Form", icon: "F" },
+    { type: "timer", label: "Timer", icon: "⏱" },
   ];
 
 export function ToolboxPanel() {

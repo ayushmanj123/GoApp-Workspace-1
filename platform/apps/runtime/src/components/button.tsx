@@ -1,12 +1,18 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
 import {
   useFormulaEngine,
   useFormulaEvaluationContext,
   useVariableStore,
   useScreenContextStore,
+  useCollectionStore,
+  useGallerySelectionStore,
+  useFormUpdatesStore,
+  useRecordStore,
 } from "../formula/formula-context";
+import { useNavigationStore, useScreenResolver, useRuntime } from "../runtime-hooks";
 import { executeAction } from "../formula/execute-action";
+import type { RuntimeNavigationStore } from "../formula/runtime-navigation-store";
 
 function readActionFormula(property: unknown): string | null {
   if (property && typeof property === "object" && "formula" in property) {
@@ -17,6 +23,12 @@ function readActionFormula(property: unknown): string | null {
   }
   return null;
 }
+
+const noopNavigationStore: RuntimeNavigationStore = {
+  getCurrentScreenId: () => undefined,
+  navigate: () => {},
+  subscribe: () => () => {},
+};
 
 export const Button: React.FC<any> = ({
   text = "Button",
@@ -29,6 +41,17 @@ export const Button: React.FC<any> = ({
   const context = useFormulaEvaluationContext();
   const store = useVariableStore();
   const screenContextStore = useScreenContextStore();
+  const collectionStore = useCollectionStore();
+  const gallerySelectionStore = useGallerySelectionStore();
+  const formUpdatesStore = useFormUpdatesStore();
+  const recordStore = useRecordStore();
+  const navigationStore = useNavigationStore() ?? noopNavigationStore;
+  const resolveScreenId = useScreenResolver() ?? (() => undefined);
+  const { pkg, currentScreen } = useRuntime();
+  const controls = useMemo(() => {
+    const screen = pkg?.screens?.find((item) => item.id === currentScreen);
+    return screen?.controls ?? [];
+  }, [pkg, currentScreen]);
 
   const handleClick = useCallback(async () => {
     const formula = readActionFormula(onSelect);
@@ -36,14 +59,40 @@ export const Button: React.FC<any> = ({
       try {
         await executeAction(
           { formula },
-          { store, screenContextStore, engine, context },
+          {
+            store,
+            screenContextStore,
+            collectionStore,
+            formUpdatesStore,
+            recordStore,
+            controls,
+            gallerySelectionStore,
+            navigationStore,
+            resolveScreenId,
+            engine,
+            context,
+          },
         );
       } catch (err) {
         console.error(err);
       }
     }
     onClick?.();
-  }, [onSelect, store, screenContextStore, engine, context, onClick]);
+  }, [
+    onSelect,
+    store,
+    screenContextStore,
+    collectionStore,
+    formUpdatesStore,
+    recordStore,
+    controls,
+    gallerySelectionStore,
+    navigationStore,
+    resolveScreenId,
+    engine,
+    context,
+    onClick,
+  ]);
 
   return (
     <button disabled={disabled} onClick={handleClick}>

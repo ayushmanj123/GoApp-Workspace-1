@@ -189,4 +189,72 @@ public class PowerFxEvaluatorTests
         Assert.ThrowsAny<Exception>(
             () => _evaluator.Evaluate("SomeUnknownFunction()", FullContext()));
     }
+
+    private static Dictionary<string, JsonElement> CustomersContext(
+        params object[] rows) =>
+        Context(("Customers", rows));
+
+    [Fact]
+    public void Evaluate_CountRowsCustomers_Returns1()
+    {
+        var result = _evaluator.Evaluate(
+            "CountRows(Customers)",
+            CustomersContext(new { Name = "John" }));
+        Assert.Equal(1, Convert.ToDecimal(result));
+    }
+
+    [Fact]
+    public void Evaluate_CountRowsCustomers_Returns2()
+    {
+        var result = _evaluator.Evaluate(
+            "CountRows(Customers)",
+            CustomersContext(new { Name = "John" }, new { Name = "Jane" }));
+        Assert.Equal(2, Convert.ToDecimal(result));
+    }
+
+    [Fact]
+    public void Evaluate_FirstCustomersName_ReturnsJohn()
+    {
+        var result = _evaluator.Evaluate(
+            "First(Customers).Name",
+            CustomersContext(new { Name = "John" }, new { Name = "Jane" }));
+        Assert.Equal("John", result);
+    }
+
+    [Fact]
+    public void Evaluate_LastCustomersName_ReturnsJane()
+    {
+        var result = _evaluator.Evaluate(
+            "Last(Customers).Name",
+            CustomersContext(new { Name = "John" }, new { Name = "Jane" }));
+        Assert.Equal("Jane", result);
+    }
+
+    [Fact]
+    public void Evaluate_IsEmptyCustomers_ReturnsFalse()
+    {
+        var result = _evaluator.Evaluate(
+            "IsEmpty(Customers)",
+            CustomersContext(new { Name = "John" }));
+        Assert.Equal(false, result);
+    }
+
+    [Fact]
+    public void Evaluate_IsEmptyCustomers_ReturnsTrue()
+    {
+        var result = _evaluator.Evaluate(
+            "IsEmpty(Customers)",
+            CustomersContext());
+        Assert.Equal(true, result);
+    }
+
+    [Fact]
+    public void Evaluate_FilterCustomers_IsHandledByPowerFx()
+    {
+        // Filter is out of phase scope but works via Microsoft Power Fx when tables are present.
+        var result = _evaluator.Evaluate(
+            "CountRows(Filter(Customers, Name = \"John\"))",
+            CustomersContext(new { Name = "John" }, new { Name = "Jane" }));
+        Assert.Equal(1, Convert.ToDecimal(result));
+    }
 }

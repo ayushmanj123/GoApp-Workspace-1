@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { RuntimeProvider } from "../../../../runtime/src/runtime-provider";
 import RuntimeRenderer from "../../../../runtime/src/runtime-renderer";
@@ -21,20 +21,20 @@ function RuntimePreviewContent({
 }: {
   selectedScreenId: string | null;
 }) {
-  const { pkg, loading, currentScreen, navigate } = useRuntime();
+  const { pkg, loading, navigate } = useRuntime();
+  const initialized = useRef(false);
 
   useEffect(() => {
-    if (loading || !pkg) {
+    if (loading || !pkg || initialized.current) {
       return;
     }
 
-    const targetScreenId =
-      selectedScreenId ?? pkg.screens?.[0]?.id ?? currentScreen;
-
-    if (targetScreenId && targetScreenId !== currentScreen) {
+    const targetScreenId = selectedScreenId ?? pkg.screens?.[0]?.id;
+    if (targetScreenId) {
       navigate(targetScreenId);
+      initialized.current = true;
     }
-  }, [loading, pkg, selectedScreenId, currentScreen, navigate]);
+  }, [loading, pkg, selectedScreenId, navigate]);
 
   return <RuntimeRenderer />;
 }

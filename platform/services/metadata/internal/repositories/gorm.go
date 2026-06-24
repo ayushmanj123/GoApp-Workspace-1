@@ -388,6 +388,9 @@ type gormTenantSession struct {
 	auditLogs            AuditLogRepository
 	packages             PackageRepository
 	applicationSnapshots ApplicationSnapshotRepository
+	componentDefinitions ComponentDefinitionRepository
+	entities             EntityRepository
+	entityFields         EntityFieldRepository
 }
 
 func newGormTenantSession(db *gorm.DB, tenantID uuid.UUID, inTx bool) *gormTenantSession {
@@ -414,6 +417,9 @@ func newGormTenantSession(db *gorm.DB, tenantID uuid.UUID, inTx bool) *gormTenan
 		session.auditLogs = newTenantTxGormRepository[models.AuditLog](db, tenantID)
 		session.packages = newTenantTxGormRepository[models.Package](db, tenantID)
 		session.applicationSnapshots = newTenantTxGormRepository[models.ApplicationSnapshot](db, tenantID)
+		session.componentDefinitions = newTenantTxGormRepository[models.ComponentDefinition](db, tenantID)
+		session.entities = newTenantTxGormRepository[models.Entity](db, tenantID)
+		session.entityFields = newTenantTxGormRepository[models.EntityField](db, tenantID)
 		return session
 	}
 	session.users = NewTenantGormRepository[models.User](db, tenantID)
@@ -433,6 +439,9 @@ func newGormTenantSession(db *gorm.DB, tenantID uuid.UUID, inTx bool) *gormTenan
 	session.auditLogs = NewTenantGormRepository[models.AuditLog](db, tenantID)
 	session.packages = NewTenantGormRepository[models.Package](db, tenantID)
 	session.applicationSnapshots = NewTenantGormRepository[models.ApplicationSnapshot](db, tenantID)
+	session.componentDefinitions = NewTenantGormRepository[models.ComponentDefinition](db, tenantID)
+	session.entities = NewTenantGormRepository[models.Entity](db, tenantID)
+	session.entityFields = NewTenantGormRepository[models.EntityField](db, tenantID)
 	return session
 }
 
@@ -457,6 +466,11 @@ func (s *gormTenantSession) Packages() PackageRepository                  { retu
 func (s *gormTenantSession) ApplicationSnapshots() ApplicationSnapshotRepository {
 	return s.applicationSnapshots
 }
+func (s *gormTenantSession) ComponentDefinitions() ComponentDefinitionRepository {
+	return s.componentDefinitions
+}
+func (s *gormTenantSession) Entities() EntityRepository             { return s.entities }
+func (s *gormTenantSession) EntityFields() EntityFieldRepository     { return s.entityFields }
 
 func (s *gormTenantSession) Transaction(ctx context.Context, fn func(session TenantSession) error) error {
 	if s == nil || s.db == nil {

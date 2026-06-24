@@ -41,6 +41,9 @@ type PermissionRepository interface{ TenantRepositoryContract[models.Permission]
 type AuditLogRepository interface{ TenantRepositoryContract[models.AuditLog] }
 type PackageRepository interface{ TenantRepositoryContract[models.Package] }
 type ApplicationSnapshotRepository interface{ TenantRepositoryContract[models.ApplicationSnapshot] }
+type ComponentDefinitionRepository interface{ TenantRepositoryContract[models.ComponentDefinition] }
+type EntityRepository interface{ TenantRepositoryContract[models.Entity] }
+type EntityFieldRepository interface{ TenantRepositoryContract[models.EntityField] }
 
 // TenantSession groups repositories that execute with tenant context applied.
 type TenantSession interface {
@@ -61,6 +64,9 @@ type TenantSession interface {
 	AuditLogs() AuditLogRepository
 	Packages() PackageRepository
 	ApplicationSnapshots() ApplicationSnapshotRepository
+	ComponentDefinitions() ComponentDefinitionRepository
+	Entities() EntityRepository
+	EntityFields() EntityFieldRepository
 	Transaction(ctx context.Context, fn func(session TenantSession) error) error
 }
 

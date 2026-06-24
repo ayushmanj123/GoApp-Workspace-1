@@ -15,6 +15,7 @@ export function StudioLayout() {
   const explorerCollapsed = useStudioStore((s) => s.explorerCollapsed);
   const propertiesCollapsed = useStudioStore((s) => s.propertiesCollapsed);
   const activeAppId = useStudioStore((s) => s.activeAppId);
+  const dirty = useStudioStore((s) => s.dirty);
   const selectedApplicationId = useApplicationStore(
     (s) => s.selectedApplicationId,
   );
@@ -25,10 +26,22 @@ export function StudioLayout() {
     [selectedApplicationId, activeAppId],
   );
 
+  const handlePreview = () => {
+    if (dirty) {
+      const proceed = window.confirm(
+        "You have unsaved changes. Save before preview?",
+      );
+      if (!proceed) {
+        return;
+      }
+    }
+    setPreviewOpen(true);
+  };
+
   return (
     <div className={styles.root}>
       <TopBar
-        onPreview={() => setPreviewOpen(true)}
+        onPreview={handlePreview}
         previewDisabled={!applicationId}
       />
 

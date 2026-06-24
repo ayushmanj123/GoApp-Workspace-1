@@ -2,6 +2,7 @@ export interface RuntimeScreenContextStore {
   get(name: string): unknown;
   set(name: string, value: unknown): void;
   getAll(): Record<string, unknown>;
+  clear(): void;
   subscribe(listener: () => void): () => void;
 }
 
@@ -24,6 +25,11 @@ export class InMemoryScreenContextStore implements RuntimeScreenContextStore {
 
   getAll(): Record<string, unknown> {
     return { ...this.context };
+  }
+
+  clear(): void {
+    this.context = {};
+    for (const fn of this.listeners) fn();
   }
 
   subscribe(listener: () => void): () => void {

@@ -50,6 +50,7 @@ type Application struct {
 	Name             string         `gorm:"column:name;not null;index" json:"name"`
 	Description      string         `gorm:"column:description;not null" json:"description"`
 	Status           string         `gorm:"column:status;not null" json:"status"`
+	OnStart          *string        `gorm:"column:on_start" json:"on_start,omitempty"`
 	CurrentVersionID *uuid.UUID     `gorm:"column:current_version_id;type:uuid" json:"current_version_id"`
 	DeletedAt        gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
 	AuditFields
@@ -87,6 +88,7 @@ type Screen struct {
 	Name          string         `gorm:"column:name;not null" json:"name"`
 	DisplayOrder  int            `gorm:"column:display_order;not null" json:"display_order"`
 	LayoutType    string         `gorm:"column:layout_type;not null" json:"layout_type"`
+	OnVisible     *string        `gorm:"column:on_visible" json:"on_visible,omitempty"`
 	DeletedAt     gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
 	AuditFields
 }
@@ -235,3 +237,40 @@ type ApplicationSnapshot struct {
 }
 
 func (ApplicationSnapshot) TableName() string { return "application_snapshots" }
+
+type ComponentDefinition struct {
+	ID             uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	TenantID       uuid.UUID      `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
+	ApplicationID  uuid.UUID      `gorm:"column:application_id;type:uuid;not null;index" json:"application_id"`
+	Name           string         `gorm:"column:name;not null" json:"name"`
+	DefinitionJSON datatypes.JSON `gorm:"column:definition_json;type:jsonb;not null" json:"definition_json"`
+	DeletedAt      gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
+	AuditFields
+}
+
+func (ComponentDefinition) TableName() string { return "component_definitions" }
+
+type Entity struct {
+	ID            uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	TenantID      uuid.UUID      `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
+	ApplicationID uuid.UUID      `gorm:"column:application_id;type:uuid;not null;index" json:"application_id"`
+	Name          string         `gorm:"column:name;not null" json:"name"`
+	DisplayName   string         `gorm:"column:display_name;not null" json:"display_name"`
+	DeletedAt     gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
+	AuditFields
+}
+
+func (Entity) TableName() string { return "entities" }
+
+type EntityField struct {
+	ID          uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	TenantID    uuid.UUID      `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
+	EntityID    uuid.UUID      `gorm:"column:entity_id;type:uuid;not null;index" json:"entity_id"`
+	Name        string         `gorm:"column:name;not null" json:"name"`
+	DisplayName string         `gorm:"column:display_name;not null" json:"display_name"`
+	FieldType   string         `gorm:"column:field_type;not null" json:"field_type"`
+	DeletedAt   gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
+	AuditFields
+}
+
+func (EntityField) TableName() string { return "entity_fields" }

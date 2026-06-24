@@ -3,6 +3,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useStudioStore } from "../../store/studioStore";
 import { useApplicationStore } from "../../store/applicationStore";
 import { ToolboxPanel } from "./ToolboxPanel";
+import { ControlTree } from "./ControlTree";
+import { LayerActions } from "./LayerActions";
+import { ComponentActions } from "./ComponentActions";
+import { InsertComponentModal } from "./InsertComponentModal";
+import { CreateEntityModal } from "./CreateEntityModal";
+import { AddFieldModal } from "./AddFieldModal";
 import styles from "./ExplorerPanel.module.css";
 
 // ── Icons ────────────────────────────────────────────────────────────────────
@@ -153,28 +159,44 @@ export function ExplorerPanel() {
   const toggleExplorer = useStudioStore((s) => s.toggleExplorer);
   const setActiveApp = useStudioStore((s) => s.setActiveApp);
   const setActiveScreen = useStudioStore((s) => s.setActiveScreen);
+  const selectedControlId = useStudioStore((s) => s.selectedControlId);
+  const selectControl = useStudioStore((s) => s.selectControl);
 
   const {
     applications,
     screens,
+    controls,
+    controlsLoading,
     selectedApplicationId,
     selectedScreenId,
     appsLoading,
     screensLoading,
+    createScreenLoading,
     appsError,
     screensError,
     loadApplications,
     loadScreens,
+    loadControls,
     selectApplication,
     selectScreen,
     createScreen,
     renameScreen,
     deleteScreen,
+    componentDefinitions,
+    componentDefinitionsLoading,
+    entities,
+    entitiesLoading,
+    entityFieldsByEntityId,
+    selectedEntityId,
+    selectEntity,
   } = useApplicationStore();
 
   const [expandedApps, setExpandedApps] = useState<Set<string>>(new Set());
   const [renamingScreenId, setRenamingScreenId] = useState<string | null>(null);
   const [hoveredScreenId, setHoveredScreenId] = useState<string | null>(null);
+  const [insertComponentOpen, setInsertComponentOpen] = useState(false);
+  const [createEntityOpen, setCreateEntityOpen] = useState(false);
+  const [addFieldOpen, setAddFieldOpen] = useState(false);
 
   // Load apps once on mount
   useEffect(() => {
@@ -219,6 +241,11 @@ export function ExplorerPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screens, selectedScreenId]);
 
+  useEffect(() => {
+    if (!selectedScreenId) return;
+    void loadControls(selectedScreenId);
+  }, [selectedScreenId, loadControls]);
+
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleSelectApp = (app: { id: string; name: string }) => {
@@ -246,10 +273,16 @@ export function ExplorerPanel() {
   };
 
   const handleAddScreen = async () => {
-    if (!selectedApplicationId) return;
-    const count = screens.length + 1;
-    const screen = await createScreen(selectedApplicationId, `Screen${count}`);
-    handleSelectScreen(screen);
+    if (!selectedApplicationId) {
+      return;
+    }
+    try {
+      const screen = await createScreen(selectedApplicationId);
+      await loadScreens(selectedApplicationId);
+      handleSelectScreen(screen);
+    } catch {
+      // screensError is set in the store
+    }
   };
 
   const handleRename = async (screenId: string, newName: string) => {
@@ -311,11 +344,12 @@ export function ExplorerPanel() {
                         <span>Screens</span>
                         <button
                           className={styles.addBtn}
+                          data-testid="add-screen-btn"
                           onClick={() => {
                             void handleAddScreen();
                           }}
                           title="New screen"
-                          disabled={screensLoading}
+                          disabled={screensLoading || createScreenLoading}
                         >
                           <AddIcon />
                         </button>
@@ -405,12 +439,152 @@ export function ExplorerPanel() {
                           </li>
                         )}
                       </ul>
+
+                      {isSelectedApp && (
+                        <div className={styles.controlsSection} data-testid="explorer-entities-section">
+                          <div className={styles.sectionHeader}>
+                            <span>Entities</span>
+                            <button
+                              type="button"
+                              className={styles.layerActionBtn}
+                              title="Create Entity"
+                              data-testid="explorer-create-entity"
+                              onClick={() => setCreateEntityOpen(true)}
+                            >
+                              + Create
+                            </button>
+                          </div>
+                          {entitiesLoading ? (
+                            <div className={styles.loadingMsg}>Loading entities…</div>
+                          ) : entities.length === 0 ? (
+                            <div className={styles.emptyControls}>No entities yet</div>
+                          ) : (
+                            <ul className={styles.componentList}>
+                              {entities.map((entity) => {
+                                const fields = entityFieldsByEntityId[entity.id] ?? [];
+                                const isSelected = selectedEntityId === entity.id;
+                                return (
+                                  <li key={entity.id} className={styles.entityNode}>
+                                    <div className={styles.entityRow}>
+                                      <button
+                                        type="button"
+                                        className={`${styles.treeItem} ${isSelected ? styles.appSelected : ""}`}
+                                        data-testid={`explorer-entity-${entity.name}`}
+                                        onClick={() => selectEntity(isSelected ? null : entity.id)}
+                                      >
+                                        <span className={styles.treeItemLabel}>{entity.name}</span>
+                                      </button>
+                                      {isSelected && (
+                                        <button
+                                          type="button"
+                                          className={styles.layerActionBtn}
+                                          title="Add Field"
+                                          data-testid={`explorer-add-field-${entity.name}`}
+                                          onClick={() => setAddFieldOpen(true)}
+                                        >
+                                          + Field
+                                        </button>
+                                      )}
+                                    </div>
+                                    {fields.length > 0 && (
+                                      <ul className={styles.entityFieldList}>
+                                        {fields.map((field) => (
+                                          <li
+                                            key={field.id}
+                                            className={styles.entityFieldItem}
+                                            data-testid={`explorer-entity-field-${entity.name}-${field.name}`}
+                                          >
+                                            {field.name}
+                                            <span className={styles.entityFieldType}>{field.field_type}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </div>
+                      )}
+
+                      {isSelectedApp && selectedScreenId && (
+                        <>
+                          <div className={styles.controlsSection} data-testid="explorer-components-section">
+                            <div className={styles.sectionHeader}>
+                              <span>Components</span>
+                              <button
+                                type="button"
+                                className={styles.layerActionBtn}
+                                title="Insert Component"
+                                data-testid="explorer-insert-component"
+                                onClick={() => setInsertComponentOpen(true)}
+                              >
+                                + Insert
+                              </button>
+                            </div>
+                            {componentDefinitionsLoading ? (
+                              <div className={styles.loadingMsg}>Loading components…</div>
+                            ) : componentDefinitions.length === 0 ? (
+                              <div className={styles.emptyControls}>No components yet</div>
+                            ) : (
+                              <ul className={styles.componentList}>
+                                {componentDefinitions.map((definition) => (
+                                  <li
+                                    key={definition.id}
+                                    className={styles.componentItem}
+                                    data-testid={`explorer-component-def-${definition.name}`}
+                                  >
+                                    {definition.name}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                          <div className={styles.controlsSection}>
+                            <div className={styles.sectionHeader}>
+                              <span>Controls</span>
+                            </div>
+                            {controlsLoading ? (
+                              <div className={styles.loadingMsg}>Loading controls…</div>
+                            ) : (
+                              <>
+                                {selectedControlId && (
+                                  <>
+                                    <LayerActions selectedControlId={selectedControlId} />
+                                    <ComponentActions selectedControlId={selectedControlId} />
+                                  </>
+                                )}
+                                <ControlTree
+                                  controls={controls}
+                                  selectedControlId={selectedControlId}
+                                  onSelectControl={selectControl}
+                                />
+                              </>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
               );
             })}
           <ToolboxPanel />
+          <InsertComponentModal
+            open={insertComponentOpen}
+            onClose={() => setInsertComponentOpen(false)}
+          />
+          <CreateEntityModal
+            open={createEntityOpen}
+            onClose={() => setCreateEntityOpen(false)}
+          />
+          <AddFieldModal
+            open={addFieldOpen}
+            entityId={selectedEntityId}
+            entityName={entities.find((e) => e.id === selectedEntityId)?.name ?? ""}
+            onClose={() => setAddFieldOpen(false)}
+          />
         </div>
       )}
     </aside>

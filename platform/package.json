@@ -4,6 +4,7 @@
   "private": true,
   "description": "GoApps Platform — cloud-native low-code platform monorepo",
   "scripts": {
+    "dev:formula-api": "pnpm --filter @goapps/formula serve",
     "dev:studio": "pnpm --filter @goapps/studio dev",
     "dev:runtime": "pnpm --filter @goapps/runtime dev",
     "build": "pnpm -r build",

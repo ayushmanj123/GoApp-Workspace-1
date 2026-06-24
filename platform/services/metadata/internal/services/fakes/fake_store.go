@@ -192,13 +192,34 @@ func (r *fakeFormulaRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, 
 	return r.List(ctx, limit, offset)
 }
 
+type fakeGenericRepo[T any] struct{ data map[uuid.UUID]T }
+
+func newFakeGenericRepo[T any]() *fakeGenericRepo[T] {
+	return &fakeGenericRepo[T]{data: map[uuid.UUID]T{}}
+}
+func (r *fakeGenericRepo[T]) Create(ctx context.Context, entity *T) error { return nil }
+func (r *fakeGenericRepo[T]) GetByID(ctx context.Context, id uuid.UUID) (*T, error) {
+	return nil, gorm.ErrRecordNotFound
+}
+func (r *fakeGenericRepo[T]) List(ctx context.Context, limit int, offset int) ([]T, error) {
+	return nil, nil
+}
+func (r *fakeGenericRepo[T]) Update(ctx context.Context, entity *T) error { return nil }
+func (r *fakeGenericRepo[T]) Delete(ctx context.Context, id uuid.UUID) error { return nil }
+func (r *fakeGenericRepo[T]) ListByTenant(ctx context.Context, tenantID uuid.UUID, limit int, offset int) ([]T, error) {
+	return nil, nil
+}
+
 // fake tenant session
 type fakeTenantSession struct {
-	apps         *fakeApplicationRepo
-	screens      *fakeScreenRepo
-	controls     *fakeControlRepo
-	controlProps *fakeControlPropertyRepo
-	formulas     *fakeFormulaRepo
+	apps                 *fakeApplicationRepo
+	screens              *fakeScreenRepo
+	controls             *fakeControlRepo
+	controlProps         *fakeControlPropertyRepo
+	formulas             *fakeFormulaRepo
+	componentDefinitions *fakeGenericRepo[models.ComponentDefinition]
+	entities             *fakeGenericRepo[models.Entity]
+	entityFields         *fakeGenericRepo[models.EntityField]
 }
 
 func (s *fakeTenantSession) Users() repositories.UserRepository               { return nil }
@@ -224,21 +245,38 @@ func (s *fakeTenantSession) Packages() repositories.PackageRepository           
 func (s *fakeTenantSession) ApplicationSnapshots() repositories.ApplicationSnapshotRepository {
 	return nil
 }
+func (s *fakeTenantSession) ComponentDefinitions() repositories.ComponentDefinitionRepository {
+	return s.componentDefinitions
+}
+func (s *fakeTenantSession) Entities() repositories.EntityRepository         { return s.entities }
+func (s *fakeTenantSession) EntityFields() repositories.EntityFieldRepository { return s.entityFields }
 func (s *fakeTenantSession) Transaction(ctx context.Context, fn func(session repositories.TenantSession) error) error {
 	return fn(s)
 }
 
 // fake store
 type FakeStore struct {
-	apps         *fakeApplicationRepo
-	screens      *fakeScreenRepo
-	controls     *fakeControlRepo
-	controlProps *fakeControlPropertyRepo
-	formulas     *fakeFormulaRepo
+	apps                 *fakeApplicationRepo
+	screens              *fakeScreenRepo
+	controls             *fakeControlRepo
+	controlProps         *fakeControlPropertyRepo
+	formulas             *fakeFormulaRepo
+	componentDefinitions *fakeGenericRepo[models.ComponentDefinition]
+	entities             *fakeGenericRepo[models.Entity]
+	entityFields         *fakeGenericRepo[models.EntityField]
 }
 
 func NewFakeStore() *FakeStore {
-	return &FakeStore{apps: newFakeApplicationRepo(), screens: newFakeScreenRepo(), controls: newFakeControlRepo(), controlProps: newFakeControlPropertyRepo(), formulas: newFakeFormulaRepo()}
+	return &FakeStore{
+		apps:                 newFakeApplicationRepo(),
+		screens:              newFakeScreenRepo(),
+		controls:             newFakeControlRepo(),
+		controlProps:         newFakeControlPropertyRepo(),
+		formulas:             newFakeFormulaRepo(),
+		componentDefinitions: newFakeGenericRepo[models.ComponentDefinition](),
+		entities:             newFakeGenericRepo[models.Entity](),
+		entityFields:         newFakeGenericRepo[models.EntityField](),
+	}
 }
 
 // Expose internals for tests (convenience)
@@ -249,5 +287,14 @@ func (s *FakeStore) ControlPropsRepo() *fakeControlPropertyRepo { return s.contr
 func (s *FakeStore) FormulasRepo() *fakeFormulaRepo             { return s.formulas }
 func (s *FakeStore) Tenants() repositories.TenantRepository     { return nil }
 func (s *FakeStore) WithTenant(ctx context.Context, tenantID uuid.UUID) repositories.TenantSession {
-	return &fakeTenantSession{apps: s.apps, screens: s.screens, controls: s.controls, controlProps: s.controlProps, formulas: s.formulas}
+	return &fakeTenantSession{
+		apps:                 s.apps,
+		screens:              s.screens,
+		controls:             s.controls,
+		controlProps:         s.controlProps,
+		formulas:             s.formulas,
+		componentDefinitions: s.componentDefinitions,
+		entities:             s.entities,
+		entityFields:         s.entityFields,
+	}
 }

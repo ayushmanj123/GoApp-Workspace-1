@@ -58,3 +58,8 @@ user-select: none;
   background: var(--color-danger);
   opacity: 1;
 }
+
+.warningText {
+  font-weight: 600;
+  color: #7f1d1d;
+}

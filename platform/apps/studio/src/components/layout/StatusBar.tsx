@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { useStudioStore } from "../../store/studioStore";
 import styles from "./StatusBar.module.css";
+import { checkFormulaApiHealth } from "../formula/validate-formula";
 
 export function StatusBar() {
   const zoom = useStudioStore((s) => s.zoom);
@@ -7,6 +9,28 @@ export function StatusBar() {
   const selectedControlId = useStudioStore((s) => s.selectedControlId);
   const dirty = useStudioStore((s) => s.dirty);
   const saveMessage = useStudioStore((s) => s.saveMessage);
+  const [formulaApiHealthy, setFormulaApiHealthy] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkHealth = async () => {
+      const healthy = await checkFormulaApiHealth();
+      if (!cancelled) {
+        setFormulaApiHealthy(healthy);
+      }
+    };
+
+    void checkHealth();
+    const intervalId = window.setInterval(() => {
+      void checkHealth();
+    }, 30000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   const statusText = saveMessage ?? (dirty ? "Unsaved changes" : "Ready");
 
@@ -21,6 +45,15 @@ export function StatusBar() {
         />
         <span className={styles.text}>{statusText}</span>
       </div>
+
+      {!formulaApiHealthy && (
+        <>
+          <div className={styles.divider} />
+          <div className={styles.section}>
+            <span className={styles.warningText}>Formula engine unavailable</span>
+          </div>
+        </>
+      )}
 
       <div className={styles.divider} />
 
@@ -41,6 +74,12 @@ export function StatusBar() {
 
       {/* Right: zoom */}
       <div className={styles.spacer} />
+      <div className={styles.section}>
+        <span className={styles.text}>Design mode — use Preview to test formulas</span>
+      </div>
+
+      <div className={styles.divider} />
+
       <div className={styles.section}>
         <span className={styles.text}>Zoom:</span>
         <span className={styles.value}>{zoom}%</span>

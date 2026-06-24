@@ -40,8 +40,29 @@ public sealed class PowerFxEvaluator
                         property.Name,
                         JsonToFormulaValue(property.Value)))
                     .ToArray()),
+            JsonValueKind.Array => JsonArrayToTable(element),
             _ => throw new ArgumentException(
                 $"Unsupported JSON value kind: {element.ValueKind}"),
         };
+    }
+
+    private static FormulaValue JsonArrayToTable(JsonElement element)
+    {
+        var items = element.EnumerateArray().ToArray();
+        if (items.Length == 0)
+        {
+            return FormulaValue.NewTable(RecordType.Empty(), Array.Empty<RecordValue>());
+        }
+
+        var records = items
+            .Select(item =>
+            {
+                var value = JsonToFormulaValue(item);
+                return value as RecordValue
+                    ?? throw new ArgumentException("Table rows must be JSON objects.");
+            })
+            .ToArray();
+
+        return FormulaValue.NewTable(records[0].Type, records);
     }
 }

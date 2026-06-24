@@ -6,13 +6,17 @@
   pointer-events: none;
 }
 
+.host,
+.host * {
+  pointer-events: none;
+}
+
 .host button,
 .host input,
 .host span {
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  pointer-events: none;
 }
 
 .host button:disabled {

@@ -17,6 +17,10 @@ import {
   HARDCODED_USER,
 } from "./formula-runtime-context";
 import {
+  defaultScreenContextStore,
+  type RuntimeScreenContextStore,
+} from "./runtime-screen-context-store";
+import {
   defaultVariableStore,
   type RuntimeVariableStore,
 } from "./runtime-variable-store";
@@ -29,11 +33,15 @@ const FormulaEvaluationContext = createContext<Record<string, unknown>>(
 const VariableStoreContext =
   createContext<RuntimeVariableStore>(defaultVariableStore);
 
+const ScreenContextStoreContext =
+  createContext<RuntimeScreenContextStore>(defaultScreenContextStore);
+
 interface FormulaProviderProps {
   engine?: FormulaEngine;
   appName?: string;
   controls?: FormulaControlContextInput[];
   variableStore?: RuntimeVariableStore;
+  screenContextStore?: RuntimeScreenContextStore;
   children: ReactNode;
 }
 
@@ -42,39 +50,49 @@ export function FormulaProvider({
   appName,
   controls = [],
   variableStore,
+  screenContextStore,
   children,
 }: FormulaProviderProps) {
   const resolvedStore = variableStore ?? defaultVariableStore;
+  const resolvedScreenStore = screenContextStore ?? defaultScreenContextStore;
 
   const formulaEngine = useMemo(
     () => engine ?? createDefaultFormulaEngine(),
     [engine],
   );
 
-  // Incremented whenever the store notifies of a change so that
-  // evaluationContext is recomputed with fresh variable values.
-  const [storeVersion, setStoreVersion] = useState(0);
+  const [contextVersion, setContextVersion] = useState(0);
 
   useEffect(() => {
-    return resolvedStore.subscribe(() => setStoreVersion((v) => v + 1));
+    return resolvedStore.subscribe(() => setContextVersion((v) => v + 1));
   }, [resolvedStore]);
+
+  useEffect(() => {
+    return resolvedScreenStore.subscribe(() => setContextVersion((v) => v + 1));
+  }, [resolvedScreenStore]);
 
   useEffect(() => {
     void formulaEngine.initialize();
   }, [formulaEngine]);
 
   const evaluationContext = useMemo(
-    // storeVersion is intentionally included to force rebuild on variable changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    () => buildFormulaRuntimeContext(appName, controls, resolvedStore),
-    [appName, controls, resolvedStore, storeVersion],
+    () =>
+      buildFormulaRuntimeContext(
+        appName,
+        controls,
+        resolvedStore,
+        resolvedScreenStore,
+      ),
+    [appName, controls, resolvedStore, resolvedScreenStore, contextVersion],
   );
 
   return (
     <FormulaContext.Provider value={formulaEngine}>
       <FormulaEvaluationContext.Provider value={evaluationContext}>
         <VariableStoreContext.Provider value={resolvedStore}>
-          {children}
+          <ScreenContextStoreContext.Provider value={resolvedScreenStore}>
+            {children}
+          </ScreenContextStoreContext.Provider>
         </VariableStoreContext.Provider>
       </FormulaEvaluationContext.Provider>
     </FormulaContext.Provider>
@@ -97,6 +115,10 @@ export function useVariableStore(): RuntimeVariableStore {
   return useContext(VariableStoreContext);
 }
 
+export function useScreenContextStore(): RuntimeScreenContextStore {
+  return useContext(ScreenContextStoreContext);
+}
+
 /**
  * Returns a stable callback that executes a Set(varName, value) formula
  * and updates the RuntimeVariableStore, triggering reactive re-evaluation.
@@ -115,4 +137,4 @@ export function useSet(): (formula: string) => Promise<void> {
 }
 
 export { HARDCODED_USER, buildFormulaRuntimeContext };
-export type { RuntimeVariableStore };
+export type { RuntimeVariableStore, RuntimeScreenContextStore };

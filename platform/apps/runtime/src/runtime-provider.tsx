@@ -5,8 +5,10 @@ import {
   useFormulaEngine,
   useFormulaEvaluationContext,
   useVariableStore,
+  useScreenContextStore,
 } from "./formula/formula-context";
 import { InMemoryVariableStore } from "./formula/runtime-variable-store";
+import { InMemoryScreenContextStore } from "./formula/runtime-screen-context-store";
 import { executeAction } from "./formula/execute-action";
 const TENANT_ID =
   (import.meta.env.VITE_TENANT_ID as string | undefined) ??
@@ -37,6 +39,7 @@ function DevActionRunner() {
   const engine = useFormulaEngine();
   const context = useFormulaEvaluationContext();
   const store = useVariableStore();
+  const screenContextStore = useScreenContextStore();
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -44,13 +47,16 @@ function DevActionRunner() {
       formula: string,
     ) => {
       try {
-        await executeAction({ formula }, { store, engine, context });
+        await executeAction(
+          { formula },
+          { store, screenContextStore, engine, context },
+        );
         return { ok: true };
       } catch (err) {
         return { ok: false, error: String(err) };
       }
     };
-  }, [store, engine, context]);
+  }, [store, screenContextStore, engine, context]);
 
   return null;
 }
@@ -69,11 +75,14 @@ export const RuntimeProvider: React.FC<{
   const [collections] = useState<Record<string, any[]>>({});
 
   const variableStoreRef = useRef(new InMemoryVariableStore());
+  const screenContextStoreRef = useRef(new InMemoryScreenContextStore());
 
   useEffect(() => {
     if (import.meta.env.DEV) {
       (window as unknown as Record<string, unknown>).__variableStore =
         variableStoreRef.current;
+      (window as unknown as Record<string, unknown>).__screenContextStore =
+        screenContextStoreRef.current;
     }
   }, []);
 
@@ -119,7 +128,12 @@ export const RuntimeProvider: React.FC<{
   }, [pkg, currentScreen]);
 
   return (
-    <FormulaProvider appName={pkg?.name} controls={screenControls} variableStore={variableStoreRef.current}>
+    <FormulaProvider
+      appName={pkg?.name}
+      controls={screenControls}
+      variableStore={variableStoreRef.current}
+      screenContextStore={screenContextStoreRef.current}
+    >
       <DevActionRunner />
       <RuntimeContext.Provider
         value={{ pkg, loading, currentScreen, navigate, variables, collections }}

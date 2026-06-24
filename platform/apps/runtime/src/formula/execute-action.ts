@@ -1,6 +1,8 @@
 import type { FormulaEngine } from "@goapps/formula";
+import type { RuntimeScreenContextStore } from "./runtime-screen-context-store";
 import type { RuntimeVariableStore } from "./runtime-variable-store";
 import { executeSet } from "./execute-set";
+import { executeUpdateContext } from "./execute-update-context";
 
 export interface RuntimeAction {
   formula: string;
@@ -8,6 +10,7 @@ export interface RuntimeAction {
 
 export interface ActionServices {
   store: RuntimeVariableStore;
+  screenContextStore: RuntimeScreenContextStore;
   engine: FormulaEngine;
   context: Record<string, unknown>;
 }
@@ -15,11 +18,8 @@ export interface ActionServices {
 /**
  * Executes a runtime action formula.
  *
- * Supported:  Set(varName, value)
+ * Supported:  Set(varName, value), UpdateContext({ key: "value" })
  * Unsupported: anything else throws [Action Error]
- *
- * New action types (Navigate, UpdateContext, etc.) can be added here
- * in future phases without changing the call sites.
  */
 export async function executeAction(
   action: RuntimeAction,
@@ -34,6 +34,11 @@ export async function executeAction(
       services.engine,
       services.context,
     );
+    return;
+  }
+
+  if (/^UpdateContext\s*\(/i.test(trimmed)) {
+    executeUpdateContext(trimmed, services.screenContextStore);
     return;
   }
 

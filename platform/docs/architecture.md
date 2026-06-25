@@ -40,10 +40,12 @@ All services return a consistent JSON envelope:
 {
   "success": true,
   "data": {},
-  "error": { "code": "ERROR_CODE", "message": "Human-readable message" },
-  "meta": { "requestId": "uuid", "timestamp": "ISO-8601" }
+  "error": null,
+  "meta": { "requestId": "uuid", "timestamp": "ISO-8601", "pagination": { "limit": 50, "offset": 0, "total": 100 } }
 }
 ```
+
+Error responses set `success: false`, `data: null`, and populate `error` with `code`, `message`, optional `details`, and `correlationId`. List endpoints may include `meta.pagination`.
 
 Implemented in:
 - Go: `packages/shared/go/response`

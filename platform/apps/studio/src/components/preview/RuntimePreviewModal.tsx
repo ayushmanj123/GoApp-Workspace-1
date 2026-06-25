@@ -87,7 +87,7 @@ export function RuntimePreviewModal({
               Select an application to preview.
             </div>
           ) : (
-            <RuntimeProvider appId={applicationId}>
+            <RuntimeProvider appId={applicationId} channel="draft">
               <RuntimePreviewContent
                 selectedScreenId={selectedScreenId ?? activeScreenId}
               />

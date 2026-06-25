@@ -17,17 +17,25 @@ export const TextInput: React.FC<any> = ({
   value = "",
   default: defaultProperty,
   placeholder = "",
+  disabled = false,
+  readOnly = false,
   controlName,
   onChange,
 }) => {
   const formEdit = useFormEditContext();
   const controlValueStore = useControlValueStore();
   const defaultFormula = readPropertyFormula(defaultProperty);
-  const bindingField = defaultFormula ? parseParentItemField(defaultFormula) : null;
-  const usesDefaultBinding = Boolean(formEdit && bindingField && defaultProperty);
+  const bindingField = defaultFormula
+    ? parseParentItemField(defaultFormula)
+    : null;
+  const usesDefaultBinding = Boolean(
+    formEdit && bindingField && defaultProperty,
+  );
 
   const resolvedDefault = useParentItemDefault(defaultProperty);
-  const resolvedValue = useResolvedPropertyText(usesDefaultBinding ? undefined : value);
+  const resolvedValue = useResolvedPropertyText(
+    usesDefaultBinding ? undefined : value,
+  );
   const resolvedPlaceholder = useResolvedPropertyText(placeholder);
 
   const [localValue, setLocalValue] = useState(resolvedDefault);
@@ -57,7 +65,10 @@ export const TextInput: React.FC<any> = ({
       data-testid={controlName ? `input-${controlName}` : undefined}
       value={displayValue}
       placeholder={resolvedPlaceholder}
+      disabled={disabled}
+      readOnly={readOnly}
       onChange={handleChange}
+      style={{ width: "100%", height: "100%", boxSizing: "border-box" }}
     />
   );
 };

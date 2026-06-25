@@ -16,10 +16,13 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	app := server.New(cfg)
+	runtimeApp, err := server.New(cfg)
+	if err != nil {
+		log.Fatalf("failed to create server: %v", err)
+	}
 
 	go func() {
-		if err := app.Listen(cfg.Addr()); err != nil {
+		if err := runtimeApp.Fiber.Listen(cfg.Addr()); err != nil {
 			log.Fatalf("server error: %v", err)
 		}
 	}()
@@ -28,7 +31,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	if err := app.Shutdown(); err != nil {
+	if err := runtimeApp.Shutdown(); err != nil {
 		log.Printf("shutdown error: %v", err)
 	}
 }

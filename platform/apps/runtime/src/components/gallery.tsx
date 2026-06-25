@@ -9,7 +9,8 @@ import {
   firstStringLikeField,
   readItemsFormula,
 } from "../utils/gallery-rows";
-import { useNavigationStore } from "../runtime-hooks";
+import { useIsDesignSurface } from "../design-mode-context";
+import { fillParentStyle, relativeContainerStyle } from "../utils/control-layout";
 import type { ControlPackage } from "../runtime-types";
 
 const STUDIO_PLACEHOLDER_RECORDS = [{ Name: "Item 1" }, { Name: "Item 2" }];
@@ -18,14 +19,15 @@ export const Gallery: React.FC<{
   name?: string;
   items?: unknown;
   templateControls?: ControlPackage[];
-}> = ({ name, items, templateControls = [] }) => {
+  disabled?: boolean;
+  readOnly?: boolean;
+}> = ({ name, items, templateControls = [], disabled = false }) => {
   const records = useResolvedGalleryRecords(items);
   const selectionStore = useGallerySelectionStore();
-  const navigationStore = useNavigationStore();
-  const isStudioCanvas = navigationStore === null;
+  const isStudioCanvas = useIsDesignSurface();
   const hasFormula = Boolean(readItemsFormula(items));
   const galleryName = name?.trim() ?? "";
-  const canSelect = Boolean(galleryName) && !isStudioCanvas;
+  const canSelect = Boolean(galleryName) && !isStudioCanvas && !disabled;
   const selectedRecord = canSelect ? selectionStore.get(galleryName) : undefined;
 
   const displayRecords =
@@ -56,16 +58,11 @@ export const Gallery: React.FC<{
   return (
     <div
       style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
+        ...fillParentStyle(),
         overflow: "auto",
-        width: "100%",
-        height: "100%",
         border: "1px solid #d0d0d0",
         borderRadius: 4,
         padding: 4,
-        boxSizing: "border-box",
       }}
     >
       {displayRecords.map((record, index) => (
@@ -73,8 +70,11 @@ export const Gallery: React.FC<{
           key={`${index}-${JSON.stringify(record)}`}
           onClick={canSelect ? () => handleRowClick(record) : undefined}
           style={{
-            padding: "6px 8px",
+            position: "relative",
+            minHeight: 32,
+            padding: "4px 6px",
             borderBottom: "1px solid #eee",
+            marginBottom: 2,
             cursor: canSelect ? "pointer" : undefined,
             background: isRowSelected(record) ? "#e8f0fe" : undefined,
           }}
@@ -85,6 +85,7 @@ export const Gallery: React.FC<{
                 <ControlRenderer
                   key={`${index}-${control.id}`}
                   control={control}
+                  nested
                 />
               ))}
             </GalleryRowProvider>

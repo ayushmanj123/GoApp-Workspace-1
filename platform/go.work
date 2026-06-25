@@ -6,6 +6,7 @@ use (
 	./services/auth
 	./services/connector
 	./services/environment
+	./services/gateway
 	./services/metadata
 	./services/publish
 	./services/runtime

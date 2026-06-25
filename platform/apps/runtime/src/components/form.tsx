@@ -7,7 +7,8 @@ import {
   useFormUpdatesStore,
 } from "../formula/formula-context";
 import { FormEditContext } from "../form-edit-context";
-import { useNavigationStore } from "../runtime-hooks";
+import { useIsDesignSurface } from "../design-mode-context";
+import { fillParentStyle, relativeContainerStyle } from "../utils/control-layout";
 import type { ControlPackage } from "../runtime-types";
 
 function readItemFormula(property: unknown): string {
@@ -42,17 +43,26 @@ export const Form: React.FC<{
   item?: unknown;
   mode?: unknown;
   templateControls?: ControlPackage[];
-}> = ({ name, item, mode, templateControls = [] }) => {
+  disabled?: boolean;
+  readOnly?: boolean;
+}> = ({
+  name,
+  item,
+  mode,
+  templateControls = [],
+  disabled = false,
+  readOnly = false,
+}) => {
   const engine = useFormulaEngine();
   const context = useFormulaEvaluationContext();
-  const navigationStore = useNavigationStore();
   const formUpdatesStore = useFormUpdatesStore();
-  const isStudioCanvas = navigationStore === null;
+  const isStudioCanvas = useIsDesignSurface();
   const formMode = readModeValue(mode);
   const formName = name?.trim() ?? "";
   const [record, setRecord] = useState<Record<string, unknown> | null>(null);
   const lastInitializedRecordKey = useRef<string | null>(null);
   const recordKey = record ? JSON.stringify(record) : null;
+  const isReadOnly = readOnly || disabled || formMode === "View";
 
   useEffect(() => {
     let cancelled = false;
@@ -84,18 +94,20 @@ export const Form: React.FC<{
   }, [item, engine, context]);
 
   useEffect(() => {
-    if (formMode !== "Edit" || !formName || !record || !recordKey) return;
+    if (formMode !== "Edit" || !formName || !record || !recordKey || isReadOnly) {
+      return;
+    }
     if (lastInitializedRecordKey.current === recordKey) return;
     lastInitializedRecordKey.current = recordKey;
     formUpdatesStore.set(formName, { ...record });
-  }, [formMode, formName, record, recordKey, formUpdatesStore]);
+  }, [formMode, formName, record, recordKey, formUpdatesStore, isReadOnly]);
 
   const reportUpdate = useCallback(
     (field: string, value: unknown) => {
-      if (!formName) return;
+      if (!formName || isReadOnly) return;
       formUpdatesStore.updateField(formName, field, value);
     },
-    [formName, formUpdatesStore],
+    [formName, formUpdatesStore, isReadOnly],
   );
 
   const editContextValue = useMemo(
@@ -111,23 +123,13 @@ export const Form: React.FC<{
     return <div>No Record</div>;
   }
 
-  if (formMode === "Edit") {
+  if (formMode === "Edit" && !isReadOnly) {
     return (
       <FormEditContext.Provider value={editContextValue}>
         <FormItemProvider item={record}>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              width: "100%",
-              height: "100%",
-              overflow: "auto",
-              boxSizing: "border-box",
-            }}
-          >
+          <div style={{ ...relativeContainerStyle(), overflow: "auto" }}>
             {templateControls.map((control) => (
-              <ControlRenderer key={control.id} control={control} />
+              <ControlRenderer key={control.id} control={control} nested />
             ))}
           </div>
         </FormItemProvider>
@@ -136,12 +138,20 @@ export const Form: React.FC<{
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      {Object.entries(record).map(([field, value]) => (
-        <div key={field}>
-          {field}: {stringifyFieldValue(value)}
+    <div style={{ ...fillParentStyle(), overflow: "auto", padding: 4 }}>
+      {templateControls.length > 0 ? (
+        <div style={relativeContainerStyle()}>
+          {templateControls.map((control) => (
+            <ControlRenderer key={control.id} control={control} nested />
+          ))}
         </div>
-      ))}
+      ) : (
+        Object.entries(record).map(([field, value]) => (
+          <div key={field}>
+            {field}: {stringifyFieldValue(value)}
+          </div>
+        ))
+      )}
     </div>
   );
 };

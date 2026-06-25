@@ -34,21 +34,39 @@ func RequestID() fiber.Handler {
 func RequestLogger(base *slog.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		requestID, _ := c.Locals("requestID").(string)
-		reqLogger := base.With(
-			slog.String("request_id", requestID),
-		)
+		reqLogger := base.With(slog.String("request_id", requestID))
 		ctx := logging.WithContext(c.UserContext(), reqLogger)
 		c.SetUserContext(ctx)
 
 		start := time.Now()
 		err := c.Next()
 
-		reqLogger.Info("request completed",
+		fields := []any{
 			slog.String("method", c.Method()),
 			slog.String("path", c.Path()),
 			slog.Int("status", c.Response().StatusCode()),
 			slog.Int64("duration_ms", time.Since(start).Milliseconds()),
-		)
+		}
+		if sessionID := c.Params("sessionId"); sessionID != "" {
+			fields = append(fields, slog.String("session_id", sessionID))
+		}
+		if screenID := c.Params("screenId"); screenID != "" {
+			fields = append(fields, slog.String("screen_id", screenID))
+		}
+		if controlID := c.Params("controlId"); controlID != "" {
+			fields = append(fields, slog.String("control_id", controlID))
+		}
+		if tenantID := c.Get(tenant.HeaderTenantID); tenantID != "" {
+			fields = append(fields, slog.String("tenant_id", tenantID))
+		}
+		if userID := c.Get(tenant.HeaderUserID); userID != "" {
+			fields = append(fields, slog.String("user_id", userID))
+		}
+		if appID, ok := c.Locals("appId").(string); ok && appID != "" {
+			fields = append(fields, slog.String("app_id", appID))
+		}
+
+		reqLogger.Info("request completed", fields...)
 		return err
 	}
 }
@@ -98,14 +116,13 @@ func ErrorHandler(c *fiber.Ctx, err error) error {
 	}
 
 	if appErr := errors.AsAppError(err); appErr != nil {
+		safe := errors.Sanitize(appErr, requestID)
 		logger.Error("application error",
 			slog.String("error", err.Error()),
-			slog.String("app_error_code", appErr.Code),
+			slog.String("app_error_code", safe.Code),
 			slog.String("request_id", requestID),
 		)
-		return c.Status(appErr.HTTPStatus).JSON(
-			response.Fail(appErr.Code, appErr.Message, requestID),
-		)
+		return c.Status(safe.HTTPStatus).JSON(response.FromAppError(safe, requestID))
 	}
 
 	if err == fiber.ErrNotFound {
@@ -121,6 +138,31 @@ func ErrorHandler(c *fiber.Ctx, err error) error {
 	status := fiber.StatusInternalServerError
 	if fe, ok := err.(*fiber.Error); ok {
 		status = fe.Code
+		message := fe.Message
+		if message == "" {
+			message = "request failed"
+		}
+		logger.Error("fiber error",
+			slog.String("error", err.Error()),
+			slog.String("request_id", requestID),
+		)
+		code := "INTERNAL_ERROR"
+		switch status {
+		case fiber.StatusBadRequest:
+			code = "BAD_REQUEST"
+		case fiber.StatusUnauthorized:
+			code = "UNAUTHORIZED"
+		case fiber.StatusForbidden:
+			code = "FORBIDDEN"
+		case fiber.StatusNotFound:
+			code = "NOT_FOUND"
+		case fiber.StatusConflict:
+			code = "CONFLICT"
+		}
+		if status >= fiber.StatusInternalServerError {
+			message = "internal server error"
+		}
+		return c.Status(status).JSON(response.Fail(code, message, requestID))
 	}
 
 	message := "internal server error"

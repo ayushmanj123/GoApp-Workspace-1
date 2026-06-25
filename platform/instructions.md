@@ -407,15 +407,22 @@ Never mix design-time and runtime logic.
 
 Studio
 ↓
-Metadata
+Publish Service (:8085)
 ↓
-Publish
+Metadata Service (snapshot assembly)
 ↓
-Version Snapshot
+Version Snapshot (`application_snapshots.snapshot_json`)
 ↓
 Runtime Package
 ↓
-Runtime
+Runtime App
+
+Rules:
+
+- Draft metadata tables remain editable after publish
+- Published runtime loads frozen snapshots via `applications.current_version_id`
+- Studio preview uses `?channel=draft` on runtime APIs
+- `packages` / MinIO artifact storage deferred to a later phase
 
 Published versions must be immutable.
 
@@ -493,67 +500,67 @@ Never:
 
 # Current Build Order
 
-Phase 1:
-Infrastructure
+Macro phases (product roadmap):
 
-Status:
-COMPLETE
-
----
-
-Phase 2:
-Metadata Service
-
-Status:
-IN PROGRESS
-
----
-
-Phase 3:
-Runtime Engine
-
-Status:
-IN PROGRESS
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Infrastructure | COMPLETE |
+| 2 | Metadata Service | COMPLETE (CRUD + runtime assembly; JWT deferred) |
+| 3 | Runtime Engine | COMPLETE (client-side `apps/runtime`; Go service health-only) |
+| 4 | Canvas Studio | COMPLETE (Konva, Monaco, explorer, layers) |
+| 5 | Formula Engine | COMPLETE (literal + remote Power Fx, actions, forms) |
+| 6.0 | Entity Foundation | COMPLETE |
+| 6.1 | Publishing Pipeline | COMPLETE |
+| 7 | Connector Framework | NOT STARTED |
+| 8 | Enterprise Features | NOT STARTED |
 
 ---
 
-Phase 4:
-Canvas Studio
+# Granular Validation Milestones
 
-Status:
-NOT STARTED
+Acceptance scripts live in `infrastructure/scripts/validate-phase-*.mjs`.
 
----
+Granular sub-phases use different numbering than macro phases:
 
-Phase 5:
-Formula Engine
+- **4.3.8 → 4.33** — Studio chrome, canvas, formulas, actions, gallery, forms, timer, components
+- **5.0 → 5.2** — Explorer tree, layers UX, Monaco formula editor
+- **6.0** — Entity foundation (schema + Studio + runtime package)
+- **6.1** — Publishing pipeline (immutable snapshots + publish service)
 
-Status:
-NOT STARTED
-
----
-
-Phase 6:
-Publishing Pipeline
-
-Status:
-NOT STARTED
+Run: `node infrastructure/scripts/validate-phase-6.1.mjs`
 
 ---
 
-Phase 7:
-Connector Framework
+# Phase 6.1 — Publishing Pipeline
 
-Status:
-NOT STARTED
+## APIs
 
----
+Publish service (public entry, :8085):
 
-Phase 8:
-Enterprise Features
+- `POST /api/v1/applications/:id/publish`
+- `GET /api/v1/applications/:id/versions`
+- `GET /api/v1/applications/:id/versions/:versionId`
 
-Status:
-NOT STARTED
+Metadata service (domain logic + persistence, :8082):
+
+- Same publish/version routes (used internally by publish service)
+- `GET /api/v1/runtime/applications/:id` — default `published` channel (snapshot)
+- `GET /api/v1/runtime/applications/:id?channel=draft` — live draft assembly
+
+## Data model
+
+- `application_versions` — `status`: `draft` | `released` | `deprecated`
+- `application_snapshots` — immutable `snapshot_json` (full `RuntimeApplication` DTO)
+- `applications.current_version_id` — pointer to latest released version
+- `applications.status` — `draft` | `published` | `archived`
+
+## Out of scope (6.1)
+
+- `packages` table / MinIO upload
+- Environment promotion (dev → prod)
+- Unpublish / rollback / deprecate
+- Audit service writes
+- Keycloak JWT (continue `X-Tenant-Id` header)
 
 ---
 
@@ -561,25 +568,23 @@ NOT STARTED
 
 User can:
 
-1. Create Application
-2. Create Screen
-3. Create Controls
-4. Save Metadata
-5. Publish
-6. Open Runtime
-7. Interact with App
+1. Create Application — DONE
+2. Create Screen — DONE
+3. Create Controls — DONE
+4. Save Metadata — DONE
+5. Publish — DONE (Phase 6.1)
+6. Open Runtime — DONE (loads published snapshot by default)
+7. Interact with App — DONE
 
-No Power Fx yet.
+No Power Fx parity yet.
 
 No AI features yet.
 
 No Marketplace yet.
 
-Focus entirely on:
+Next focus:
 
-Metadata → Runtime → Studio
-
-before building advanced capabilities.
+Connectors → Enterprise features
 
 ---
 

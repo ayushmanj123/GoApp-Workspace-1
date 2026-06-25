@@ -2,13 +2,20 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/goapps-platform/metadata-service/internal/api/contracts"
 	"github.com/goapps-platform/metadata-service/internal/models"
 	"github.com/goapps-platform/metadata-service/internal/repositories"
 	"github.com/google/uuid"
 )
+
+// RuntimePackageOptions controls how runtime packages are assembled.
+type RuntimePackageOptions struct {
+	Channel string // "published" (default) or "draft"
+}
 
 // RuntimeService provides read-only runtime packages built from metadata.
 type RuntimeService struct{ store repositories.Store }
@@ -71,6 +78,35 @@ func (s *RuntimeService) GetApplicationPackage(ctx context.Context, tenantID, ap
 
 // Convenience for assembler
 func (s *RuntimeService) BuildRuntimePackage(ctx context.Context, tenantID, appID uuid.UUID) (*contracts.RuntimeApplication, error) {
+	return s.BuildRuntimePackageWithOptions(ctx, tenantID, appID, RuntimePackageOptions{})
+}
+
+func (s *RuntimeService) BuildRuntimePackageWithOptions(ctx context.Context, tenantID, appID uuid.UUID, opts RuntimePackageOptions) (*contracts.RuntimeApplication, error) {
+	channel := strings.TrimSpace(opts.Channel)
+	if channel == "" {
+		channel = "published"
+	}
+	if channel == "draft" {
+		return s.buildDraftPackage(ctx, tenantID, appID)
+	}
+	if channel != "published" {
+		return nil, fmt.Errorf("unsupported runtime channel %q", channel)
+	}
+
+	sess := s.store.WithTenant(ctx, tenantID)
+	app, err := sess.Applications().GetByID(ctx, appID)
+	if err != nil {
+		return nil, fmt.Errorf("load application: %w", err)
+	}
+	if app.CurrentVersionID != nil {
+		if pkg, err := s.loadPublishedPackage(ctx, sess, *app.CurrentVersionID); err == nil {
+			return pkg, nil
+		}
+	}
+	return s.buildDraftPackage(ctx, tenantID, appID)
+}
+
+func (s *RuntimeService) buildDraftPackage(ctx context.Context, tenantID, appID uuid.UUID) (*contracts.RuntimeApplication, error) {
 	app, screens, controls, props, formulas, componentDefs, err := s.GetApplicationPackage(ctx, tenantID, appID)
 	if err != nil {
 		return nil, err
@@ -85,6 +121,21 @@ func (s *RuntimeService) BuildRuntimePackage(ctx context.Context, tenantID, appI
 		return nil, err
 	}
 	return pkg, nil
+}
+
+func (s *RuntimeService) loadPublishedPackage(ctx context.Context, sess repositories.TenantSession, versionID uuid.UUID) (*contracts.RuntimeApplication, error) {
+	snapshots, err := listSnapshotsByVersion(ctx, sess, versionID)
+	if err != nil {
+		return nil, err
+	}
+	if len(snapshots) == 0 {
+		return nil, fmt.Errorf("published snapshot not found")
+	}
+	var pkg contracts.RuntimeApplication
+	if err := json.Unmarshal(snapshots[0].SnapshotJSON, &pkg); err != nil {
+		return nil, fmt.Errorf("decode published snapshot: %w", err)
+	}
+	return &pkg, nil
 }
 
 // FindScreenOwner returns the application id that owns the screen.

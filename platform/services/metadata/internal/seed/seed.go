@@ -65,23 +65,6 @@ func Run(ctx context.Context, db *gorm.DB) error {
 				return err
 			}
 
-			version := models.ApplicationVersion{
-				ID:            DemoAppVersionID,
-				TenantID:      DevelopmentTenantID,
-				ApplicationID: DemoApplicationID,
-				Version:       "0.1.0",
-				Status:        "draft",
-				Manifest:      datatypes.JSON([]byte(`{"screens":[],"controls":[]}`)),
-			}
-			if err := upsert(scopedTx, &version, []string{"version", "status", "manifest", "modified_on"}); err != nil {
-				return err
-			}
-
-			app.CurrentVersionID = &DemoAppVersionID
-			if err := upsert(scopedTx, &app, []string{"name", "description", "status", "current_version_id", "modified_on"}); err != nil {
-				return err
-			}
-
 			screen := models.Screen{
 				ID:            DemoScreenID,
 				TenantID:      DevelopmentTenantID,
@@ -175,7 +158,7 @@ func Run(ctx context.Context, db *gorm.DB) error {
 				return err
 			}
 
-			return nil
+			return SeedCustomerApp(ctx, scopedTx)
 		})
 	})
 }

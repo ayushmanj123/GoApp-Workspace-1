@@ -43,6 +43,7 @@ export function StudioLayout() {
       <TopBar
         onPreview={handlePreview}
         previewDisabled={!applicationId}
+        applicationId={applicationId}
       />
 
       <div className={styles.workArea}>

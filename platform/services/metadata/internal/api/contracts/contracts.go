@@ -182,3 +182,33 @@ type RuntimeFormula struct {
 	FormulaText  string    `json:"formula_text"`
 	FormulaType  string    `json:"formula_type"`
 }
+
+// Publish DTOs
+
+type PublishApplicationRequest struct {
+	Version *string `json:"version" validate:"omitempty,max=50"`
+	Notes   *string `json:"notes" validate:"omitempty,max=500"`
+}
+
+type PublishResult struct {
+	ApplicationID uuid.UUID `json:"application_id"`
+	VersionID     uuid.UUID `json:"version_id"`
+	Version       string    `json:"version"`
+	Status        string    `json:"status"`
+	SnapshotID    uuid.UUID `json:"snapshot_id"`
+	PublishedAt   time.Time `json:"published_at"`
+}
+
+type ApplicationVersionSummary struct {
+	ID        uuid.UUID `json:"id"`
+	Version   string    `json:"version"`
+	Status    string    `json:"status"`
+	CreatedOn time.Time `json:"created_on"`
+}
+
+type ApplicationVersionDetail struct {
+	ApplicationVersionSummary
+	ApplicationID uuid.UUID `json:"application_id"`
+	Manifest      any       `json:"manifest,omitempty"`
+	SnapshotSize  int       `json:"snapshot_size"`
+}

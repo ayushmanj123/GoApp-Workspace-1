@@ -78,8 +78,15 @@ pnpm dev:runtime  # Runtime app on http://localhost:5174
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Platform Hardening (Phase 6.9)](docs/platform-hardening.md)
 - [Local Development](docs/local-development.md)
 - [Services](docs/services.md)
+
+## Platform validation
+
+```bash
+node infrastructure/scripts/validate-platform.mjs
+```
 
 ## Service Ports
 

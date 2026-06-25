@@ -15,7 +15,17 @@ const noopDesigner = () => null;
 
 function registerRuntime() {
   // override v1 noop components by unregistering then registering runtime-aware versions
-  ["Button", "Label", "TextInput", "Dropdown", "Container", "Component", "Gallery", "Form", "Timer"].forEach((t) => {
+  [
+    "Button",
+    "Label",
+    "TextInput",
+    "Dropdown",
+    "Container",
+    "Component",
+    "Gallery",
+    "Form",
+    "Timer",
+  ].forEach((t) => {
     if (registry.exists(t)) registry.unregister(t);
   });
 
@@ -47,6 +57,7 @@ function registerRuntime() {
           default={p.default}
           placeholder={p.placeholder}
           disabled={p.disabled}
+          readOnly={p.readOnly}
           controlName={p.controlName}
           onChange={p.onChange}
         />

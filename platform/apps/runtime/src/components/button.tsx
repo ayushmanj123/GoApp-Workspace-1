@@ -10,7 +10,11 @@ import {
   useFormUpdatesStore,
   useRecordStore,
 } from "../formula/formula-context";
-import { useNavigationStore, useScreenResolver, useRuntime } from "../runtime-hooks";
+import {
+  useNavigationStore,
+  useScreenResolver,
+  useRuntime,
+} from "../runtime-hooks";
 import { executeAction } from "../formula/execute-action";
 import type { RuntimeNavigationStore } from "../formula/runtime-navigation-store";
 
@@ -95,7 +99,7 @@ export const Button: React.FC<any> = ({
   ]);
 
   return (
-    <button disabled={disabled} onClick={handleClick}>
+    <button disabled={disabled} onClick={handleClick} style={{ width: "100%", height: "100%" }}>
       {label}
     </button>
   );

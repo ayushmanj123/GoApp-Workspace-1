@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useInteractionStore } from "../canvas/interaction/interactionStore";
 
 export interface StudioState {
   // Panel visibility
@@ -55,10 +56,23 @@ export const useStudioStore = create<StudioState>((set) => ({
 
   setActiveApp: (appId, appName) => set({ activeAppId: appId, appName }),
 
-  setActiveScreen: (screenId, screenName) =>
-    set({ activeScreenId: screenId, screenName, selectedControlId: null }),
+  setActiveScreen: (screenId, screenName) => {
+    const interaction = useInteractionStore.getState();
+    interaction.clearSelection();
+    interaction.exitContainerEdit();
+    interaction.setActiveScreen(screenId);
+    set({ activeScreenId: screenId, screenName, selectedControlId: null });
+  },
 
-  selectControl: (controlId) => set({ selectedControlId: controlId }),
+  selectControl: (controlId) => {
+    const interaction = useInteractionStore.getState();
+    if (controlId) {
+      interaction.select(controlId);
+    } else {
+      interaction.clearSelection();
+    }
+    set({ selectedControlId: controlId });
+  },
 
   setZoom: (zoom) => set({ zoom }),
 

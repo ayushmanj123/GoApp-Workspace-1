@@ -118,8 +118,8 @@ const Timer: ComponentDefinition = {
 };
 
 // Register v1 components
-[Button, Label, TextInput, Dropdown, Container, Gallery, Form, Timer].forEach((c) =>
-  registry.register(c),
+[Button, Label, TextInput, Dropdown, Container, Gallery, Form, Timer].forEach(
+  (c) => registry.register(c),
 );
 
 export const V1 = {

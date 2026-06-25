@@ -192,6 +192,112 @@ func (r *fakeFormulaRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, 
 	return r.List(ctx, limit, offset)
 }
 
+type fakeApplicationVersionRepo struct {
+	data map[uuid.UUID]models.ApplicationVersion
+}
+
+func newFakeApplicationVersionRepo() *fakeApplicationVersionRepo {
+	return &fakeApplicationVersionRepo{data: map[uuid.UUID]models.ApplicationVersion{}}
+}
+func (r *fakeApplicationVersionRepo) Create(ctx context.Context, entity *models.ApplicationVersion) error {
+	if entity.ID == uuid.Nil {
+		entity.ID = uuid.New()
+	}
+	r.data[entity.ID] = *entity
+	return nil
+}
+func (r *fakeApplicationVersionRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.ApplicationVersion, error) {
+	e, ok := r.data[id]
+	if !ok {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &e, nil
+}
+func (r *fakeApplicationVersionRepo) List(ctx context.Context, limit int, offset int) ([]models.ApplicationVersion, error) {
+	out := []models.ApplicationVersion{}
+	for _, v := range r.data {
+		out = append(out, v)
+	}
+	return out, nil
+}
+func (r *fakeApplicationVersionRepo) Update(ctx context.Context, entity *models.ApplicationVersion) error {
+	r.data[entity.ID] = *entity
+	return nil
+}
+func (r *fakeApplicationVersionRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	delete(r.data, id)
+	return nil
+}
+func (r *fakeApplicationVersionRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, limit int, offset int) ([]models.ApplicationVersion, error) {
+	return r.List(ctx, limit, offset)
+}
+func (r *fakeApplicationVersionRepo) ListByField(ctx context.Context, field string, value any, limit int, offset int) ([]models.ApplicationVersion, error) {
+	if field != "application_id" {
+		return nil, nil
+	}
+	appID := value.(uuid.UUID)
+	out := []models.ApplicationVersion{}
+	for _, v := range r.data {
+		if v.ApplicationID == appID {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+
+type fakeApplicationSnapshotRepo struct {
+	data map[uuid.UUID]models.ApplicationSnapshot
+}
+
+func newFakeApplicationSnapshotRepo() *fakeApplicationSnapshotRepo {
+	return &fakeApplicationSnapshotRepo{data: map[uuid.UUID]models.ApplicationSnapshot{}}
+}
+func (r *fakeApplicationSnapshotRepo) Create(ctx context.Context, entity *models.ApplicationSnapshot) error {
+	if entity.ID == uuid.Nil {
+		entity.ID = uuid.New()
+	}
+	r.data[entity.ID] = *entity
+	return nil
+}
+func (r *fakeApplicationSnapshotRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.ApplicationSnapshot, error) {
+	e, ok := r.data[id]
+	if !ok {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &e, nil
+}
+func (r *fakeApplicationSnapshotRepo) List(ctx context.Context, limit int, offset int) ([]models.ApplicationSnapshot, error) {
+	out := []models.ApplicationSnapshot{}
+	for _, v := range r.data {
+		out = append(out, v)
+	}
+	return out, nil
+}
+func (r *fakeApplicationSnapshotRepo) Update(ctx context.Context, entity *models.ApplicationSnapshot) error {
+	r.data[entity.ID] = *entity
+	return nil
+}
+func (r *fakeApplicationSnapshotRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	delete(r.data, id)
+	return nil
+}
+func (r *fakeApplicationSnapshotRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, limit int, offset int) ([]models.ApplicationSnapshot, error) {
+	return r.List(ctx, limit, offset)
+}
+func (r *fakeApplicationSnapshotRepo) ListByField(ctx context.Context, field string, value any, limit int, offset int) ([]models.ApplicationSnapshot, error) {
+	if field != "application_version_id" {
+		return nil, nil
+	}
+	versionID := value.(uuid.UUID)
+	out := []models.ApplicationSnapshot{}
+	for _, v := range r.data {
+		if v.ApplicationVersionID == versionID {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+
 type fakeGenericRepo[T any] struct{ data map[uuid.UUID]T }
 
 func newFakeGenericRepo[T any]() *fakeGenericRepo[T] {
@@ -217,6 +323,8 @@ type fakeTenantSession struct {
 	controls             *fakeControlRepo
 	controlProps         *fakeControlPropertyRepo
 	formulas             *fakeFormulaRepo
+	versions             *fakeApplicationVersionRepo
+	snapshots            *fakeApplicationSnapshotRepo
 	componentDefinitions *fakeGenericRepo[models.ComponentDefinition]
 	entities             *fakeGenericRepo[models.Entity]
 	entityFields         *fakeGenericRepo[models.EntityField]
@@ -226,7 +334,7 @@ func (s *fakeTenantSession) Users() repositories.UserRepository               { 
 func (s *fakeTenantSession) Applications() repositories.ApplicationRepository { return s.apps }
 func (s *fakeTenantSession) Environments() repositories.EnvironmentRepository { return nil }
 func (s *fakeTenantSession) ApplicationVersions() repositories.ApplicationVersionRepository {
-	return nil
+	return s.versions
 }
 func (s *fakeTenantSession) Screens() repositories.ScreenRepository   { return s.screens }
 func (s *fakeTenantSession) Controls() repositories.ControlRepository { return s.controls }
@@ -243,7 +351,7 @@ func (s *fakeTenantSession) Permissions() repositories.PermissionRepository     
 func (s *fakeTenantSession) AuditLogs() repositories.AuditLogRepository               { return nil }
 func (s *fakeTenantSession) Packages() repositories.PackageRepository                 { return nil }
 func (s *fakeTenantSession) ApplicationSnapshots() repositories.ApplicationSnapshotRepository {
-	return nil
+	return s.snapshots
 }
 func (s *fakeTenantSession) ComponentDefinitions() repositories.ComponentDefinitionRepository {
 	return s.componentDefinitions
@@ -261,6 +369,8 @@ type FakeStore struct {
 	controls             *fakeControlRepo
 	controlProps         *fakeControlPropertyRepo
 	formulas             *fakeFormulaRepo
+	versions             *fakeApplicationVersionRepo
+	snapshots            *fakeApplicationSnapshotRepo
 	componentDefinitions *fakeGenericRepo[models.ComponentDefinition]
 	entities             *fakeGenericRepo[models.Entity]
 	entityFields         *fakeGenericRepo[models.EntityField]
@@ -273,6 +383,8 @@ func NewFakeStore() *FakeStore {
 		controls:             newFakeControlRepo(),
 		controlProps:         newFakeControlPropertyRepo(),
 		formulas:             newFakeFormulaRepo(),
+		versions:             newFakeApplicationVersionRepo(),
+		snapshots:            newFakeApplicationSnapshotRepo(),
 		componentDefinitions: newFakeGenericRepo[models.ComponentDefinition](),
 		entities:             newFakeGenericRepo[models.Entity](),
 		entityFields:         newFakeGenericRepo[models.EntityField](),
@@ -285,6 +397,8 @@ func (s *FakeStore) ScreensRepo() *fakeScreenRepo               { return s.scree
 func (s *FakeStore) ControlsRepo() *fakeControlRepo             { return s.controls }
 func (s *FakeStore) ControlPropsRepo() *fakeControlPropertyRepo { return s.controlProps }
 func (s *FakeStore) FormulasRepo() *fakeFormulaRepo             { return s.formulas }
+func (s *FakeStore) VersionsRepo() *fakeApplicationVersionRepo  { return s.versions }
+func (s *FakeStore) SnapshotsRepo() *fakeApplicationSnapshotRepo { return s.snapshots }
 func (s *FakeStore) Tenants() repositories.TenantRepository     { return nil }
 func (s *FakeStore) WithTenant(ctx context.Context, tenantID uuid.UUID) repositories.TenantSession {
 	return &fakeTenantSession{
@@ -293,6 +407,8 @@ func (s *FakeStore) WithTenant(ctx context.Context, tenantID uuid.UUID) reposito
 		controls:             s.controls,
 		controlProps:         s.controlProps,
 		formulas:             s.formulas,
+		versions:             s.versions,
+		snapshots:            s.snapshots,
 		componentDefinitions: s.componentDefinitions,
 		entities:             s.entities,
 		entityFields:         s.entityFields,

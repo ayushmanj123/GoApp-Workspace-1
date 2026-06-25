@@ -19,6 +19,16 @@ export default defineConfig({
         target: "http://localhost:8082",
         changeOrigin: true,
       },
+      "/runtime-api": {
+        target: "http://localhost:8083",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/runtime-api/, ""),
+      },
+      "/publish-api": {
+        target: "http://localhost:8085",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/publish-api/, ""),
+      },
       "/formula-api": {
         target: "http://localhost:8085",
         changeOrigin: true,

@@ -77,6 +77,12 @@ func RegisterRoutes(app *fiber.App, store repositories.Store, jwtMiddleware fibe
 	v1.Put("/entity-fields/:id", func(c *fiber.Ctx) error {
 		return handlers.NewEntityHandler(store).UpdateField(c)
 	})
+
+	// Publishing
+	publishHandler := handlers.NewPublishHandler(store)
+	v1.Post("/applications/:id/publish", func(c *fiber.Ctx) error { return publishHandler.Publish(c) })
+	v1.Get("/applications/:id/versions", func(c *fiber.Ctx) error { return publishHandler.ListVersions(c) })
+	v1.Get("/applications/:id/versions/:versionId", func(c *fiber.Ctx) error { return publishHandler.GetVersion(c) })
 }
 
 // Helper to extract tenant id from Fiber context. It prefers Locals("tenant_id") then header.

@@ -1,6 +1,7 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useStudioStore } from "../../store/studioStore";
 import { useApplicationStore } from "../../store/applicationStore";
+import { publishApi } from "../../api/publish-api";
 import styles from "./TopBar.module.css";
 
 const UndoIcon = () => (
@@ -77,15 +78,21 @@ const PublishIcon = () => (
 interface TopBarProps {
   onPreview: () => void;
   previewDisabled?: boolean;
+  applicationId?: string | null;
 }
 
-export function TopBar({ onPreview, previewDisabled = false }: TopBarProps) {
+export function TopBar({
+  onPreview,
+  previewDisabled = false,
+  applicationId = null,
+}: TopBarProps) {
   const appName = useStudioStore((s) => s.appName);
   const saving = useStudioStore((s) => s.saving);
   const selectedScreenId = useApplicationStore((s) => s.selectedScreenId);
   const saveScreen = useApplicationStore((s) => s.saveScreen);
   const setSaving = useStudioStore((s) => s.setSaving);
   const setSaveMessage = useStudioStore((s) => s.setSaveMessage);
+  const [publishing, setPublishing] = useState(false);
 
   const handleSave = useCallback(async () => {
     if (saving || !selectedScreenId) {
@@ -102,6 +109,28 @@ export function TopBar({ onPreview, previewDisabled = false }: TopBarProps) {
       setSaving(false);
     }
   }, [saving, selectedScreenId, saveScreen, setSaving, setSaveMessage]);
+
+  const handlePublish = useCallback(async () => {
+    if (!applicationId || publishing) {
+      return;
+    }
+    const confirmed = window.confirm(
+      "Publish this application? A new immutable runtime version will be created.",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setPublishing(true);
+    try {
+      const result = await publishApi.publish(applicationId);
+      setSaveMessage(`Published v${result.version}`);
+    } catch {
+      setSaveMessage("Publish failed");
+    } finally {
+      setPublishing(false);
+    }
+  }, [applicationId, publishing, setSaveMessage]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -160,9 +189,15 @@ export function TopBar({ onPreview, previewDisabled = false }: TopBarProps) {
 
         <div className={styles.divider} />
 
-        <button className={styles.publishBtn} title="Publish application">
+        <button
+          className={styles.publishBtn}
+          title="Publish application"
+          onClick={() => void handlePublish()}
+          disabled={!applicationId || publishing}
+          data-testid="publish-application"
+        >
           <PublishIcon />
-          <span>Publish</span>
+          <span>{publishing ? "Publishing…" : "Publish"}</span>
         </button>
       </div>
 

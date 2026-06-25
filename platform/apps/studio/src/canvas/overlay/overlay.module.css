@@ -1,0 +1,88 @@
+.overlayRoot {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.selectionOutline {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid #89b4fa;
+  pointer-events: none;
+}
+
+.hoverOutline {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px dashed #89b4fa;
+  pointer-events: none;
+}
+
+.multiOutline {
+  border-color: #74c7ec;
+}
+
+.resizeHandle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #fff;
+  border: 1px solid #89b4fa;
+  border-radius: 1px;
+  pointer-events: auto;
+  z-index: 4;
+}
+
+.marquee {
+  position: absolute;
+  border: 1px dashed #89b4fa;
+  background: rgba(137, 180, 250, 0.08);
+  pointer-events: none;
+}
+
+.guideH,
+.guideV {
+  position: absolute;
+  background: #f38ba8;
+  pointer-events: none;
+}
+
+.guideH {
+  height: 1px;
+  left: 0;
+  right: 0;
+}
+
+.guideV {
+  width: 1px;
+  top: 0;
+  bottom: 0;
+}
+
+.containerEditBanner {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: 4px 12px;
+  font-size: 11px;
+  color: #cdd6f4;
+  background: rgba(30, 30, 46, 0.92);
+  border: 1px solid #45475a;
+  border-radius: 4px;
+  pointer-events: auto;
+}
+
+.hitTarget {
+  position: absolute;
+  background: transparent;
+  pointer-events: auto;
+  cursor: default;
+}
+
+.hitTargetHovered {
+  outline: 1px dashed rgba(137, 180, 250, 0.5);
+}

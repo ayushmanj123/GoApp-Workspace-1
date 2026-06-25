@@ -269,6 +269,7 @@ type EntityField struct {
 	Name        string         `gorm:"column:name;not null" json:"name"`
 	DisplayName string         `gorm:"column:display_name;not null" json:"display_name"`
 	FieldType   string         `gorm:"column:field_type;not null" json:"field_type"`
+	IsRequired  bool           `gorm:"column:is_required;not null;default:false" json:"is_required"`
 	DeletedAt   gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
 	AuditFields
 }

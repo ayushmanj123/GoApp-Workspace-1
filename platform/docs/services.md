@@ -8,12 +8,13 @@ All services expose standard health endpoints and use the shared API response en
 |---------|--------|-------------|--------|
 | auth | `services/auth` | 8081 | `GET /health`, `GET /ready` |
 | metadata | `services/metadata` | 8082 | `GET /health`, `GET /ready` |
-| runtime | `services/runtime` | 8083 | `GET /health`, `GET /ready` |
+| runtime | `services/runtime` | 8083 | `GET /health`, `GET /ready`, `GET /readiness`, `GET /live`, `GET /metrics`, records, kernel session, renderer |
 | connector | `services/connector` | 8084 | `GET /health`, `GET /ready` |
 | publish | `services/publish` | 8085 | `GET /health`, `GET /ready` |
 | environment | `services/environment` | 8086 | `GET /health`, `GET /ready` |
 | audit | `services/audit` | 8087 | `GET /health`, `GET /ready` |
 | search | `services/search` | 8088 | `GET /health`, `GET /ready` |
+| gateway | `services/gateway` | 8090 | `GET /health`, `GET /ready`, `GET /live` |
 
 ## Environment Variables
 

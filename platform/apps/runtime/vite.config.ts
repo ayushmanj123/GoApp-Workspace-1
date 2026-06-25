@@ -14,6 +14,15 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
+      "/api": {
+        target: "http://localhost:8082",
+        changeOrigin: true,
+      },
+      "/runtime-api": {
+        target: "http://localhost:8083",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/runtime-api/, ""),
+      },
       "/formula-api": {
         target: "http://localhost:8085",
         changeOrigin: true,

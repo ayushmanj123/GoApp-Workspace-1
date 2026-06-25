@@ -31,6 +31,11 @@ import {
   type RuntimeNavigationStore,
 } from "./formula/runtime-navigation-store";
 import { executeAction } from "./formula/execute-action";
+import {
+  fetchRenderedScreen,
+  startRuntimeSession,
+} from "./runtime-session-client";
+import { mergeRenderIntoPackage } from "./utils/merge-render-package";
 
 const TENANT_ID =
   (import.meta.env.VITE_TENANT_ID as string | undefined) ??
@@ -50,6 +55,7 @@ export interface RuntimeContextValue {
   navigate: (screenId: string) => void;
   variables: Record<string, any>;
   collections: Record<string, any[]>;
+  renderLoading: boolean;
 }
 
 export const RuntimeContext = createContext<RuntimeContextValue>({
@@ -57,6 +63,7 @@ export const RuntimeContext = createContext<RuntimeContextValue>({
   navigate: () => {},
   variables: {},
   collections: {},
+  renderLoading: false,
 });
 
 function ActionRunner({
@@ -82,7 +89,8 @@ function ActionRunner({
   pkgRef.current = pkg;
   const currentScreenId = navigationStore.getCurrentScreenId();
   const currentControls =
-    pkg?.screens?.find((screen) => screen.id === currentScreenId)?.controls ?? [];
+    pkg?.screens?.find((screen) => screen.id === currentScreenId)?.controls ??
+    [];
   const servicesRef = useRef({
     store,
     screenContextStore,
@@ -152,7 +160,7 @@ function ActionRunner({
 
     onStartCompletedRef.current = true;
     runInitialOnVisible(pkg.screens);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pkg]);
 
   // Subscribe to every navigate() call after OnStart has completed.
@@ -163,7 +171,7 @@ function ActionRunner({
       lastOnVisibleScreenRef.current = screenId;
       runOnVisible(screenId, pkgRef.current.screens);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigationStore]);
 
   useEffect(() => {
@@ -180,7 +188,7 @@ function ActionRunner({
     };
     (window as unknown as Record<string, unknown>).__getCurrentScreenId = () =>
       navigationStore.getCurrentScreenId();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigationStore]);
 
   return null;
@@ -190,9 +198,13 @@ export const RuntimeProvider: React.FC<{
   appId: string;
   children: React.ReactNode;
   baseUrl?: string;
-}> = ({ appId, children, baseUrl }) => {
+  channel?: "draft" | "published";
+}> = ({ appId, children, baseUrl, channel = "published" }) => {
   const [pkg, setPkg] = useState<AppPackage | undefined>();
+  const [renderedPkg, setRenderedPkg] = useState<AppPackage | undefined>();
   const [loading, setLoading] = useState(true);
+  const [renderLoading, setRenderLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | undefined>();
   const [navTick, setNavTick] = useState(0);
   const [variables] = useState<Record<string, any>>({});
 
@@ -232,7 +244,9 @@ export const RuntimeProvider: React.FC<{
 
   useEffect(() => {
     let mounted = true;
-    const url = `${baseUrl || ""}/api/v1/runtime/applications/${appId}`;
+    const channelQuery =
+      channel === "draft" ? "?channel=draft" : "";
+    const url = `${baseUrl || ""}/api/v1/runtime/applications/${appId}${channelQuery}`;
     setLoading(true);
     fetch(url, {
       headers: {
@@ -242,13 +256,22 @@ export const RuntimeProvider: React.FC<{
       cache: "no-store",
     })
       .then((res) => res.json())
-      .then((body) => {
+      .then(async (body) => {
         if (!mounted) return;
         const data = body?.success ? body.data : body?.data;
         if (data) {
           setPkg(data);
           if (data.screens?.length > 0) {
             navigationStoreRef.current.navigate(data.screens[0].id);
+          }
+          const firstScreen = data.screens?.[0];
+          const session = await startRuntimeSession(
+            appId,
+            firstScreen?.name ?? firstScreen?.id ?? "",
+            channel,
+          );
+          if (mounted) {
+            setSessionId(session);
           }
         }
       })
@@ -257,7 +280,7 @@ export const RuntimeProvider: React.FC<{
     return () => {
       mounted = false;
     };
-  }, [appId, baseUrl]);
+  }, [appId, baseUrl, channel]);
 
   const resolveScreenId = useCallback(
     (name: string) => pkg?.screens?.find((screen) => screen.name === name)?.id,
@@ -275,10 +298,51 @@ export const RuntimeProvider: React.FC<{
   const currentScreen = navigationStoreRef.current.getCurrentScreenId();
   void navTick;
 
+  useEffect(() => {
+    if (!pkg || !currentScreen) {
+      setRenderedPkg(pkg);
+      return;
+    }
+    let cancelled = false;
+    setRenderLoading(true);
+    const screen = pkg.screens?.find((item) => item.id === currentScreen);
+    const loadRender = async () => {
+      let activeSession = sessionId;
+      if (!activeSession) {
+        activeSession = await startRuntimeSession(
+          appId,
+          screen?.name ?? currentScreen,
+          channel,
+        );
+        if (!cancelled && activeSession) {
+          setSessionId(activeSession);
+        }
+      }
+      if (!activeSession) {
+        if (!cancelled) {
+          setRenderedPkg(pkg);
+          setRenderLoading(false);
+        }
+        return;
+      }
+      const render = await fetchRenderedScreen(activeSession, currentScreen);
+      if (!cancelled) {
+        setRenderedPkg(mergeRenderIntoPackage(pkg, currentScreen, render));
+        setRenderLoading(false);
+      }
+    };
+    void loadRender();
+    return () => {
+      cancelled = true;
+    };
+  }, [pkg, currentScreen, sessionId, appId, channel]);
+
+  const activePackage = renderedPkg ?? pkg;
+
   const screenControls = useMemo(() => {
-    const screen = pkg?.screens?.find((item) => item.id === currentScreen);
+    const screen = activePackage?.screens?.find((item) => item.id === currentScreen);
     return screen?.controls ?? [];
-  }, [pkg, currentScreen]);
+  }, [activePackage, currentScreen]);
 
   return (
     <FormulaProvider
@@ -297,16 +361,17 @@ export const RuntimeProvider: React.FC<{
           <ActionRunner
             navigationStore={navigationStoreRef.current}
             resolveScreenId={resolveScreenId}
-            pkg={pkg}
+            pkg={activePackage}
           />
           <RuntimeContext.Provider
             value={{
-              pkg,
-              loading,
+              pkg: activePackage,
+              loading: loading || renderLoading,
               currentScreen,
               navigate,
               variables,
               collections: collectionStoreRef.current.getAll(),
+              renderLoading,
             }}
           >
             {children}
@@ -321,6 +386,8 @@ export function useNavigationStore(): RuntimeNavigationStore | null {
   return useContext(NavigationStoreContext);
 }
 
-export function useScreenResolver(): ((name: string) => string | undefined) | null {
+export function useScreenResolver():
+  | ((name: string) => string | undefined)
+  | null {
   return useContext(ScreenResolverContext);
 }

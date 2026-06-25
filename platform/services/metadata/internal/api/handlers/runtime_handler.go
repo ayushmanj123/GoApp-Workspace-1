@@ -17,6 +17,10 @@ func NewRuntimeHandler(store repositories.Store) *runtimeHandler {
 	return &runtimeHandler{svc: services.NewRuntimeService(store)}
 }
 
+func (h *runtimeHandler) runtimeOptions(c *fiber.Ctx) services.RuntimePackageOptions {
+	return services.RuntimePackageOptions{Channel: c.Query("channel", "published")}
+}
+
 // GET /api/v1/runtime/applications/:id
 func (h *runtimeHandler) GetApplication(c *fiber.Ctx) error {
 	idStr := c.Params("id")
@@ -29,7 +33,7 @@ func (h *runtimeHandler) GetApplication(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(contracts.APIResponse{Success: false, Error: "tenant missing"})
 	}
 	ctx := context.Background()
-	pkg, err := h.svc.BuildRuntimePackage(ctx, tid, id)
+	pkg, err := h.svc.BuildRuntimePackageWithOptions(ctx, tid, id, h.runtimeOptions(c))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(contracts.APIResponse{Success: false, Error: err.Error()})
 	}
@@ -48,7 +52,7 @@ func (h *runtimeHandler) GetApplicationScreens(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(contracts.APIResponse{Success: false, Error: "tenant missing"})
 	}
 	ctx := context.Background()
-	pkg, err := h.svc.BuildRuntimePackage(ctx, tid, id)
+	pkg, err := h.svc.BuildRuntimePackageWithOptions(ctx, tid, id, h.runtimeOptions(c))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(contracts.APIResponse{Success: false, Error: err.Error()})
 	}
@@ -71,7 +75,7 @@ func (h *runtimeHandler) GetScreen(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(contracts.APIResponse{Success: false, Error: "screen not found"})
 	}
-	pkg, perr := h.svc.BuildRuntimePackage(ctx, tid, appID)
+	pkg, perr := h.svc.BuildRuntimePackageWithOptions(ctx, tid, appID, h.runtimeOptions(c))
 	if perr != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(contracts.APIResponse{Success: false, Error: perr.Error()})
 	}
@@ -100,7 +104,7 @@ func (h *runtimeHandler) GetScreenTree(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(contracts.APIResponse{Success: false, Error: "screen not found"})
 	}
-	pkg, err := h.svc.BuildRuntimePackage(ctx, tid, appID)
+	pkg, err := h.svc.BuildRuntimePackageWithOptions(ctx, tid, appID, h.runtimeOptions(c))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(contracts.APIResponse{Success: false, Error: err.Error()})
 	}

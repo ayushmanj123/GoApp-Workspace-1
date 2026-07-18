@@ -110,6 +110,138 @@ func (s *PublishService) Publish(ctx context.Context, tenantID, appID uuid.UUID,
 	return result, nil
 }
 
+// Unpublish clears the application's current version pointer and reverts its
+// status to draft. Existing versions and snapshots are left untouched so the
+// application can be republished or rolled back later.
+func (s *PublishService) Unpublish(ctx context.Context, tenantID, appID uuid.UUID) (*contracts.UnpublishResult, error) {
+	var result *contracts.UnpublishResult
+	err := s.store.WithTenant(ctx, tenantID).Transaction(ctx, func(session repositories.TenantSession) error {
+		app, err := session.Applications().GetByID(ctx, appID)
+		if err != nil {
+			return fmt.Errorf("unpublish: load application: %w", err)
+		}
+		if app.Status == "archived" {
+			return fmt.Errorf("unpublish: application is archived")
+		}
+
+		app.CurrentVersionID = nil
+		app.Status = "draft"
+		if err := session.Applications().Update(ctx, app); err != nil {
+			return fmt.Errorf("unpublish: update application: %w", err)
+		}
+
+		result = &contracts.UnpublishResult{ApplicationID: appID, Status: app.Status}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// Rollback points the application's current version at a previously released
+// version. The target version must belong to the application, be in
+// "released" status, and have an immutable snapshot to serve at runtime.
+func (s *PublishService) Rollback(ctx context.Context, tenantID, appID, versionID uuid.UUID) (*contracts.RollbackResult, error) {
+	var result *contracts.RollbackResult
+	err := s.store.WithTenant(ctx, tenantID).Transaction(ctx, func(session repositories.TenantSession) error {
+		app, err := session.Applications().GetByID(ctx, appID)
+		if err != nil {
+			return fmt.Errorf("rollback: load application: %w", err)
+		}
+		if app.Status == "archived" {
+			return fmt.Errorf("rollback: application is archived")
+		}
+
+		version, err := session.ApplicationVersions().GetByID(ctx, versionID)
+		if err != nil {
+			return fmt.Errorf("rollback: load version: %w", err)
+		}
+		if version.ApplicationID != appID {
+			return fmt.Errorf("rollback: version does not belong to application")
+		}
+		if version.Status != "released" {
+			return fmt.Errorf("rollback: version %s is not released (status=%s)", version.Version, version.Status)
+		}
+
+		snapshots, err := listSnapshotsByVersion(ctx, session, versionID)
+		if err != nil {
+			return err
+		}
+		if len(snapshots) == 0 {
+			return fmt.Errorf("rollback: no snapshot found for version %s", version.Version)
+		}
+
+		app.CurrentVersionID = &version.ID
+		app.Status = "published"
+		if err := session.Applications().Update(ctx, app); err != nil {
+			return fmt.Errorf("rollback: update application: %w", err)
+		}
+
+		result = &contracts.RollbackResult{
+			ApplicationID: appID,
+			VersionID:     version.ID,
+			Version:       version.Version,
+			Status:        app.Status,
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// Deprecate marks a version as no longer supported. If the version is the
+// application's current version, the application's pointer is cleared and
+// its status reverts to draft so the deprecated version stops serving traffic.
+func (s *PublishService) Deprecate(ctx context.Context, tenantID, appID, versionID uuid.UUID) (*contracts.DeprecateResult, error) {
+	var result *contracts.DeprecateResult
+	err := s.store.WithTenant(ctx, tenantID).Transaction(ctx, func(session repositories.TenantSession) error {
+		app, err := session.Applications().GetByID(ctx, appID)
+		if err != nil {
+			return fmt.Errorf("deprecate: load application: %w", err)
+		}
+
+		version, err := session.ApplicationVersions().GetByID(ctx, versionID)
+		if err != nil {
+			return fmt.Errorf("deprecate: load version: %w", err)
+		}
+		if version.ApplicationID != appID {
+			return fmt.Errorf("deprecate: version does not belong to application")
+		}
+
+		wasCurrent := app.CurrentVersionID != nil && *app.CurrentVersionID == version.ID
+
+		version.Status = "deprecated"
+		if err := session.ApplicationVersions().Update(ctx, version); err != nil {
+			return fmt.Errorf("deprecate: update version: %w", err)
+		}
+
+		if wasCurrent {
+			app.CurrentVersionID = nil
+			app.Status = "draft"
+			if err := session.Applications().Update(ctx, app); err != nil {
+				return fmt.Errorf("deprecate: update application: %w", err)
+			}
+		}
+
+		result = &contracts.DeprecateResult{
+			ApplicationID:     appID,
+			VersionID:         version.ID,
+			Version:           version.Version,
+			Status:            version.Status,
+			ApplicationStatus: app.Status,
+			WasCurrent:        wasCurrent,
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (s *PublishService) ListVersions(ctx context.Context, tenantID, appID uuid.UUID, limit, offset int) ([]contracts.ApplicationVersionSummary, int64, error) {
 	if _, err := s.store.WithTenant(ctx, tenantID).Applications().GetByID(ctx, appID); err != nil {
 		return nil, 0, fmt.Errorf("list versions: application not found: %w", err)

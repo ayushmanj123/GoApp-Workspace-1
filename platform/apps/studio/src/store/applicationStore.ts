@@ -13,6 +13,10 @@ import {
   type EntityFieldType,
   type EntityRecord,
 } from "../api/entities-api";
+import {
+  connectorsApi,
+  type ConnectorRecord,
+} from "../api/connectors-api";
 import { TENANT_ID, ApiError } from "../api/metadata-client";
 import {
   buildControlName,
@@ -28,6 +32,11 @@ import {
 import { createLocalControlId, isLocalControlId } from "../utils/control-ids";
 import { buildUniqueScreenName, buildFallbackScreenName } from "../utils/screen-names";
 import { useStudioStore } from "./studioStore";
+import { useHistoryStore } from "./historyStore";
+
+function pushControlHistory(controls: Control[]) {
+  useHistoryStore.getState().pushSnapshot(controls);
+}
 
 export interface SaveScreenResult {
   success: boolean;
@@ -42,6 +51,7 @@ export interface ApplicationState {
   componentDefinitions: ComponentDefinitionRecord[];
   entities: EntityRecord[];
   entityFieldsByEntityId: Record<string, EntityFieldRecord[]>;
+  connectors: ConnectorRecord[];
 
   // Selection
   selectedApplicationId: string | null;
@@ -55,6 +65,7 @@ export interface ApplicationState {
   controlsLoading: boolean;
   componentDefinitionsLoading: boolean;
   entitiesLoading: boolean;
+  connectorsLoading: boolean;
   appsError: string | null;
   screensError: string | null;
   controlsError: string | null;
@@ -65,6 +76,7 @@ export interface ApplicationState {
   loadControls: (screenId: string) => Promise<void>;
   loadComponentDefinitions: (applicationId: string) => Promise<void>;
   loadEntities: (applicationId: string) => Promise<void>;
+  loadConnectors: (applicationId: string) => Promise<void>;
   createEntity: (name: string, displayName: string) => Promise<void>;
   addEntityField: (
     entityId: string,
@@ -91,6 +103,7 @@ export interface ApplicationState {
   updateScreenOnVisible: (screenId: string, onVisible: string) => void;
   createControl: (controlType: ToolboxControlType) => void;
   deleteControl: (controlId: string) => Promise<void>;
+  setControlsFromHistory: (controls: Control[]) => void;
 
   // CRUD
   createScreen: (applicationId: string, name?: string) => Promise<Screen>;
@@ -105,6 +118,7 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
   componentDefinitions: [],
   entities: [],
   entityFieldsByEntityId: {},
+  connectors: [],
   selectedApplicationId: null,
   selectedScreenId: null,
   selectedEntityId: null,
@@ -114,6 +128,7 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
   controlsLoading: false,
   componentDefinitionsLoading: false,
   entitiesLoading: false,
+  connectorsLoading: false,
   appsError: null,
   screensError: null,
   controlsError: null,
@@ -155,6 +170,7 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
       componentDefinitions: [],
       entities: [],
       entityFieldsByEntityId: {},
+      connectors: [],
       selectedEntityId: null,
     });
     useStudioStore.getState().selectControl(null);
@@ -162,6 +178,7 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     useStudioStore.getState().setSaveMessage(null);
     void get().loadComponentDefinitions(id);
     void get().loadEntities(id);
+    void get().loadConnectors(id);
   },
 
   selectScreen: (id: string) => {
@@ -228,6 +245,19 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
       });
     } catch {
       set({ entitiesLoading: false, entities: [], entityFieldsByEntityId: {} });
+    }
+  },
+
+  loadConnectors: async (applicationId) => {
+    set({ connectorsLoading: true });
+    try {
+      const data = await connectorsApi.list(applicationId);
+      set({
+        connectors: data.items ?? [],
+        connectorsLoading: false,
+      });
+    } catch {
+      set({ connectorsLoading: false, connectors: [] });
     }
   },
 
@@ -458,6 +488,7 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
   },
 
   updateControl: (controlId, updates) => {
+    pushControlHistory(get().controls);
     set((state) => ({
       controls: state.controls.map((control) => {
         if (control.id !== controlId) {
@@ -492,6 +523,8 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
       return;
     }
 
+    pushControlHistory(controls);
+
     set((state) => ({
       controls: state.controls.map((control) => {
         const nextZ = updates.get(control.id);
@@ -520,6 +553,8 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     if (!selectedScreenId) {
       return;
     }
+
+    pushControlHistory(controls);
 
     const defaults = getControlDefaults(controlType);
     const positionOffset = (controls.length % 5) * 24;
@@ -556,6 +591,8 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
   },
 
   deleteControl: async (controlId) => {
+    pushControlHistory(get().controls);
+
     if (!isLocalControlId(controlId)) {
       await controlsApi.delete(controlId);
     }
@@ -567,6 +604,13 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     if (useStudioStore.getState().selectedControlId === controlId) {
       useStudioStore.getState().selectControl(null);
     }
+    useStudioStore.getState().setDirty(true);
+    useStudioStore.getState().setSaveMessage(null);
+  },
+
+  setControlsFromHistory: (controls) => {
+    set({ controls });
+    useStudioStore.getState().setDirty(true);
   },
 
   createScreen: async (applicationId: string, name?: string) => {

@@ -1,3 +1,6 @@
+/* ── Fonts ──────────────────────────────────────────────────── */
+@import url("https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap");
+
 /* ── Reset & base ───────────────────────────────────────────── */
 *,
 *::before,
@@ -13,48 +16,82 @@ body,
   height: 100%;
   overflow: hidden;
   font-family:
-    "Segoe UI",
+    "Inter",
     system-ui,
     -apple-system,
     sans-serif;
   font-size: 13px;
-  background: #1e1e2e;
-  color: #cdd6f4;
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
 }
 
-/* ── CSS variables (Power-Apps-inspired dark theme) ─────────── */
+/* ── Design tokens (light reference theme) ──────────────────── */
 :root {
-  --color-bg-app: #1e1e2e;
-  --color-bg-topbar: #181825;
-  --color-bg-panel: #181825;
-  --color-bg-canvas: #11111b;
-  --color-bg-panel-header: #1e1e2e;
-  --color-bg-artboard: #2a2a3e;
-  --color-bg-hover: #313244;
-  --color-bg-selected: #45475a;
+  --color-primary: #5856d6;
+  --color-primary-hover: #4a48c4;
+  --color-primary-subtle: rgba(88, 86, 214, 0.1);
 
-  --color-border: #313244;
-  --color-border-subtle: #2a2a3e;
+  --color-bg-app: #f9f9fb;
+  --color-bg-topbar: #ffffff;
+  --color-bg-panel: #ffffff;
+  --color-bg-surface: #ffffff;
+  --color-bg-canvas: #f1f3f7;
+  --color-bg-muted: #f2f2f7;
+  --color-bg-panel-header: #f9f9fb;
+  --color-bg-artboard: #ffffff;
+  --color-bg-hover: #f2f2f7;
+  --color-bg-selected: rgba(88, 86, 214, 0.12);
 
-  --color-text-primary: #cdd6f4;
-  --color-text-secondary: #a6adc8;
-  --color-text-muted: #6c7086;
-  --color-text-accent: #89b4fa;
+  --color-border: #e5e5ea;
+  --color-border-subtle: #f2f2f7;
 
-  --color-accent: #89b4fa;
-  --color-accent-hover: #74c7ec;
-  --color-success: #a6e3a1;
-  --color-warning: #f9e2af;
-  --color-danger: #f38ba8;
+  --color-text-primary: #1c1c1e;
+  --color-text-secondary: #3a3a3c;
+  --color-text-muted: #8e8e93;
+  --color-text-accent: #5856d6;
 
-  --topbar-height: 44px;
-  --statusbar-height: 24px;
-  --explorer-width: 220px;
-  --explorer-min-width: 160px;
-  --properties-width: 260px;
-  --properties-min-width: 200px;
+  --color-accent: #5856d6;
+  --color-accent-hover: #4a48c4;
+  --color-success: #34c759;
+  --color-warning: #ff9500;
+  --color-danger: #ff3b30;
 
-  --radius: 4px;
+  --font-headline: "Hanken Grotesk", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 12px;
+  --radius: var(--radius-sm);
+
+  --shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.06);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.04);
+
+  --manager-topbar-height: 64px;
+  --manager-sidebar-width: 260px;
+  --manager-card-shadow: 0 4px 12px rgba(0, 40, 86, 0.04);
+
+  --tools-footer-height: 40px;
+
+  --topbar-height: 56px;
+  --nav-rail-width: 48px;
+  --side-panel-width: 300px;
+  --properties-width: 320px;
+  --properties-min-width: 240px;
+  --explorer-width: 300px;
+  --explorer-min-width: 200px;
+  --formula-bar-height: 40px;
+  --console-strip-height: 28px;
+
   --transition: 150ms ease;
 }
 
@@ -71,7 +108,7 @@ body,
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-bg-selected);
+  background: var(--color-text-muted);
 }
 
 /* ── Utility ────────────────────────────────────────────────── */
@@ -86,4 +123,11 @@ button {
 button:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
 }

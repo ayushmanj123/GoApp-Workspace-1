@@ -158,6 +158,9 @@ func (k *RuntimeKernel) HandleControlEvent(ctx context.Context, sessionID uuid.U
 		if err != nil {
 			return nil, err
 		}
+		if session.State != nil && strings.TrimSpace(session.CurrentScreen) != "" && !strings.EqualFold(session.CurrentScreen, screen) {
+			session.State.SetVariable("varPreviousScreen", session.CurrentScreen)
+		}
 		session.CurrentScreen = screen
 		if err := k.loadScreenGalleries(ctx, session, screen); err != nil {
 			return nil, err
@@ -165,9 +168,9 @@ func (k *RuntimeKernel) HandleControlEvent(ctx context.Context, sessionID uuid.U
 		if err := k.loadScreenForms(ctx, session, screen); err != nil {
 			return nil, err
 		}
-		return &ControlEventResponse{Refresh: refresh.Refresh}, nil
+		return k.controlEventResponse(session, &ControlEventResponse{Refresh: refresh.Refresh}), nil
 	case "OnHidden":
-		return &ControlEventResponse{}, nil
+		return k.controlEventResponse(session, &ControlEventResponse{}), nil
 	}
 
 	formulaText, err := k.lookupControlFormula(session, req.ControlID, event)
@@ -179,10 +182,20 @@ func (k *RuntimeKernel) HandleControlEvent(ctx context.Context, sessionID uuid.U
 	if err != nil {
 		return nil, err
 	}
-	return &ControlEventResponse{
+	return k.controlEventResponse(session, &ControlEventResponse{
 		Result:  result,
 		Refresh: refresh,
-	}, nil
+	}), nil
+}
+
+func (k *RuntimeKernel) controlEventResponse(session *RuntimeSession, resp *ControlEventResponse) *ControlEventResponse {
+	if resp == nil {
+		resp = &ControlEventResponse{}
+	}
+	if session != nil {
+		resp.CurrentScreen = session.CurrentScreen
+	}
+	return resp
 }
 
 // Session returns a cached runtime session when present.
@@ -275,7 +288,14 @@ func (n *sessionNavigation) Navigate(screenName string) error {
 }
 
 func (k *RuntimeKernel) executeFormula(ctx context.Context, session *RuntimeSession, screen, formulaText string) (any, []reactive.RefreshInstruction, error) {
+	return k.executeFormulaWithOverlay(ctx, session, screen, formulaText, nil)
+}
+
+func (k *RuntimeKernel) executeFormulaWithOverlay(ctx context.Context, session *RuntimeSession, screen, formulaText string, overlay map[string]interface{}) (any, []reactive.RefreshInstruction, error) {
 	rtCtx := k.buildFormulaContext(ctx, session, screen)
+	if len(overlay) > 0 {
+		rtCtx.Overlay = overlay
+	}
 	result, err := k.registry.Formula.Evaluate(rtCtx, formulaText)
 	if err != nil {
 		return nil, nil, err
@@ -288,6 +308,16 @@ func (k *RuntimeKernel) executeFormula(ctx context.Context, session *RuntimeSess
 		return nil, nil, err
 	}
 	return result, rtCtx.Refresh, nil
+}
+
+// EvaluateExpression evaluates a formula in an active session using the full kernel context.
+func (k *RuntimeKernel) EvaluateExpression(ctx context.Context, sessionID uuid.UUID, screen, formulaText string, overlay map[string]interface{}) (any, []reactive.RefreshInstruction, error) {
+	session, ok := k.sessions.Get(sessionID)
+	if !ok {
+		return nil, nil, ErrSessionNotFound
+	}
+	session.Touch()
+	return k.executeFormulaWithOverlay(ctx, session, screen, formulaText, overlay)
 }
 
 func (k *RuntimeKernel) lookupControlFormula(session *RuntimeSession, controlID, event string) (string, error) {

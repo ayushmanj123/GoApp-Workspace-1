@@ -9,14 +9,14 @@ Control metadata
       ↓
 Binding Resolver
       ↓
-DataSource (Entity today; REST/SQL/SharePoint later)
+DataSource (Entity / REST / SQL)
       ↓
-Record Service (entity only)
+Record Service (entity only) / RestDataSource / SqlDataSource
       ↓
 JSON rows
 ```
 
-Runtime code never branches on provider type beyond the `DataSource` registry. Entity records are the first implementation; future connectors implement the same interface.
+Runtime code never branches on provider type beyond the `DataSource` registry. Entity records are the first implementation; connectors implement the same interface.
 
 ## DataSource abstraction
 
@@ -38,8 +38,8 @@ Supported kinds today:
 | Kind | Provider | Status |
 |------|----------|--------|
 | `entity` | PostgreSQL `entity_records` via record service | Implemented |
-| `rest` | External REST APIs | Future |
-| `sql` | SQL connectors | Future |
+| `rest` | External REST APIs | Implemented (Phases 7.1+) |
+| `sql` | External Postgres table/view connectors | Implemented (Phase 7.6) |
 | `sharepoint` | SharePoint lists | Future |
 
 ## Control metadata
@@ -124,7 +124,9 @@ The gateway proxies `/api/runtime/*` and `/api/entities/*/records*` to the runti
 
 ## Future connector integration
 
-To add a connector-backed datasource later:
+REST and SQL connectors are implemented — see [rest-connectors.md](./rest-connectors.md) and [sql-connectors.md](./sql-connectors.md).
+
+To add another connector-backed datasource:
 
 1. Implement `DataSource` for the connector type.
 2. Register it in `DataSourceRegistry`.
@@ -135,3 +137,5 @@ To add a connector-backed datasource later:
 
 - [Entity Record API](./entity-record-api.md)
 - [Authentication](./authentication.md)
+- [REST connectors](./rest-connectors.md)
+- [SQL connectors](./sql-connectors.md)

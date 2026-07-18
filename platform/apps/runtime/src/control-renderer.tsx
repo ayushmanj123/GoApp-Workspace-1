@@ -6,6 +6,7 @@ import {
   fillParentStyle,
   resolveControlLayout,
 } from "./utils/control-layout";
+import { mergeFormulasIntoProps } from "./utils/merge-control-formulas";
 
 interface Props {
   control: ControlPackage;
@@ -62,20 +63,20 @@ export const ControlRenderer: React.FC<Props> = ({ control, nested = false }) =>
     return null;
   }
 
-  const props = { ...((control as any).properties || {}) };
+  const props = mergeFormulasIntoProps(
+    { ...((control as any).properties || {}) },
+    (control as any).formulas,
+  );
   const controlName = (control as any).name;
   if (controlName) {
     props.controlName = controlName;
+    props.name = controlName;
   }
   if (layout.disabled) {
     props.disabled = true;
   }
   props.readOnly = layout.displayMode === "View";
   props.style = { ...(props.style || {}), ...fillParentStyle() };
-
-  if ((control as any).formulas && (control as any).formulas.length > 0) {
-    props.onFormula = () => null;
-  }
 
   const childControls = sortByZIndex((control as any).children || []);
 

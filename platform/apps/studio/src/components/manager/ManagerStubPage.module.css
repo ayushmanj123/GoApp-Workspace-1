@@ -1,0 +1,29 @@
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-8);
+}
+
+.title {
+  font-family: var(--font-headline);
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.description {
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-6);
+}
+
+.badge {
+  display: inline-block;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-muted);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}

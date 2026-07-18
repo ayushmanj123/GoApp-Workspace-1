@@ -2,6 +2,7 @@ export interface RuntimeVariableStore {
   get(name: string): unknown;
   set(name: string, value: unknown): void;
   getAll(): Record<string, unknown>;
+  replaceAll(variables: Record<string, unknown>): void;
   subscribe(listener: () => void): () => void;
 }
 
@@ -28,6 +29,11 @@ export class InMemoryVariableStore implements RuntimeVariableStore {
 
   getAll(): Record<string, unknown> {
     return { ...this.variables };
+  }
+
+  replaceAll(variables: Record<string, unknown>): void {
+    this.variables = { ...variables };
+    for (const fn of this.listeners) fn();
   }
 
   subscribe(listener: () => void): () => void {

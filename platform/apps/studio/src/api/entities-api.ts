@@ -10,6 +10,10 @@ export interface EntityRecord {
   display_name: string;
   CreatedOn?: string;
   ModifiedOn?: string;
+  created_on?: string;
+  modified_on?: string;
+  CreatedBy?: string | null;
+  created_by?: string | null;
 }
 
 export interface EntityFieldRecord {
@@ -19,8 +23,13 @@ export interface EntityFieldRecord {
   name: string;
   display_name: string;
   field_type: EntityFieldType;
+  is_required?: boolean;
   CreatedOn?: string;
   ModifiedOn?: string;
+  created_on?: string;
+  modified_on?: string;
+  CreatedBy?: string | null;
+  created_by?: string | null;
 }
 
 export interface CreateEntityPayload {
@@ -28,10 +37,21 @@ export interface CreateEntityPayload {
   display_name: string;
 }
 
+export interface UpdateEntityPayload {
+  name?: string;
+  display_name?: string;
+}
+
 export interface CreateEntityFieldPayload {
   name: string;
   display_name: string;
   field_type: EntityFieldType;
+}
+
+export interface UpdateEntityFieldPayload {
+  name?: string;
+  display_name?: string;
+  field_type?: EntityFieldType;
 }
 
 export const entitiesApi = {
@@ -43,6 +63,9 @@ export const entitiesApi = {
   create: (applicationId: string, payload: CreateEntityPayload) =>
     apiClient.post<EntityRecord>(`/applications/${applicationId}/entities`, payload),
 
+  update: (entityId: string, payload: UpdateEntityPayload) =>
+    apiClient.put<EntityRecord>(`/entities/${entityId}`, payload),
+
   listFields: (entityId: string, limit = 100, offset = 0) =>
     apiClient.get<PagedData<EntityFieldRecord>>(
       `/entities/${entityId}/fields?limit=${limit}&offset=${offset}`,
@@ -50,4 +73,7 @@ export const entitiesApi = {
 
   createField: (entityId: string, payload: CreateEntityFieldPayload) =>
     apiClient.post<EntityFieldRecord>(`/entities/${entityId}/fields`, payload),
+
+  updateField: (fieldId: string, payload: UpdateEntityFieldPayload) =>
+    apiClient.put<EntityFieldRecord>(`/entity-fields/${fieldId}`, payload),
 };

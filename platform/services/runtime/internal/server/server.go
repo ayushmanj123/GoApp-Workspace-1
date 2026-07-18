@@ -117,10 +117,17 @@ func New(cfg config.Config) (*RuntimeApp, error) {
 	metadataRepo := databinding.NewPostgresMetadataRepository(db)
 	resolver := databinding.NewResolver(metadataRepo)
 	entityDS := databinding.NewEntityDataSource(svc)
-	bindingSvc := databinding.NewService(resolver, databinding.NewDataSourceRegistry(entityDS))
+	restRepo := databinding.NewPostgresRestConnectorRepository(db)
+	restDS := databinding.NewRestDataSource(restRepo, nil)
+	sqlRepo := databinding.NewPostgresSqlConnectorRepository(db)
+	sqlDS := databinding.NewSqlDataSource(sqlRepo)
+	storageRepo := databinding.NewPostgresStorageConnectorRepository(db)
+	storageDS := databinding.NewStorageDataSource(storageRepo)
+	dataSources := databinding.NewDataSourceRegistry(entityDS).SetRest(restDS).SetSql(sqlDS).SetStorage(storageDS)
+	bindingSvc := databinding.NewService(resolver, dataSources)
 
 	formulaDeps.Resolver = resolver
-	formulaDeps.DataSources = databinding.NewDataSourceRegistry(entityDS)
+	formulaDeps.DataSources = dataSources
 
 	galleryStore := gallery.NewSessionStore()
 	gallerySvc := gallery.NewService(galleryStore, bindingSvc, resolver)

@@ -4,6 +4,10 @@
   "private": true,
   "description": "GoApps Platform — cloud-native low-code platform monorepo",
   "scripts": {
+    "dev": "node infrastructure/scripts/dev.mjs",
+    "dev:full": "node infrastructure/scripts/dev.mjs --profile full",
+    "dev:infra": "node infrastructure/scripts/dev.mjs --infra-only",
+    "dev:down": "node infrastructure/scripts/dev-down.mjs",
     "dev:formula-api": "pnpm --filter @goapps/formula serve",
     "dev:studio": "pnpm --filter @goapps/studio dev",
     "dev:runtime": "pnpm --filter @goapps/runtime dev",

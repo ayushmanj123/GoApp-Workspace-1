@@ -230,7 +230,7 @@ func (r *Reader) GetSelected(galleryName string) (any, bool) {
 	}
 	state, ok := r.store.Get(r.sessionID, galleryName)
 	if !ok || state == nil || state.Selected == nil {
-		return nil, false
+		return nil, true
 	}
 	return cloneRecord(state.Selected), true
 }

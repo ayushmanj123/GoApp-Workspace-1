@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	sharederrors "github.com/goapps-platform/shared/errors"
+	"github.com/goapps-platform/runtime-service/internal/formula"
 	"github.com/goapps-platform/runtime-service/internal/gallery"
 	"github.com/goapps-platform/runtime-service/internal/state"
 	"github.com/goapps-platform/shared/auth"
@@ -28,6 +29,7 @@ func RegisterRoutes(router fiber.Router, svc *Service) {
 	}
 	router.Post("/runtime/session", svc.startSession)
 	router.Post("/runtime/session/:sessionId/event", svc.handleControlEvent)
+	router.Post("/runtime/session/:sessionId/evaluate", svc.evaluateFormula)
 	router.Post("/runtime/session/:sessionId/gallery/:controlId/select", svc.selectGalleryItem)
 }
 
@@ -83,6 +85,50 @@ func (s *Service) handleControlEvent(c *fiber.Ctx) error {
 		return mapKernelError(err)
 	}
 	return c.JSON(response.OK(result, requestID))
+}
+
+func (s *Service) evaluateFormula(c *fiber.Ctx) error {
+	requestID, _ := c.Locals("requestID").(string)
+	if _, ok := auth.GetFiberAuthContext(c); !ok {
+		return fiber.NewError(fiber.StatusUnauthorized, "authentication required")
+	}
+
+	sessionID, err := uuid.Parse(c.Params("sessionId"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid sessionId")
+	}
+
+	var req formula.SessionEvaluateRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	if req.AppID == uuid.Nil {
+		return fiber.NewError(fiber.StatusBadRequest, "appId is required")
+	}
+	if stringsTrim(req.Formula) == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "formula is required")
+	}
+	c.Locals("appId", req.AppID.String())
+
+	result, refresh, err := s.kernel.EvaluateExpression(
+		c.UserContext(),
+		sessionID,
+		req.Screen,
+		req.Formula,
+		req.Context,
+	)
+	if err != nil {
+		return mapKernelError(err)
+	}
+	currentScreen := ""
+	if session, ok := s.kernel.Session(sessionID); ok && session != nil {
+		currentScreen = session.CurrentScreen
+	}
+	return c.JSON(response.OK(formula.EvaluateResponse{
+		Result:        result,
+		Refresh:       refresh,
+		CurrentScreen: currentScreen,
+	}, requestID))
 }
 
 func (s *Service) selectGalleryItem(c *fiber.Ctx) error {

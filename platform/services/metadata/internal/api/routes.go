@@ -8,9 +8,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// RegisterRoutes registers API routes. jwtMiddleware is passed in to allow using existing middleware.
-func RegisterRoutes(app *fiber.App, store repositories.Store, jwtMiddleware fiber.Handler) {
-	v1 := app.Group("/api/v1", jwtMiddleware)
+// RegisterRoutes registers API routes. middlewares run on /api/v1 (auth, etc.).
+func RegisterRoutes(app *fiber.App, store repositories.Store, middlewares ...fiber.Handler) {
+	v1 := app.Group("/api/v1", middlewares...)
 
 	// Applications
 	v1.Post("/applications", func(c *fiber.Ctx) error { return handlers.NewApplicationHandler(store).Create(c) })
@@ -78,11 +78,53 @@ func RegisterRoutes(app *fiber.App, store repositories.Store, jwtMiddleware fibe
 		return handlers.NewEntityHandler(store).UpdateField(c)
 	})
 
-	// Publishing
+	// Connectors
+	connectorHandler := handlers.NewConnectorHandler(store)
+	v1.Post("/applications/:appId/connectors", func(c *fiber.Ctx) error { return connectorHandler.Create(c) })
+	v1.Get("/applications/:appId/connectors", func(c *fiber.Ctx) error { return connectorHandler.List(c) })
+	v1.Get("/connectors/:id", func(c *fiber.Ctx) error { return connectorHandler.Get(c) })
+	v1.Put("/connectors/:id", func(c *fiber.Ctx) error { return connectorHandler.Update(c) })
+	v1.Delete("/connectors/:id", func(c *fiber.Ctx) error { return connectorHandler.Delete(c) })
+	v1.Post("/connectors/:connectorId/actions", func(c *fiber.Ctx) error { return connectorHandler.CreateAction(c) })
+	v1.Get("/connectors/:connectorId/actions", func(c *fiber.Ctx) error { return connectorHandler.ListActions(c) })
+	v1.Put("/connector-actions/:id", func(c *fiber.Ctx) error { return connectorHandler.UpdateAction(c) })
+	v1.Delete("/connector-actions/:id", func(c *fiber.Ctx) error { return connectorHandler.DeleteAction(c) })
+
+	// Publishing (+ Enterprise ALM: unpublish / rollback / deprecate)
 	publishHandler := handlers.NewPublishHandler(store)
 	v1.Post("/applications/:id/publish", func(c *fiber.Ctx) error { return publishHandler.Publish(c) })
+	v1.Post("/applications/:id/unpublish", func(c *fiber.Ctx) error { return publishHandler.Unpublish(c) })
 	v1.Get("/applications/:id/versions", func(c *fiber.Ctx) error { return publishHandler.ListVersions(c) })
 	v1.Get("/applications/:id/versions/:versionId", func(c *fiber.Ctx) error { return publishHandler.GetVersion(c) })
+	v1.Post("/applications/:id/versions/:versionId/rollback", func(c *fiber.Ctx) error { return publishHandler.Rollback(c) })
+	v1.Post("/applications/:id/versions/:versionId/deprecate", func(c *fiber.Ctx) error { return publishHandler.Deprecate(c) })
+
+	// Environments (ALM: per-application dev/test/production promotion targets)
+	envHandler := handlers.NewEnvironmentHandler(store)
+	v1.Get("/applications/:appId/environments", func(c *fiber.Ctx) error { return envHandler.List(c) })
+	v1.Post("/applications/:appId/environments", func(c *fiber.Ctx) error { return envHandler.Create(c) })
+	v1.Get("/applications/:appId/environments/:envId", func(c *fiber.Ctx) error { return envHandler.Get(c) })
+	v1.Put("/applications/:appId/environments/:envId", func(c *fiber.Ctx) error { return envHandler.Update(c) })
+	v1.Delete("/applications/:appId/environments/:envId", func(c *fiber.Ctx) error { return envHandler.Delete(c) })
+	v1.Post("/applications/:appId/environments/:envId/promote", func(c *fiber.Ctx) error { return envHandler.Promote(c) })
+
+	// Audit events (append-only ALM trail)
+	auditHandler := handlers.NewAuditHandler(store)
+	v1.Post("/audit-events", func(c *fiber.Ctx) error { return auditHandler.Create(c) })
+	v1.Get("/audit-events", func(c *fiber.Ctx) error { return auditHandler.List(c) })
+
+	// Solution packages (ALM references — distinct from publish artifact packages table)
+	pkgHandler := handlers.NewSolutionPackageHandler(store)
+	v1.Get("/packages", func(c *fiber.Ctx) error { return pkgHandler.List(c) })
+	v1.Post("/packages", func(c *fiber.Ctx) error { return pkgHandler.Create(c) })
+	v1.Get("/packages/:id", func(c *fiber.Ctx) error { return pkgHandler.Get(c) })
+	v1.Put("/packages/:id", func(c *fiber.Ctx) error { return pkgHandler.Update(c) })
+	v1.Delete("/packages/:id", func(c *fiber.Ctx) error { return pkgHandler.Delete(c) })
+	v1.Get("/packages/:id/components", func(c *fiber.Ctx) error { return pkgHandler.ListComponents(c) })
+	v1.Post("/packages/:id/components", func(c *fiber.Ctx) error { return pkgHandler.AddComponent(c) })
+	v1.Delete("/packages/:id/components/:componentType/:componentId", func(c *fiber.Ctx) error {
+		return pkgHandler.RemoveComponent(c)
+	})
 }
 
 // Helper to extract tenant id from Fiber context. It prefers Locals("tenant_id") then header.

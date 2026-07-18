@@ -1,4 +1,5 @@
-import { type ChangeEvent, useState } from "react";
+import { type ChangeEvent, useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import type { Control } from "../../api/controls-api";
 import { FormulaEditorModal } from "../formula/FormulaEditorModal";
 import {
@@ -19,6 +20,7 @@ import {
 import { useStudioStore } from "../../store/studioStore";
 import { useApplicationStore } from "../../store/applicationStore";
 import { buildStudioFormulaContext } from "../../utils/build-studio-formula-context";
+import { PropertyCard, TabBar } from "../ui";
 import styles from "./PropertyPanel.module.css";
 
 const ChevronLeftIcon = () => (
@@ -157,7 +159,7 @@ function MetadataPropRow({
             data-testid={`${definition.name}-open-formula-editor`}
             onClick={() => setEditorOpen(true)}
           >
-            Open Formula Editor
+            Edit formula
           </button>
         </div>
         <FormulaEditorModal
@@ -242,7 +244,7 @@ function MetadataPropRow({
             data-testid={`${definition.name}-open-formula-editor`}
             onClick={() => setEditorOpen(true)}
           >
-            Open Formula Editor
+            Edit formula
           </button>
         </div>
         <FormulaEditorModal
@@ -285,18 +287,34 @@ function MetadataPropRow({
 }
 
 export function PropertyPanel() {
+  const { applicationId: routeAppId } = useParams<{ applicationId?: string }>();
   const collapsed = useStudioStore((s) => s.propertiesCollapsed);
   const toggleProperties = useStudioStore((s) => s.toggleProperties);
+  const propertyTab = useStudioStore((s) => s.propertyTab);
+  const setPropertyTab = useStudioStore((s) => s.setPropertyTab);
   const selectedControlId = useStudioStore((s) => s.selectedControlId);
   const appName = useStudioStore((s) => s.appName);
   const screenName = useStudioStore((s) => s.screenName);
   const controls = useApplicationStore((s) => s.controls);
   const selectedScreenId = useApplicationStore((s) => s.selectedScreenId);
   const screens = useApplicationStore((s) => s.screens);
+  const entities = useApplicationStore((s) => s.entities);
+  const connectors = useApplicationStore((s) => s.connectors);
+  const selectedApplicationId = useApplicationStore((s) => s.selectedApplicationId);
+  const loadConnectors = useApplicationStore((s) => s.loadConnectors);
+  const loadEntities = useApplicationStore((s) => s.loadEntities);
   const updateControl = useApplicationStore((s) => s.updateControl);
   const updateScreenOnVisible = useApplicationStore((s) => s.updateScreenOnVisible);
   const deleteControl = useApplicationStore((s) => s.deleteControl);
   const [onVisibleEditorOpen, setOnVisibleEditorOpen] = useState(false);
+
+  const applicationId = routeAppId ?? selectedApplicationId;
+
+  useEffect(() => {
+    if (!applicationId) return;
+    void loadEntities(applicationId);
+    void loadConnectors(applicationId);
+  }, [applicationId, loadEntities, loadConnectors]);
 
   const selectedControl = controls.find(
     (control) => control.id === selectedControlId,
@@ -359,12 +377,24 @@ export function PropertyPanel() {
       </div>
 
       {!collapsed && (
+        <>
+          <TabBar
+            tabs={[
+              { id: "style", label: "Style" },
+              { id: "data", label: "Data" },
+              { id: "actions", label: "Actions" },
+            ]}
+            activeTab={propertyTab}
+            onTabChange={(tab) =>
+              setPropertyTab(tab as "style" | "data" | "actions")
+            }
+          />
         <div className={styles.content}>
           {selectedControl ? (
             <>
               <div className={styles.controlBadge}>
                 <span className={styles.controlName}>
-                  {selectedControl.name}
+                  Selected: {selectedControl.name}
                 </span>
                 <button
                   type="button"
@@ -375,100 +405,222 @@ export function PropertyPanel() {
                 </button>
               </div>
 
-              <PropRow
-                label="Name"
-                value={selectedControl.name}
-                onChange={updateName}
-              />
-              <PropRow
-                label="X"
-                type="number"
-                value={String(selectedControl.x)}
-                onChange={(value) => updateNumericField("x", value)}
-              />
-              <PropRow
-                label="Y"
-                type="number"
-                value={String(selectedControl.y)}
-                onChange={(value) => updateNumericField("y", value)}
-              />
-              <PropRow
-                label="Width"
-                type="number"
-                value={String(selectedControl.width)}
-                onChange={(value) => updateNumericField("width", value)}
-              />
-              <PropRow
-                label="Height"
-                type="number"
-                value={String(selectedControl.height)}
-                onChange={(value) => updateNumericField("height", value)}
-              />
+              {propertyTab === "style" && (
+                <>
+                  <PropertyCard title="Layout">
+                    <PropRow
+                      label="Name"
+                      value={selectedControl.name}
+                      onChange={updateName}
+                    />
+                    <PropRow
+                      label="X"
+                      type="number"
+                      value={String(selectedControl.x)}
+                      onChange={(value) => updateNumericField("x", value)}
+                    />
+                    <PropRow
+                      label="Y"
+                      type="number"
+                      value={String(selectedControl.y)}
+                      onChange={(value) => updateNumericField("y", value)}
+                    />
+                    <PropRow
+                      label="Width"
+                      type="number"
+                      value={String(selectedControl.width)}
+                      onChange={(value) => updateNumericField("width", value)}
+                    />
+                    <PropRow
+                      label="Height"
+                      type="number"
+                      value={String(selectedControl.height)}
+                      onChange={(value) => updateNumericField("height", value)}
+                    />
+                  </PropertyCard>
+                  <PropertyCard title="Appearance">
+                    {propertyDefinitions
+                      .filter((d) => d.type === "color" || d.type === "text" || d.type === "boolean")
+                      .map((definition) => (
+                        <MetadataPropRow
+                          key={definition.name}
+                          definition={definition}
+                          value={selectedControl.properties?.[definition.name]}
+                          evaluationContext={evaluationContext}
+                          onChange={(entry) =>
+                            updateMetadataProperty(definition, entry)
+                          }
+                        />
+                      ))}
+                  </PropertyCard>
+                </>
+              )}
 
-              {propertyDefinitions.map((definition) => (
-                <MetadataPropRow
-                  key={definition.name}
-                  definition={definition}
-                  value={selectedControl.properties?.[definition.name]}
-                  evaluationContext={evaluationContext}
-                  onChange={(entry) =>
-                    updateMetadataProperty(definition, entry)
-                  }
-                />
-              ))}
+              {propertyTab === "data" && (
+                <PropertyCard title="Data Binding">
+                  {(() => {
+                    const dataProps = propertyDefinitions.filter((d) =>
+                      ["items", "item", "default", "value", "mode"].includes(d.name),
+                    );
+                    if (dataProps.length === 0) {
+                      return (
+                        <p className={styles.stubHint}>
+                          This control has no data-binding properties. Use an entity
+                          name or formula on Gallery Items / Form Item (for example{" "}
+                          <code>Customer</code> or <code>Gallery1.Selected</code>).
+                        </p>
+                      );
+                    }
+                    const hasItems = dataProps.some((d) => d.name === "items");
+                    const datasourceNames = [
+                      ...entities.map((e) => e.name),
+                      ...connectors.map((c) => c.name),
+                    ];
+                    return (
+                      <>
+                        {hasItems ? (
+                          <div className={styles.propBlock}>
+                            <label className={styles.propLabel} htmlFor="items-datasource-picker">
+                              Items datasource
+                            </label>
+                            <select
+                              id="items-datasource-picker"
+                              className={styles.datasourceSelect}
+                              data-testid="items-datasource-picker"
+                              value=""
+                              onChange={(event) => {
+                                const name = event.currentTarget.value;
+                                if (!name || !selectedControl) return;
+                                updateMetadataProperty(
+                                  { name: "items", label: "Items", type: "formula" },
+                                  writePropertyFormula(name),
+                                );
+                                event.currentTarget.value = "";
+                              }}
+                            >
+                              <option value="">Choose entity or connector…</option>
+                              {entities.length > 0 ? (
+                                <optgroup label="Entities">
+                                  {entities.map((entity) => (
+                                    <option key={entity.id} value={entity.name}>
+                                      {entity.display_name || entity.name}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ) : null}
+                              {connectors.length > 0 ? (
+                                <optgroup label="Connectors">
+                                  {connectors.map((connector) => (
+                                    <option key={connector.id} value={connector.name}>
+                                      {connector.name}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ) : null}
+                              {datasourceNames.length === 0 ? (
+                                <option value="" disabled>
+                                  No datasources yet
+                                </option>
+                              ) : null}
+                            </select>
+                            <p className={styles.stubHint}>
+                              Sets Items to the selected name (e.g. <code>Weather</code>).
+                              Use Edit formula for advanced expressions.
+                            </p>
+                          </div>
+                        ) : null}
+                        {dataProps.map((definition) => (
+                          <MetadataPropRow
+                            key={definition.name}
+                            definition={definition}
+                            value={selectedControl.properties?.[definition.name]}
+                            evaluationContext={evaluationContext}
+                            onChange={(entry) =>
+                              updateMetadataProperty(definition, entry)
+                            }
+                          />
+                        ))}
+                      </>
+                    );
+                  })()}
+                </PropertyCard>
+              )}
+
+              {propertyTab === "actions" && (
+                <PropertyCard title="Events">
+                  {propertyDefinitions
+                    .filter((d) => isFormulaOnly(d))
+                    .map((definition) => (
+                      <MetadataPropRow
+                        key={definition.name}
+                        definition={definition}
+                        value={selectedControl.properties?.[definition.name]}
+                        evaluationContext={evaluationContext}
+                        onChange={(entry) =>
+                          updateMetadataProperty(definition, entry)
+                        }
+                      />
+                    ))}
+                </PropertyCard>
+              )}
             </>
           ) : selectedScreenId ? (
             <>
               <div className={styles.controlBadge}>
-                <span className={styles.controlName}>{screenName}</span>
+                <span className={styles.controlName}>Selected: {screenName}</span>
               </div>
-              <div className={styles.propBlock}>
-                <div className={styles.propRow}>
-                  <span className={styles.propLabel}>OnVisible</span>
-                  <span className={styles.formulaModeBadge}>Action</span>
-                </div>
-                <div className={styles.formulaSummaryRow}>
-                  <span
-                    className={styles.formulaSummary}
-                    title={onVisibleFormula || undefined}
-                    data-testid="on_visible-formula-summary"
-                  >
-                    {truncateFormula(onVisibleFormula) || "(empty)"}
-                  </span>
-                </div>
-                <div className={styles.formulaEditorRow}>
-                  <button
-                    type="button"
-                    className={styles.formulaEditorBtn}
-                    data-testid="on_visible-open-formula-editor"
-                    onClick={() => setOnVisibleEditorOpen(true)}
-                  >
-                    Open Formula Editor
-                  </button>
-                </div>
-                <FormulaEditorModal
-                  open={onVisibleEditorOpen}
-                  propertyLabel="OnVisible"
-                  initialFormula={onVisibleFormula}
-                  validationMode="action"
-                  evaluationContext={evaluationContext}
-                  onSave={(nextFormula) => {
-                    updateScreenOnVisible(selectedScreenId, nextFormula);
-                    setOnVisibleEditorOpen(false);
-                  }}
-                  onCancel={() => setOnVisibleEditorOpen(false)}
-                />
-              </div>
+              {propertyTab === "actions" && (
+                <PropertyCard title="Screen Events">
+                  <div className={styles.propBlock}>
+                    <div className={styles.propRow}>
+                      <span className={styles.propLabel}>OnVisible</span>
+                      <span className={styles.formulaModeBadge}>Action</span>
+                    </div>
+                    <div className={styles.formulaSummaryRow}>
+                      <span
+                        className={styles.formulaSummary}
+                        title={onVisibleFormula || undefined}
+                        data-testid="on_visible-formula-summary"
+                      >
+                        {truncateFormula(onVisibleFormula) || "(empty)"}
+                      </span>
+                    </div>
+                    <div className={styles.formulaEditorRow}>
+                      <button
+                        type="button"
+                        className={styles.formulaEditorBtn}
+                        data-testid="on_visible-open-formula-editor"
+                        onClick={() => setOnVisibleEditorOpen(true)}
+                      >
+                        Edit formula
+                      </button>
+                    </div>
+                    <FormulaEditorModal
+                      open={onVisibleEditorOpen}
+                      propertyLabel="OnVisible"
+                      initialFormula={onVisibleFormula}
+                      validationMode="action"
+                      evaluationContext={evaluationContext}
+                      onSave={(nextFormula) => {
+                        updateScreenOnVisible(selectedScreenId, nextFormula);
+                        setOnVisibleEditorOpen(false);
+                      }}
+                      onCancel={() => setOnVisibleEditorOpen(false)}
+                    />
+                  </div>
+                </PropertyCard>
+              )}
               <div className={styles.emptyHint}>
                 <p>Select a control on the canvas to view its properties.</p>
               </div>
             </>
           ) : (
             <div className={styles.emptyHint}>
-              <p>Select a screen to view screen properties.</p>
+              <p>Select a component to view and edit its properties.</p>
             </div>
           )}
         </div>
+        </>
       )}
     </aside>
   );

@@ -14,8 +14,11 @@ import (
 
 // RuntimePackageOptions controls how runtime packages are assembled.
 type RuntimePackageOptions struct {
-	Channel string // "published" (default) or "draft"
+	Channel       string     // "published" (default) or "draft"; ignored when EnvironmentID is set
+	EnvironmentID *uuid.UUID // when set, load snapshot for that env's current_version_id
 }
+
+var ErrEnvironmentNotPromoted = fmt.Errorf("environment has no promoted version")
 
 // RuntimeService provides read-only runtime packages built from metadata.
 type RuntimeService struct{ store repositories.Store }
@@ -82,6 +85,10 @@ func (s *RuntimeService) BuildRuntimePackage(ctx context.Context, tenantID, appI
 }
 
 func (s *RuntimeService) BuildRuntimePackageWithOptions(ctx context.Context, tenantID, appID uuid.UUID, opts RuntimePackageOptions) (*contracts.RuntimeApplication, error) {
+	if opts.EnvironmentID != nil {
+		return s.buildEnvironmentPackage(ctx, tenantID, appID, *opts.EnvironmentID)
+	}
+
 	channel := strings.TrimSpace(opts.Channel)
 	if channel == "" {
 		channel = "published"
@@ -104,6 +111,28 @@ func (s *RuntimeService) BuildRuntimePackageWithOptions(ctx context.Context, ten
 		}
 	}
 	return s.buildDraftPackage(ctx, tenantID, appID)
+}
+
+func (s *RuntimeService) buildEnvironmentPackage(ctx context.Context, tenantID, appID, envID uuid.UUID) (*contracts.RuntimeApplication, error) {
+	sess := s.store.WithTenant(ctx, tenantID)
+	if _, err := sess.Applications().GetByID(ctx, appID); err != nil {
+		return nil, fmt.Errorf("load application: %w", err)
+	}
+	env, err := sess.Environments().GetByID(ctx, envID)
+	if err != nil {
+		return nil, fmt.Errorf("load environment: %w", err)
+	}
+	if env.ApplicationID != appID {
+		return nil, ErrEnvironmentNotFound
+	}
+	if env.CurrentVersionID == nil {
+		return nil, ErrEnvironmentNotPromoted
+	}
+	pkg, err := s.loadPublishedPackage(ctx, sess, *env.CurrentVersionID)
+	if err != nil {
+		return nil, fmt.Errorf("load environment version: %w", err)
+	}
+	return pkg, nil
 }
 
 func (s *RuntimeService) buildDraftPackage(ctx context.Context, tenantID, appID uuid.UUID) (*contracts.RuntimeApplication, error) {

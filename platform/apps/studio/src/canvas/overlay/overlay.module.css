@@ -9,19 +9,35 @@
 .selectionOutline {
   position: absolute;
   box-sizing: border-box;
-  border: 2px solid #89b4fa;
+  border: 2px solid var(--color-primary);
+  pointer-events: none;
+}
+
+.selectionLabel {
+  position: absolute;
+  top: -22px;
+  left: 0;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  color: #ffffff;
+  background: var(--color-primary);
+  border-radius: 4px 4px 0 0;
+  white-space: nowrap;
   pointer-events: none;
 }
 
 .hoverOutline {
   position: absolute;
   box-sizing: border-box;
-  border: 1px dashed #89b4fa;
+  border: 1px dashed var(--color-primary);
+  opacity: 0.6;
   pointer-events: none;
 }
 
 .multiOutline {
-  border-color: #74c7ec;
+  border-color: var(--color-primary-hover);
 }
 
 .resizeHandle {
@@ -29,23 +45,23 @@
   width: 8px;
   height: 8px;
   background: #fff;
-  border: 1px solid #89b4fa;
-  border-radius: 1px;
+  border: 2px solid var(--color-primary);
+  border-radius: 50%;
   pointer-events: auto;
   z-index: 4;
 }
 
 .marquee {
   position: absolute;
-  border: 1px dashed #89b4fa;
-  background: rgba(137, 180, 250, 0.08);
+  border: 1px dashed var(--color-primary);
+  background: var(--color-primary-subtle);
   pointer-events: none;
 }
 
 .guideH,
 .guideV {
   position: absolute;
-  background: #f38ba8;
+  background: #ff3b30;
   pointer-events: none;
 }
 
@@ -69,10 +85,11 @@
   z-index: 5;
   padding: 4px 12px;
   font-size: 11px;
-  color: #cdd6f4;
-  background: rgba(30, 30, 46, 0.92);
-  border: 1px solid #45475a;
-  border-radius: 4px;
+  color: var(--color-text-primary);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
   pointer-events: auto;
 }
 
@@ -84,5 +101,5 @@
 }
 
 .hitTargetHovered {
-  outline: 1px dashed rgba(137, 180, 250, 0.5);
+  outline: 1px dashed rgba(88, 86, 214, 0.5);
 }

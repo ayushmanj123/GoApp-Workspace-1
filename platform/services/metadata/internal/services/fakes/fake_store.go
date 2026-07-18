@@ -2,6 +2,7 @@ package fakes
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/goapps-platform/metadata-service/internal/models"
 	"github.com/goapps-platform/metadata-service/internal/repositories"
@@ -298,6 +299,98 @@ func (r *fakeApplicationSnapshotRepo) ListByField(ctx context.Context, field str
 	return out, nil
 }
 
+// fake environment repo
+type fakeEnvironmentRepo struct{ data map[uuid.UUID]models.Environment }
+
+func newFakeEnvironmentRepo() *fakeEnvironmentRepo {
+	return &fakeEnvironmentRepo{data: map[uuid.UUID]models.Environment{}}
+}
+func (r *fakeEnvironmentRepo) Create(ctx context.Context, entity *models.Environment) error {
+	if entity.ID == uuid.Nil {
+		entity.ID = uuid.New()
+	}
+	r.data[entity.ID] = *entity
+	return nil
+}
+func (r *fakeEnvironmentRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Environment, error) {
+	e, ok := r.data[id]
+	if !ok {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &e, nil
+}
+func (r *fakeEnvironmentRepo) List(ctx context.Context, limit int, offset int) ([]models.Environment, error) {
+	out := []models.Environment{}
+	for _, v := range r.data {
+		out = append(out, v)
+	}
+	return out, nil
+}
+func (r *fakeEnvironmentRepo) Update(ctx context.Context, entity *models.Environment) error {
+	if _, ok := r.data[entity.ID]; !ok {
+		return gorm.ErrRecordNotFound
+	}
+	r.data[entity.ID] = *entity
+	return nil
+}
+func (r *fakeEnvironmentRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	delete(r.data, id)
+	return nil
+}
+func (r *fakeEnvironmentRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, limit int, offset int) ([]models.Environment, error) {
+	return r.List(ctx, limit, offset)
+}
+func (r *fakeEnvironmentRepo) ListByField(ctx context.Context, field string, value any, limit int, offset int) ([]models.Environment, error) {
+	if field != "application_id" {
+		return nil, nil
+	}
+	appID := value.(uuid.UUID)
+	out := []models.Environment{}
+	for _, v := range r.data {
+		if v.ApplicationID == appID {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+
+// fake audit log repo
+type fakeAuditLogRepo struct{ data map[uuid.UUID]models.AuditLog }
+
+func newFakeAuditLogRepo() *fakeAuditLogRepo {
+	return &fakeAuditLogRepo{data: map[uuid.UUID]models.AuditLog{}}
+}
+func (r *fakeAuditLogRepo) Create(ctx context.Context, entity *models.AuditLog) error {
+	if entity.ID == uuid.Nil {
+		entity.ID = uuid.New()
+	}
+	r.data[entity.ID] = *entity
+	return nil
+}
+func (r *fakeAuditLogRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.AuditLog, error) {
+	e, ok := r.data[id]
+	if !ok {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &e, nil
+}
+func (r *fakeAuditLogRepo) List(ctx context.Context, limit int, offset int) ([]models.AuditLog, error) {
+	out := []models.AuditLog{}
+	for _, v := range r.data {
+		out = append(out, v)
+	}
+	return out, nil
+}
+func (r *fakeAuditLogRepo) Update(ctx context.Context, entity *models.AuditLog) error {
+	return fmt.Errorf("fake: audit_logs is append-only")
+}
+func (r *fakeAuditLogRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	return fmt.Errorf("fake: audit_logs is append-only")
+}
+func (r *fakeAuditLogRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, limit int, offset int) ([]models.AuditLog, error) {
+	return r.List(ctx, limit, offset)
+}
+
 type fakeGenericRepo[T any] struct{ data map[uuid.UUID]T }
 
 func newFakeGenericRepo[T any]() *fakeGenericRepo[T] {
@@ -325,14 +418,18 @@ type fakeTenantSession struct {
 	formulas             *fakeFormulaRepo
 	versions             *fakeApplicationVersionRepo
 	snapshots            *fakeApplicationSnapshotRepo
+	environments         *fakeEnvironmentRepo
+	auditLogs            *fakeAuditLogRepo
 	componentDefinitions *fakeGenericRepo[models.ComponentDefinition]
 	entities             *fakeGenericRepo[models.Entity]
 	entityFields         *fakeGenericRepo[models.EntityField]
+	solutionPackages     *fakeGenericRepo[models.SolutionPackage]
+	solutionPackageComponents *fakeGenericRepo[models.SolutionPackageComponent]
 }
 
 func (s *fakeTenantSession) Users() repositories.UserRepository               { return nil }
 func (s *fakeTenantSession) Applications() repositories.ApplicationRepository { return s.apps }
-func (s *fakeTenantSession) Environments() repositories.EnvironmentRepository { return nil }
+func (s *fakeTenantSession) Environments() repositories.EnvironmentRepository { return s.environments }
 func (s *fakeTenantSession) ApplicationVersions() repositories.ApplicationVersionRepository {
 	return s.versions
 }
@@ -347,8 +444,9 @@ func (s *fakeTenantSession) Variables() repositories.VariableRepository         
 func (s *fakeTenantSession) Collections() repositories.CollectionRepository           { return nil }
 func (s *fakeTenantSession) Connectors() repositories.ConnectorRepository             { return nil }
 func (s *fakeTenantSession) ConnectorActions() repositories.ConnectorActionRepository { return nil }
+func (s *fakeTenantSession) Secrets() repositories.SecretRepository                   { return nil }
 func (s *fakeTenantSession) Permissions() repositories.PermissionRepository           { return nil }
-func (s *fakeTenantSession) AuditLogs() repositories.AuditLogRepository               { return nil }
+func (s *fakeTenantSession) AuditLogs() repositories.AuditLogRepository               { return s.auditLogs }
 func (s *fakeTenantSession) Packages() repositories.PackageRepository                 { return nil }
 func (s *fakeTenantSession) ApplicationSnapshots() repositories.ApplicationSnapshotRepository {
 	return s.snapshots
@@ -358,6 +456,12 @@ func (s *fakeTenantSession) ComponentDefinitions() repositories.ComponentDefinit
 }
 func (s *fakeTenantSession) Entities() repositories.EntityRepository         { return s.entities }
 func (s *fakeTenantSession) EntityFields() repositories.EntityFieldRepository { return s.entityFields }
+func (s *fakeTenantSession) SolutionPackages() repositories.SolutionPackageRepository {
+	return s.solutionPackages
+}
+func (s *fakeTenantSession) SolutionPackageComponents() repositories.SolutionPackageComponentRepository {
+	return s.solutionPackageComponents
+}
 func (s *fakeTenantSession) Transaction(ctx context.Context, fn func(session repositories.TenantSession) error) error {
 	return fn(s)
 }
@@ -371,9 +475,13 @@ type FakeStore struct {
 	formulas             *fakeFormulaRepo
 	versions             *fakeApplicationVersionRepo
 	snapshots            *fakeApplicationSnapshotRepo
+	environments         *fakeEnvironmentRepo
+	auditLogs            *fakeAuditLogRepo
 	componentDefinitions *fakeGenericRepo[models.ComponentDefinition]
 	entities             *fakeGenericRepo[models.Entity]
 	entityFields         *fakeGenericRepo[models.EntityField]
+	solutionPackages     *fakeGenericRepo[models.SolutionPackage]
+	solutionPackageComponents *fakeGenericRepo[models.SolutionPackageComponent]
 }
 
 func NewFakeStore() *FakeStore {
@@ -385,9 +493,13 @@ func NewFakeStore() *FakeStore {
 		formulas:             newFakeFormulaRepo(),
 		versions:             newFakeApplicationVersionRepo(),
 		snapshots:            newFakeApplicationSnapshotRepo(),
+		environments:         newFakeEnvironmentRepo(),
+		auditLogs:            newFakeAuditLogRepo(),
 		componentDefinitions: newFakeGenericRepo[models.ComponentDefinition](),
 		entities:             newFakeGenericRepo[models.Entity](),
 		entityFields:         newFakeGenericRepo[models.EntityField](),
+		solutionPackages:     newFakeGenericRepo[models.SolutionPackage](),
+		solutionPackageComponents: newFakeGenericRepo[models.SolutionPackageComponent](),
 	}
 }
 
@@ -399,6 +511,8 @@ func (s *FakeStore) ControlPropsRepo() *fakeControlPropertyRepo { return s.contr
 func (s *FakeStore) FormulasRepo() *fakeFormulaRepo             { return s.formulas }
 func (s *FakeStore) VersionsRepo() *fakeApplicationVersionRepo  { return s.versions }
 func (s *FakeStore) SnapshotsRepo() *fakeApplicationSnapshotRepo { return s.snapshots }
+func (s *FakeStore) EnvironmentsRepo() *fakeEnvironmentRepo     { return s.environments }
+func (s *FakeStore) AuditLogsRepo() *fakeAuditLogRepo           { return s.auditLogs }
 func (s *FakeStore) Tenants() repositories.TenantRepository     { return nil }
 func (s *FakeStore) WithTenant(ctx context.Context, tenantID uuid.UUID) repositories.TenantSession {
 	return &fakeTenantSession{
@@ -409,8 +523,12 @@ func (s *FakeStore) WithTenant(ctx context.Context, tenantID uuid.UUID) reposito
 		formulas:             s.formulas,
 		versions:             s.versions,
 		snapshots:            s.snapshots,
+		environments:         s.environments,
+		auditLogs:            s.auditLogs,
 		componentDefinitions: s.componentDefinitions,
 		entities:             s.entities,
 		entityFields:         s.entityFields,
+		solutionPackages:     s.solutionPackages,
+		solutionPackageComponents: s.solutionPackageComponents,
 	}
 }

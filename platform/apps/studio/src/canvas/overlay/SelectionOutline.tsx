@@ -49,7 +49,11 @@ export function SelectionOutline({ nodes, offset, zoom }: SelectionOutlineProps)
               width: bounds.width,
               height: bounds.height,
             }}
-          />
+          >
+            {selectedControlIds.length === 1 && (
+              <span className={styles.selectionLabel}>{node.control.name}</span>
+            )}
+          </div>
         );
       })}
     </>

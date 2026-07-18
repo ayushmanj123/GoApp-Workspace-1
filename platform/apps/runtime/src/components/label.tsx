@@ -7,7 +7,7 @@ export const Label: React.FC<any> = ({ text = "", color = "" }) => {
   return (
     <span
       style={{
-        ...(colorValue ? { color: colorValue } : {}),
+        color: colorValue || "var(--color-text-primary, #1c1c1e)",
         display: "block",
         width: "100%",
         height: "100%",

@@ -16,6 +16,9 @@ type Package struct {
 	OnStart       *string
 	Screens       []RuntimeScreen
 	Entities      []string
+	// Connectors lists REST and SQL connector names owned by the application
+	// so runtime can resolve datasource names bound to them.
+	Connectors    []string
 	Controls      map[string]RuntimeControl
 	ScreensByName map[string]RuntimeScreen
 }
@@ -95,8 +98,9 @@ type ControlEventRequest struct {
 
 // ControlEventResponse returns formula execution output and refresh instructions.
 type ControlEventResponse struct {
-	Result  any                             `json:"result,omitempty"`
-	Refresh []reactive.RefreshInstruction `json:"refresh,omitempty"`
+	Result        any                             `json:"result,omitempty"`
+	Refresh       []reactive.RefreshInstruction `json:"refresh,omitempty"`
+	CurrentScreen string                          `json:"currentScreen,omitempty"`
 }
 
 // SessionManager tracks active runtime sessions and enforces TTL expiration.

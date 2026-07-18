@@ -12,6 +12,8 @@ import {
 import { useIsDesignSurface } from "../design-mode-context";
 import { fillParentStyle, relativeContainerStyle } from "../utils/control-layout";
 import type { ControlPackage } from "../runtime-types";
+import { useRuntime } from "../runtime-hooks";
+import { selectGalleryItem } from "../runtime-session-client";
 
 const STUDIO_PLACEHOLDER_RECORDS = [{ Name: "Item 1" }, { Name: "Item 2" }];
 
@@ -25,6 +27,7 @@ export const Gallery: React.FC<{
   const records = useResolvedGalleryRecords(items);
   const selectionStore = useGallerySelectionStore();
   const isStudioCanvas = useIsDesignSurface();
+  const { appId, sessionId, runtimeUnavailable } = useRuntime();
   const hasFormula = Boolean(readItemsFormula(items));
   const galleryName = name?.trim() ?? "";
   const canSelect = Boolean(galleryName) && !isStudioCanvas && !disabled;
@@ -40,11 +43,19 @@ export const Gallery: React.FC<{
   const hasTemplate = templateControls.length > 0;
 
   const handleRowClick = useCallback(
-    (record: Record<string, unknown>) => {
+    (record: Record<string, unknown>, index: number) => {
       if (!canSelect) return;
       selectionStore.select(galleryName, record);
+      if (sessionId && appId && !runtimeUnavailable) {
+        void selectGalleryItem({
+          appId,
+          sessionId,
+          galleryName,
+          index,
+        }).catch((err) => console.error(err));
+      }
     },
-    [canSelect, galleryName, selectionStore],
+    [canSelect, galleryName, selectionStore, sessionId, appId, runtimeUnavailable],
   );
 
   const isRowSelected = useCallback(
@@ -68,7 +79,7 @@ export const Gallery: React.FC<{
       {displayRecords.map((record, index) => (
         <div
           key={`${index}-${JSON.stringify(record)}`}
-          onClick={canSelect ? () => handleRowClick(record) : undefined}
+          onClick={canSelect ? () => handleRowClick(record, index) : undefined}
           style={{
             position: "relative",
             minHeight: 32,

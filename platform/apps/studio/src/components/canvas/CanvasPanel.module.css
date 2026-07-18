@@ -4,64 +4,9 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #11111b;
+  background: var(--color-bg-canvas);
 }
 
-/* Narrow toolbar above stage */
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 32px;
-  padding: 0 12px;
-  background: var(--color-bg-panel);
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-.screenLabel {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-}
-
-.artboardSize {
-  font-size: 11px;
-  color: var(--color-text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-/* The div that Konva's canvas fills entirely */
-.toolbarRight {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.controlsBadge {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--color-text-accent);
-  background: rgba(137, 180, 250, 0.12);
-  border-radius: 8px;
-  padding: 1px 7px;
-  letter-spacing: 0.3px;
-}
-
-.loadingBadge {
-  font-size: 10px;
-  color: var(--color-text-muted);
-  font-style: italic;
-}
-
-.errorBadge {
-  font-size: 10px;
-  color: #f38ba8;
-}
-
-/* The div that Konva's canvas fills entirely */
 .stageContainer {
   flex: 1;
   min-height: 0;
@@ -100,4 +45,77 @@
 .controlPreview,
 .controlPreview * {
   pointer-events: none;
+}
+
+.zoomControls {
+  position: absolute;
+  bottom: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-soft);
+}
+
+.zoomBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.zoomBtn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.zoomLabel {
+  min-width: 48px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.statusOverlay {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 10;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: var(--color-primary-subtle);
+  border-radius: 8px;
+  padding: 2px 8px;
+}
+
+.loadingBadge {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.errorBadge {
+  font-size: 10px;
+  color: var(--color-danger);
 }

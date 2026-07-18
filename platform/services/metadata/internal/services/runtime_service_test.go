@@ -76,3 +76,61 @@ func TestBuildRuntimePackage(t *testing.T) {
 		t.Fatalf("expected 1 formula")
 	}
 }
+
+func TestBuildRuntimePackageByEnvironment(t *testing.T) {
+	store := fakes.NewFakeStore()
+	tenantID := uuid.New()
+	appID := uuid.New()
+	screenID := uuid.New()
+
+	store.Apps().Create(context.Background(), &models.Application{ID: appID, TenantID: tenantID, Name: "App", Status: "draft"})
+	store.ScreensRepo().Create(context.Background(), &models.Screen{ID: screenID, TenantID: tenantID, ApplicationID: appID, Name: "Home", DisplayOrder: 0, LayoutType: "responsive"})
+	store.ControlsRepo().Create(context.Background(), &models.Control{ID: uuid.New(), TenantID: tenantID, ScreenID: screenID, Name: "Label1", ControlType: "label", Width: 10, Height: 10})
+
+	publishSvc := NewPublishService(store)
+	result, err := publishSvc.Publish(context.Background(), tenantID, appID, PublishOptions{})
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+
+	envSvc := NewEnvironmentService(store)
+	env, err := envSvc.Create(context.Background(), tenantID, appID, "Staging", "test")
+	if err != nil {
+		t.Fatalf("create env: %v", err)
+	}
+	if _, err := envSvc.Promote(context.Background(), tenantID, appID, env.ID, result.VersionID); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+
+	runtimeSvc := NewRuntimeService(store)
+	envID := env.ID
+	pkg, err := runtimeSvc.BuildRuntimePackageWithOptions(context.Background(), tenantID, appID, RuntimePackageOptions{
+		EnvironmentID: &envID,
+	})
+	if err != nil {
+		t.Fatalf("build env package: %v", err)
+	}
+	if pkg.ID != appID {
+		t.Fatalf("expected app id %s, got %s", appID, pkg.ID)
+	}
+	if len(pkg.Screens) != 1 || pkg.Screens[0].Name != "Home" {
+		t.Fatalf("unexpected package screens: %#v", pkg.Screens)
+	}
+
+	if _, err := runtimeSvc.BuildRuntimePackageWithOptions(context.Background(), tenantID, appID, RuntimePackageOptions{
+		EnvironmentID: &[]uuid.UUID{uuid.New()}[0],
+	}); err == nil {
+		t.Fatalf("expected error for unknown environment")
+	}
+
+	emptyEnv, err := envSvc.Create(context.Background(), tenantID, appID, "Empty", "development")
+	if err != nil {
+		t.Fatalf("create empty env: %v", err)
+	}
+	emptyID := emptyEnv.ID
+	if _, err := runtimeSvc.BuildRuntimePackageWithOptions(context.Background(), tenantID, appID, RuntimePackageOptions{
+		EnvironmentID: &emptyID,
+	}); err != ErrEnvironmentNotPromoted {
+		t.Fatalf("expected ErrEnvironmentNotPromoted, got %v", err)
+	}
+}

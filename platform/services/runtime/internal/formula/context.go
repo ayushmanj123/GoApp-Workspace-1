@@ -72,6 +72,9 @@ type RuntimeFormulaContext struct {
 	App          AppContext
 	Session      SessionContext
 	Refresh      []reactive.RefreshInstruction
+	// Overlay carries request-scoped values (e.g. ThisItem, Parent) that take
+	// precedence over session state for the duration of a single evaluation.
+	Overlay map[string]interface{}
 }
 
 // RecordRefresh merges refresh instructions produced during formula execution.
@@ -87,16 +90,26 @@ func (rtCtx *RuntimeFormulaContext) RecordRefresh(resp reactive.RefreshResponse)
 
 // EvaluateRequest is the body for POST /api/runtime/formula/evaluate.
 type EvaluateRequest struct {
-	AppID     uuid.UUID `json:"appId"`
-	SessionID uuid.UUID `json:"sessionId"`
-	Screen    string    `json:"screen,omitempty"`
-	Formula   string    `json:"formula"`
+	AppID     uuid.UUID              `json:"appId"`
+	SessionID uuid.UUID              `json:"sessionId"`
+	Screen    string                 `json:"screen,omitempty"`
+	Formula   string                 `json:"formula"`
+	Context   map[string]interface{} `json:"context,omitempty"`
+}
+
+// SessionEvaluateRequest is the body for POST /api/runtime/session/:sessionId/evaluate.
+type SessionEvaluateRequest struct {
+	AppID   uuid.UUID              `json:"appId"`
+	Screen  string                 `json:"screen,omitempty"`
+	Formula string                 `json:"formula"`
+	Context map[string]interface{} `json:"context,omitempty"`
 }
 
 // EvaluateResponse is returned after formula execution.
 type EvaluateResponse struct {
-	Result  any                           `json:"result"`
-	Refresh []reactive.RefreshInstruction `json:"refresh,omitempty"`
+	Result        any                           `json:"result"`
+	Refresh       []reactive.RefreshInstruction `json:"refresh,omitempty"`
+	CurrentScreen string                        `json:"currentScreen,omitempty"`
 }
 
 // FormulaError is a structured runtime formula error.

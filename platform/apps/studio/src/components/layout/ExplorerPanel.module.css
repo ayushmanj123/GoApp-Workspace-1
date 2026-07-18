@@ -67,12 +67,21 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 3px 10px 3px 28px;
+  padding: 6px 10px 4px 28px;
   font-size: 10px;
   font-weight: 600;
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.6px;
+}
+
+.sectionHeader .addBtn {
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.screensSection:hover .sectionHeader .addBtn {
+  opacity: 1;
 }
 
 .addBtn {
@@ -156,9 +165,16 @@
 .screenItem {
   position: relative;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   padding: 0;
   transition: background var(--transition);
+}
+
+.screenRow {
+  display: flex;
+  align-items: center;
+  width: 100%;
 }
 
 .screenItem:hover {
@@ -171,6 +187,27 @@
 
 .screenItem.active .screenBtn {
   color: var(--color-text-accent);
+  font-weight: 500;
+}
+
+.screenChildren {
+  padding-bottom: 4px;
+}
+
+.screenChildren .emptyControls {
+  padding: 4px 10px 4px 36px;
+}
+
+.componentsTab {
+  padding-bottom: 8px;
+}
+
+.componentsTab .sectionHeader {
+  padding-left: 12px;
+}
+
+.componentsTab .componentList {
+  padding-left: 12px;
 }
 
 .screenBtn {
@@ -549,4 +586,29 @@
 .treeItemLabel {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.searchWrap {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+  flex-shrink: 0;
+}
+
+.placeholderPanel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.screenItem.active {
+  background: var(--color-bg-selected);
+}
+
+.controlSelected {
+  background: var(--color-bg-selected) !important;
 }

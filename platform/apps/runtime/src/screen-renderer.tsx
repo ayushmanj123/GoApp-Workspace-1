@@ -18,7 +18,7 @@ export const ScreenRenderer: React.FC<{ screen?: ScreenPackage }> = ({
         height: ARTBOARD_HEIGHT,
         overflow: "hidden",
         boxSizing: "border-box",
-        background: "#1e1e2e",
+        background: "var(--color-bg-artboard, #ffffff)",
       }}
     >
       {screen.controls.map((control) => (

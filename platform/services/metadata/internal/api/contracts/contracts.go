@@ -1,6 +1,7 @@
 package contracts
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -98,6 +99,34 @@ type UpdateEntityFieldRequest struct {
 	Name        *string `json:"name" validate:"omitempty,min=1,max=200"`
 	DisplayName *string `json:"display_name" validate:"omitempty,min=1,max=200"`
 	FieldType   *string `json:"field_type" validate:"omitempty,oneof=text number boolean date"`
+}
+
+// Connector DTOs
+type CreateConnectorRequest struct {
+	Name               string          `json:"name" validate:"required,min=1,max=200"`
+	ConnectorType      string          `json:"connector_type" validate:"required,oneof=rest sql storage"`
+	AuthenticationType string          `json:"authentication_type" validate:"required,oneof=none header connection_string oauth_client_credentials s3"`
+	BaseURL            string          `json:"base_url" validate:"omitempty,max=2000"`
+	AuthConfig         json.RawMessage `json:"auth_config" validate:"omitempty"`
+}
+
+type UpdateConnectorRequest struct {
+	Name               *string         `json:"name" validate:"omitempty,min=1,max=200"`
+	AuthenticationType *string         `json:"authentication_type" validate:"omitempty,oneof=none header connection_string oauth_client_credentials s3"`
+	BaseURL            *string         `json:"base_url" validate:"omitempty,max=2000"`
+	AuthConfig         json.RawMessage `json:"auth_config" validate:"omitempty"`
+}
+
+type CreateConnectorActionRequest struct {
+	ActionName string `json:"action_name" validate:"required,min=1,max=200"`
+	HTTPMethod string `json:"http_method" validate:"required,oneof=GET POST PUT PATCH DELETE HEAD OPTIONS"`
+	Endpoint   string `json:"endpoint" validate:"required,max=2000"`
+}
+
+type UpdateConnectorActionRequest struct {
+	ActionName *string `json:"action_name" validate:"omitempty,min=1,max=200"`
+	HTTPMethod *string `json:"http_method" validate:"omitempty,oneof=GET POST PUT PATCH DELETE HEAD OPTIONS"`
+	Endpoint   *string `json:"endpoint" validate:"omitempty,max=2000"`
 }
 
 // Pagination
@@ -211,4 +240,124 @@ type ApplicationVersionDetail struct {
 	ApplicationID uuid.UUID `json:"application_id"`
 	Manifest      any       `json:"manifest,omitempty"`
 	SnapshotSize  int       `json:"snapshot_size"`
+}
+
+// Publish ALM DTOs (Phase 8.0 — unpublish / rollback / deprecate)
+
+type UnpublishResult struct {
+	ApplicationID uuid.UUID `json:"application_id"`
+	Status        string    `json:"status"`
+}
+
+type RollbackResult struct {
+	ApplicationID uuid.UUID `json:"application_id"`
+	VersionID     uuid.UUID `json:"version_id"`
+	Version       string    `json:"version"`
+	Status        string    `json:"status"`
+}
+
+type DeprecateResult struct {
+	ApplicationID     uuid.UUID `json:"application_id"`
+	VersionID         uuid.UUID `json:"version_id"`
+	Version           string    `json:"version"`
+	Status            string    `json:"status"`
+	ApplicationStatus string    `json:"application_status"`
+	WasCurrent        bool      `json:"was_current"`
+}
+
+// Environment DTOs
+
+type CreateEnvironmentRequest struct {
+	Name            string `json:"name" validate:"required,min=1,max=200"`
+	EnvironmentType string `json:"environment_type" validate:"required,oneof=development test production"`
+}
+
+type UpdateEnvironmentRequest struct {
+	Name            *string `json:"name" validate:"omitempty,min=1,max=200"`
+	EnvironmentType *string `json:"environment_type" validate:"omitempty,oneof=development test production"`
+}
+
+type PromoteEnvironmentRequest struct {
+	VersionID string `json:"version_id" validate:"required,uuid4"`
+}
+
+type EnvironmentDTO struct {
+	ID               uuid.UUID  `json:"id"`
+	TenantID         uuid.UUID  `json:"tenant_id"`
+	ApplicationID    uuid.UUID  `json:"application_id"`
+	Name             string     `json:"name"`
+	EnvironmentType  string     `json:"environment_type"`
+	CurrentVersionID *uuid.UUID `json:"current_version_id,omitempty"`
+	CurrentVersion   *string    `json:"current_version,omitempty"`
+	CreatedOn        time.Time  `json:"created_on"`
+	CreatedBy        *uuid.UUID `json:"created_by,omitempty"`
+	ModifiedOn       time.Time  `json:"modified_on"`
+	ModifiedBy       *uuid.UUID `json:"modified_by,omitempty"`
+}
+
+// Audit event DTOs
+
+type CreateAuditEventRequest struct {
+	Action       string `json:"action" validate:"required,min=1,max=100"`
+	ResourceType string `json:"resource_type" validate:"required,min=1,max=100"`
+	ResourceID   string `json:"resource_id" validate:"required,uuid4"`
+	UserID       *string `json:"user_id" validate:"omitempty,uuid4"`
+}
+
+type AuditEventDTO struct {
+	ID           uuid.UUID  `json:"id"`
+	TenantID     uuid.UUID  `json:"tenant_id"`
+	UserID       *uuid.UUID `json:"user_id,omitempty"`
+	Action       string     `json:"action"`
+	ResourceType string     `json:"resource_type"`
+	ResourceID   uuid.UUID  `json:"resource_id"`
+	CreatedOn    time.Time  `json:"created_on"`
+}
+
+// Solution package DTOs
+
+type CreateSolutionPackageRequest struct {
+	Name        string `json:"name" validate:"required,min=1,max=200"`
+	DisplayName string `json:"display_name" validate:"required,min=1,max=200"`
+	Description string `json:"description" validate:"omitempty,max=2000"`
+}
+
+type UpdateSolutionPackageRequest struct {
+	Name        *string `json:"name" validate:"omitempty,min=1,max=200"`
+	DisplayName *string `json:"display_name" validate:"omitempty,min=1,max=200"`
+	Description *string `json:"description" validate:"omitempty,max=2000"`
+	Version     *string `json:"version" validate:"omitempty,min=1,max=50"`
+}
+
+type AddPackageComponentRequest struct {
+	ComponentType string `json:"component_type" validate:"required,oneof=app table"`
+	ComponentID   string `json:"component_id" validate:"required,uuid4"`
+}
+
+type SolutionPackageDTO struct {
+	ID             uuid.UUID  `json:"id"`
+	TenantID       uuid.UUID  `json:"tenant_id"`
+	Name           string     `json:"name"`
+	DisplayName    string     `json:"display_name"`
+	Description    string     `json:"description"`
+	Version        string     `json:"version"`
+	Managed        bool       `json:"managed"`
+	IsMaster       bool       `json:"is_master"`
+	Status         string     `json:"status"`
+	ComponentCount int64      `json:"component_count"`
+	CreatedOn      time.Time  `json:"created_on"`
+	CreatedBy      *uuid.UUID `json:"created_by,omitempty"`
+	ModifiedOn     time.Time  `json:"modified_on"`
+	ModifiedBy     *uuid.UUID `json:"modified_by,omitempty"`
+}
+
+type PackageComponentDTO struct {
+	ID            uuid.UUID  `json:"id"`
+	PackageID     uuid.UUID  `json:"package_id"`
+	ComponentType string     `json:"component_type"`
+	ComponentID   uuid.UUID  `json:"component_id"`
+	Name          string     `json:"name"`
+	DisplayName   string     `json:"display_name"`
+	AddedOn       time.Time  `json:"added_on"`
+	AddedBy       *uuid.UUID `json:"added_by,omitempty"`
 }

@@ -1,19 +1,23 @@
 # GoApps Platform
 
-Cloud-native low-code platform monorepo. This repository contains the foundation scaffold for building, deploying, and running GoApps applications.
+Cloud-native low-code platform monorepo for building, publishing, and running management applications visually.
+
+## Current status
+
+Phases **1–6.1**, runtime hardening **6.9**, core-loop polish **7.0**, REST connectors **7.1**, Keycloak auth **7.2**, Studio connector designer **7.3**, auth trust-boundary hardening **7.4**, and enterprise ALM **8.0** are complete. Builders can create apps in Studio (via the gateway), configure REST connectors visually, bind galleries/forms to entities or connectors, publish/unpublish/rollback, promote environment versions, and run apps with development or Keycloak identity.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
 | Frontend | React, TypeScript, Vite |
-| Canvas | KonvaJS (declared, not yet implemented) |
-| Editor | Monaco (declared, not yet implemented) |
+| Canvas | KonvaJS (Studio) |
+| Editor | Monaco (formula editor) |
 | Backend | Go, Fiber |
 | Database | PostgreSQL |
 | Cache / Event Bus | Redis |
 | Object Storage | MinIO |
-| Auth | Keycloak |
+| Auth | Keycloak (dev mode uses `X-Tenant-Id` / `dev:` tokens) |
 | Deployment | Docker, Kubernetes |
 | CI/CD | GitHub Actions |
 
@@ -61,10 +65,10 @@ cp .env.example .env
 ### 3. Run a backend service
 
 ```bash
-cd services/auth
+cd services/metadata
 cp .env.example .env
 go run ./cmd/server
-curl http://localhost:8081/health
+curl http://localhost:8082/health
 ```
 
 ### 4. Run frontend apps
@@ -81,11 +85,14 @@ pnpm dev:runtime  # Runtime app on http://localhost:5174
 - [Platform Hardening (Phase 6.9)](docs/platform-hardening.md)
 - [Local Development](docs/local-development.md)
 - [Services](docs/services.md)
+- [Authentication](docs/authentication.md)
+- [Sample Customer App](docs/sample-customer-app.md)
 
 ## Platform validation
 
 ```bash
 node infrastructure/scripts/validate-platform.mjs
+node infrastructure/scripts/validate-phase-7.0.mjs
 ```
 
 ## Service Ports
@@ -100,6 +107,7 @@ node infrastructure/scripts/validate-platform.mjs
 | environment | 8086 |
 | audit | 8087 |
 | search | 8088 |
+| gateway | 8090 |
 
 ## License
 

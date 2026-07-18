@@ -37,6 +37,7 @@ type VariableRepository interface{ TenantRepositoryContract[models.Variable] }
 type CollectionRepository interface{ TenantRepositoryContract[models.Collection] }
 type ConnectorRepository interface{ TenantRepositoryContract[models.Connector] }
 type ConnectorActionRepository interface{ TenantRepositoryContract[models.ConnectorAction] }
+type SecretRepository interface{ TenantRepositoryContract[models.Secret] }
 type PermissionRepository interface{ TenantRepositoryContract[models.Permission] }
 type AuditLogRepository interface{ TenantRepositoryContract[models.AuditLog] }
 type PackageRepository interface{ TenantRepositoryContract[models.Package] }
@@ -44,6 +45,12 @@ type ApplicationSnapshotRepository interface{ TenantRepositoryContract[models.Ap
 type ComponentDefinitionRepository interface{ TenantRepositoryContract[models.ComponentDefinition] }
 type EntityRepository interface{ TenantRepositoryContract[models.Entity] }
 type EntityFieldRepository interface{ TenantRepositoryContract[models.EntityField] }
+type SolutionPackageRepository interface {
+	TenantRepositoryContract[models.SolutionPackage]
+}
+type SolutionPackageComponentRepository interface {
+	TenantRepositoryContract[models.SolutionPackageComponent]
+}
 
 // TenantSession groups repositories that execute with tenant context applied.
 type TenantSession interface {
@@ -60,6 +67,7 @@ type TenantSession interface {
 	Collections() CollectionRepository
 	Connectors() ConnectorRepository
 	ConnectorActions() ConnectorActionRepository
+	Secrets() SecretRepository
 	Permissions() PermissionRepository
 	AuditLogs() AuditLogRepository
 	Packages() PackageRepository
@@ -67,6 +75,8 @@ type TenantSession interface {
 	ComponentDefinitions() ComponentDefinitionRepository
 	Entities() EntityRepository
 	EntityFields() EntityFieldRepository
+	SolutionPackages() SolutionPackageRepository
+	SolutionPackageComponents() SolutionPackageComponentRepository
 	Transaction(ctx context.Context, fn func(session TenantSession) error) error
 }
 

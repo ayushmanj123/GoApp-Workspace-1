@@ -2,13 +2,13 @@
 
 ## Overview
 
-GoApps Platform is a cloud-native low-code platform built as a monorepo. The foundation phase establishes shared contracts, service boundaries, and infrastructure — without business logic or UI implementation.
+GoApps Platform is a cloud-native low-code platform built as a monorepo. Builders design apps in Studio; metadata is published as immutable snapshots; the Runtime kernel executes sessions against entity records and (progressively) connectors.
 
 ## Monorepo Layout
 
 ```
 platform/
-├── apps/           Frontend shells (studio, runtime)
+├── apps/           Frontend apps (studio, runtime)
 ├── services/       Go microservices (Fiber)
 ├── packages/       Shared libraries (Go + TypeScript)
 ├── infrastructure/ Docker, Kubernetes, scripts
@@ -17,16 +17,17 @@ platform/
 
 ## Service Boundaries
 
-| Service | Responsibility |
-|---------|----------------|
-| auth | Authentication and authorization (Keycloak integration) |
-| metadata | App definitions, schemas, platform metadata |
-| runtime | Published app execution |
-| connector | External system integrations |
-| publish | App publishing and versioning |
-| environment | Environment config and secrets references |
-| audit | Audit trail recording |
-| search | Search indexing and queries |
+| Service | Responsibility | Maturity |
+|---------|----------------|----------|
+| auth | Authentication and authorization (Keycloak integration) | Scaffold + gateway auth middleware |
+| metadata | App definitions, screens, controls, entities, publish snapshots | Production path for Studio |
+| runtime | Session kernel, formulas, gallery/form, records, renderer | Production path for Runtime |
+| connector | External system integrations | Scaffold (REST execution lives in runtime V1) |
+| publish | App publishing and versioning + ALM (unpublish/rollback/deprecate), proxies metadata | Production path (Phase 8.0) |
+| environment | Environment config and secrets references (metadata is source of truth for env CRUD/promote) | Scaffold |
+| audit | Audit trail recording (metadata is source of truth; writes hooked into ALM ops) | Scaffold |
+| search | Search indexing and queries | Scaffold |
+| gateway | Edge proxy + AuthContext | Development + Keycloak mode |
 
 Each service is an independent Go module with its own deployment unit, health endpoints, and configuration.
 
@@ -53,7 +54,7 @@ Implemented in:
 
 ### Tenant Context
 
-Multi-tenancy is propagated via request headers (foundation phase) and JWT claims (future):
+Multi-tenancy is propagated via gateway `AuthContext` (preferred) and request headers in development:
 
 | Header | Field |
 |--------|-------|
@@ -62,10 +63,10 @@ Multi-tenancy is propagated via request headers (foundation phase) and JWT claim
 | `X-Organization-ID` | Organization scope |
 | `X-Request-ID` | Correlation ID |
 
-Tenant IDs are **never hardcoded** in application code. They are extracted at runtime from incoming requests.
+Tenant IDs are **never hardcoded** in application business logic. They are extracted at runtime from incoming requests / AuthContext.
 
 Implemented in:
-- Go: `packages/shared/go/tenant`, `packages/shared/go/middleware`
+- Go: `packages/shared/go/tenant`, `packages/shared/go/middleware`, `packages/shared/go/auth`
 - TypeScript: `packages/shared/src/tenant/context.ts`
 
 ### Logging and Errors
@@ -79,27 +80,47 @@ Implemented in:
 ```mermaid
 sequenceDiagram
   participant Client
+  participant Gateway
+  participant AuthMiddleware
   participant Service
-  participant Middleware
-  participant Handler
 
-  Client->>Service: HTTP Request
-  Service->>Middleware: RequestID
-  Middleware->>Middleware: Logging
-  Middleware->>Handler: Health routes (no tenant)
-  Middleware->>Middleware: Tenant extraction
-  Middleware->>Handler: Business routes (future)
-  Handler->>Client: API Envelope JSON
+  Client->>Gateway: HTTP Request
+  Gateway->>AuthMiddleware: Authenticate
+  AuthMiddleware->>Gateway: AuthContext
+  Gateway->>Service: Proxy with tenant headers
+  Service->>Client: API Envelope JSON
+```
+
+## Core product loop
+
+```text
+Studio (design)
+  → Metadata Service (draft tables)
+  → Publish Service (immutable snapshot)
+  → Runtime Kernel (session + render)
+  → Entity Record API / Connectors (data)
 ```
 
 ## Infrastructure
 
 Local development uses Docker Compose for PostgreSQL, Redis, MinIO, and Keycloak. Production deployment uses Kubernetes manifests under `infrastructure/kubernetes/`.
 
-## Deferred (Future Phases)
+## Roadmap status
 
-- Business API endpoints
-- Konva canvas and Monaco editor UI
-- Database migrations and ORM layers
-- Keycloak JWT validation in middleware
-- API gateway and service mesh
+| Phase | Status |
+|-------|--------|
+| 1–6.1 Infrastructure → Publishing | Complete |
+| 6.9 Runtime hardening | Complete |
+| 7.0 Core loop polish | Complete |
+| 7.1 REST connectors | Complete |
+| 7.2 Keycloak production auth | Complete |
+| 7.3 Studio connector designer | Complete |
+| 7.4 Auth trust boundary hardening | Complete |
+| 8.0 Enterprise ALM | Complete |
+
+## Deferred
+
+- Power Fx full parity
+- MinIO publish package artifacts
+- Real-time collaboration / WebSocket push
+- Marketplace and AI features

@@ -1,32 +1,34 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import path from 'path';
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import path from "path";
+
+const GATEWAY = "http://localhost:8090";
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@goapps/shared': path.resolve(__dirname, '../../packages/shared/src'),
-      '@goapps/sdk': path.resolve(__dirname, '../../packages/sdk/src'),
-      '@goapps/formula': path.resolve(__dirname, '../../packages/formula/src'),
+      "@goapps/shared": path.resolve(__dirname, "../../packages/shared/src"),
+      "@goapps/sdk": path.resolve(__dirname, "../../packages/sdk/src"),
+      "@goapps/formula": path.resolve(__dirname, "../../packages/formula/src"),
     },
   },
   server: {
     port: 5174,
     proxy: {
       "/api": {
-        target: "http://localhost:8082",
+        target: GATEWAY,
         changeOrigin: true,
       },
       "/runtime-api": {
-        target: "http://localhost:8083",
+        target: GATEWAY,
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/runtime-api/, ""),
+        rewrite: (p) => p.replace(/^\/runtime-api/, ""),
       },
       "/formula-api": {
-        target: "http://localhost:8085",
+        target: "http://localhost:8091",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/formula-api/, ""),
+        rewrite: (p) => p.replace(/^\/formula-api/, ""),
       },
     },
   },

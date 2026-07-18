@@ -37,11 +37,24 @@ func LoadConfig() (Config, error) {
 func (c Config) Validate() error {
 	mode := strings.ToLower(strings.TrimSpace(c.Mode))
 	switch mode {
-	case ModeDevelopment, ModeKeycloak:
+	case ModeDevelopment:
 		return nil
+	case ModeKeycloak:
+		return c.ValidateKeycloak()
 	default:
 		return fmt.Errorf("auth: unsupported AUTH_MODE %q", c.Mode)
 	}
+}
+
+// ValidateKeycloak ensures Keycloak settings are present for JWKS validation.
+func (c Config) ValidateKeycloak() error {
+	if strings.TrimSpace(c.KeycloakURL) == "" {
+		return fmt.Errorf("auth: KEYCLOAK_URL is required when AUTH_MODE=keycloak")
+	}
+	if strings.TrimSpace(c.KeycloakRealm) == "" {
+		return fmt.Errorf("auth: KEYCLOAK_REALM is required when AUTH_MODE=keycloak")
+	}
+	return nil
 }
 
 // IsDevelopment reports whether development auth mode is active.

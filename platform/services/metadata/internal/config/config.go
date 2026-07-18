@@ -4,12 +4,14 @@ package config
 import (
 	"time"
 
+	"github.com/goapps-platform/shared/auth"
 	"github.com/goapps-platform/shared/config"
 )
 
 // Config holds metadata-service specific configuration.
 type Config struct {
 	config.Base
+	Auth                    auth.Config
 	DatabaseMaxOpenConns    int           `env:"DATABASE_MAX_OPEN_CONNS" envDefault:"25"`
 	DatabaseMaxIdleConns    int           `env:"DATABASE_MAX_IDLE_CONNS" envDefault:"5"`
 	DatabaseConnMaxLifetime time.Duration `env:"DATABASE_CONN_MAX_LIFETIME" envDefault:"30m"`
@@ -22,5 +24,10 @@ func Load() (Config, error) {
 	if err := config.Load(&cfg); err != nil {
 		return Config{}, err
 	}
+	authCfg, err := auth.LoadConfig()
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.Auth = authCfg
 	return cfg, nil
 }

@@ -89,5 +89,8 @@ func clonePackage(pkg *Package) *Package {
 	if len(pkg.Entities) > 0 {
 		copy.Entities = append([]string(nil), pkg.Entities...)
 	}
+	if len(pkg.Connectors) > 0 {
+		copy.Connectors = append([]string(nil), pkg.Connectors...)
+	}
 	return &copy
 }

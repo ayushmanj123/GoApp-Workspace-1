@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"errors"
+	"strings"
 
 	"github.com/goapps-platform/metadata-service/internal/api/contracts"
 	"github.com/goapps-platform/metadata-service/internal/api/tenant"
@@ -18,7 +20,13 @@ func NewRuntimeHandler(store repositories.Store) *runtimeHandler {
 }
 
 func (h *runtimeHandler) runtimeOptions(c *fiber.Ctx) services.RuntimePackageOptions {
-	return services.RuntimePackageOptions{Channel: c.Query("channel", "published")}
+	opts := services.RuntimePackageOptions{Channel: c.Query("channel", "published")}
+	if envRaw := strings.TrimSpace(c.Query("environmentId")); envRaw != "" {
+		if envID, err := uuid.Parse(envRaw); err == nil {
+			opts.EnvironmentID = &envID
+		}
+	}
+	return opts
 }
 
 // GET /api/v1/runtime/applications/:id
@@ -35,7 +43,11 @@ func (h *runtimeHandler) GetApplication(c *fiber.Ctx) error {
 	ctx := context.Background()
 	pkg, err := h.svc.BuildRuntimePackageWithOptions(ctx, tid, id, h.runtimeOptions(c))
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(contracts.APIResponse{Success: false, Error: err.Error()})
+		status := fiber.StatusInternalServerError
+		if errors.Is(err, services.ErrEnvironmentNotFound) || errors.Is(err, services.ErrEnvironmentNotPromoted) {
+			status = fiber.StatusNotFound
+		}
+		return c.Status(status).JSON(contracts.APIResponse{Success: false, Error: err.Error()})
 	}
 	return c.JSON(contracts.APIResponse{Success: true, Data: pkg})
 }

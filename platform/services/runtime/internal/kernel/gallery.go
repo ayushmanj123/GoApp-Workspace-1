@@ -133,6 +133,7 @@ func toGalleryControl(session *RuntimeSession, control RuntimeControl) gallery.C
 	entities := []string{}
 	if session != nil && session.Package != nil {
 		entities = append(entities, session.Package.Entities...)
+		entities = append(entities, session.Package.Connectors...)
 	}
 	return gallery.ControlMetadata{
 		Name:        control.Name,

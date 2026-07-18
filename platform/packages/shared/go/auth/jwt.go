@@ -75,18 +75,3 @@ func (v *DevTokenValidator) Validate(_ context.Context, token string) (*AuthCont
 		IsAuthenticated: true,
 	}, nil
 }
-
-// KeycloakTokenValidator validates Keycloak-issued JWTs.
-type KeycloakTokenValidator struct {
-	cfg Config
-}
-
-func NewKeycloakTokenValidator(cfg Config) *KeycloakTokenValidator {
-	return &KeycloakTokenValidator{cfg: cfg}
-}
-
-func (v *KeycloakTokenValidator) Validate(_ context.Context, _ string) (*AuthContext, error) {
-	_ = v.cfg
-	// TODO: implement Keycloak JWKS validation and claim extraction.
-	return nil, fmt.Errorf("keycloak token validation not implemented")
-}

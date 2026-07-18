@@ -27,35 +27,74 @@ func NewMetadataClient(baseURL string) *MetadataClient {
 	}
 }
 
-func (c *MetadataClient) Publish(applicationID, tenantID, requestID string, rawBody []byte) (*APIResponse, int, error) {
+type ForwardHeaders struct {
+	TenantID      string
+	UserID        string
+	Authorization string
+	RequestID     string
+}
+
+func (c *MetadataClient) Publish(applicationID string, hdr ForwardHeaders, rawBody []byte) (*APIResponse, int, error) {
 	var reader io.Reader
 	if len(rawBody) > 0 {
 		reader = bytes.NewReader(rawBody)
 	}
-	return c.do(http.MethodPost, fmt.Sprintf("/api/v1/applications/%s/publish", applicationID), tenantID, requestID, reader)
+	return c.do(http.MethodPost, fmt.Sprintf("/api/v1/applications/%s/publish", applicationID), hdr, reader)
 }
 
-func (c *MetadataClient) ListVersions(applicationID, tenantID, requestID, query string) (*APIResponse, int, error) {
+func (c *MetadataClient) ListVersions(applicationID string, hdr ForwardHeaders, query string) (*APIResponse, int, error) {
 	path := fmt.Sprintf("/api/v1/applications/%s/versions", applicationID)
 	if query != "" {
 		path += "?" + query
 	}
-	return c.do(http.MethodGet, path, tenantID, requestID, nil)
+	return c.do(http.MethodGet, path, hdr, nil)
 }
 
-func (c *MetadataClient) GetVersion(applicationID, versionID, tenantID, requestID string) (*APIResponse, int, error) {
-	return c.do(http.MethodGet, fmt.Sprintf("/api/v1/applications/%s/versions/%s", applicationID, versionID), tenantID, requestID, nil)
+func (c *MetadataClient) GetVersion(applicationID, versionID string, hdr ForwardHeaders) (*APIResponse, int, error) {
+	return c.do(http.MethodGet, fmt.Sprintf("/api/v1/applications/%s/versions/%s", applicationID, versionID), hdr, nil)
 }
 
-func (c *MetadataClient) do(method, path, tenantID, requestID string, body io.Reader) (*APIResponse, int, error) {
+func (c *MetadataClient) Unpublish(applicationID string, hdr ForwardHeaders, rawBody []byte) (*APIResponse, int, error) {
+	var reader io.Reader
+	if len(rawBody) > 0 {
+		reader = bytes.NewReader(rawBody)
+	}
+	return c.do(http.MethodPost, fmt.Sprintf("/api/v1/applications/%s/unpublish", applicationID), hdr, reader)
+}
+
+func (c *MetadataClient) Rollback(applicationID, versionID string, hdr ForwardHeaders, rawBody []byte) (*APIResponse, int, error) {
+	var reader io.Reader
+	if len(rawBody) > 0 {
+		reader = bytes.NewReader(rawBody)
+	}
+	return c.do(http.MethodPost, fmt.Sprintf("/api/v1/applications/%s/versions/%s/rollback", applicationID, versionID), hdr, reader)
+}
+
+func (c *MetadataClient) Deprecate(applicationID, versionID string, hdr ForwardHeaders, rawBody []byte) (*APIResponse, int, error) {
+	var reader io.Reader
+	if len(rawBody) > 0 {
+		reader = bytes.NewReader(rawBody)
+	}
+	return c.do(http.MethodPost, fmt.Sprintf("/api/v1/applications/%s/versions/%s/deprecate", applicationID, versionID), hdr, reader)
+}
+
+func (c *MetadataClient) do(method, path string, hdr ForwardHeaders, body io.Reader) (*APIResponse, int, error) {
 	req, err := http.NewRequest(method, c.baseURL+path, body)
 	if err != nil {
 		return nil, 0, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Tenant-Id", tenantID)
-	if requestID != "" {
-		req.Header.Set("X-Request-ID", requestID)
+	if hdr.TenantID != "" {
+		req.Header.Set("X-Tenant-Id", hdr.TenantID)
+	}
+	if hdr.UserID != "" {
+		req.Header.Set("X-User-Id", hdr.UserID)
+	}
+	if hdr.Authorization != "" {
+		req.Header.Set("Authorization", hdr.Authorization)
+	}
+	if hdr.RequestID != "" {
+		req.Header.Set("X-Request-ID", hdr.RequestID)
 	}
 
 	res, err := c.httpClient.Do(req)

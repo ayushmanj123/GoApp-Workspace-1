@@ -384,6 +384,7 @@ type gormTenantSession struct {
 	collections          CollectionRepository
 	connectors           ConnectorRepository
 	connectorActions     ConnectorActionRepository
+	secrets              SecretRepository
 	permissions          PermissionRepository
 	auditLogs            AuditLogRepository
 	packages             PackageRepository
@@ -391,6 +392,8 @@ type gormTenantSession struct {
 	componentDefinitions ComponentDefinitionRepository
 	entities             EntityRepository
 	entityFields         EntityFieldRepository
+	solutionPackages     SolutionPackageRepository
+	solutionPackageComponents SolutionPackageComponentRepository
 }
 
 func newGormTenantSession(db *gorm.DB, tenantID uuid.UUID, inTx bool) *gormTenantSession {
@@ -413,6 +416,7 @@ func newGormTenantSession(db *gorm.DB, tenantID uuid.UUID, inTx bool) *gormTenan
 		session.collections = newTenantTxGormRepository[models.Collection](db, tenantID)
 		session.connectors = newTenantTxGormRepository[models.Connector](db, tenantID)
 		session.connectorActions = newTenantTxGormRepository[models.ConnectorAction](db, tenantID)
+		session.secrets = newTenantTxGormRepository[models.Secret](db, tenantID)
 		session.permissions = newTenantTxGormRepository[models.Permission](db, tenantID)
 		session.auditLogs = newTenantTxGormRepository[models.AuditLog](db, tenantID)
 		session.packages = newTenantTxGormRepository[models.Package](db, tenantID)
@@ -420,6 +424,8 @@ func newGormTenantSession(db *gorm.DB, tenantID uuid.UUID, inTx bool) *gormTenan
 		session.componentDefinitions = newTenantTxGormRepository[models.ComponentDefinition](db, tenantID)
 		session.entities = newTenantTxGormRepository[models.Entity](db, tenantID)
 		session.entityFields = newTenantTxGormRepository[models.EntityField](db, tenantID)
+		session.solutionPackages = newTenantTxGormRepository[models.SolutionPackage](db, tenantID)
+		session.solutionPackageComponents = newTenantTxGormRepository[models.SolutionPackageComponent](db, tenantID)
 		return session
 	}
 	session.users = NewTenantGormRepository[models.User](db, tenantID)
@@ -435,6 +441,7 @@ func newGormTenantSession(db *gorm.DB, tenantID uuid.UUID, inTx bool) *gormTenan
 	session.collections = NewTenantGormRepository[models.Collection](db, tenantID)
 	session.connectors = NewTenantGormRepository[models.Connector](db, tenantID)
 	session.connectorActions = NewTenantGormRepository[models.ConnectorAction](db, tenantID)
+	session.secrets = NewTenantGormRepository[models.Secret](db, tenantID)
 	session.permissions = NewTenantGormRepository[models.Permission](db, tenantID)
 	session.auditLogs = NewTenantGormRepository[models.AuditLog](db, tenantID)
 	session.packages = NewTenantGormRepository[models.Package](db, tenantID)
@@ -442,6 +449,8 @@ func newGormTenantSession(db *gorm.DB, tenantID uuid.UUID, inTx bool) *gormTenan
 	session.componentDefinitions = NewTenantGormRepository[models.ComponentDefinition](db, tenantID)
 	session.entities = NewTenantGormRepository[models.Entity](db, tenantID)
 	session.entityFields = NewTenantGormRepository[models.EntityField](db, tenantID)
+	session.solutionPackages = NewTenantGormRepository[models.SolutionPackage](db, tenantID)
+	session.solutionPackageComponents = NewTenantGormRepository[models.SolutionPackageComponent](db, tenantID)
 	return session
 }
 
@@ -460,6 +469,7 @@ func (s *gormTenantSession) Variables() VariableRepository                { retu
 func (s *gormTenantSession) Collections() CollectionRepository            { return s.collections }
 func (s *gormTenantSession) Connectors() ConnectorRepository              { return s.connectors }
 func (s *gormTenantSession) ConnectorActions() ConnectorActionRepository  { return s.connectorActions }
+func (s *gormTenantSession) Secrets() SecretRepository                    { return s.secrets }
 func (s *gormTenantSession) Permissions() PermissionRepository            { return s.permissions }
 func (s *gormTenantSession) AuditLogs() AuditLogRepository                { return s.auditLogs }
 func (s *gormTenantSession) Packages() PackageRepository                  { return s.packages }
@@ -471,6 +481,12 @@ func (s *gormTenantSession) ComponentDefinitions() ComponentDefinitionRepository
 }
 func (s *gormTenantSession) Entities() EntityRepository             { return s.entities }
 func (s *gormTenantSession) EntityFields() EntityFieldRepository     { return s.entityFields }
+func (s *gormTenantSession) SolutionPackages() SolutionPackageRepository {
+	return s.solutionPackages
+}
+func (s *gormTenantSession) SolutionPackageComponents() SolutionPackageComponentRepository {
+	return s.solutionPackageComponents
+}
 
 func (s *gormTenantSession) Transaction(ctx context.Context, fn func(session TenantSession) error) error {
 	if s == nil || s.db == nil {

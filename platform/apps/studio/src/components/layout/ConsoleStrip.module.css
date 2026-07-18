@@ -1,0 +1,67 @@
+.strip {
+  display: flex;
+  align-items: center;
+  height: var(--console-strip-height);
+  background: var(--color-bg-muted);
+  border-top: 1px solid var(--color-border);
+  padding: 0 var(--space-3);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-success);
+  flex-shrink: 0;
+}
+
+.indicator[data-status="error"] {
+  background: var(--color-danger);
+}
+
+.tab {
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color var(--transition);
+}
+
+.tab:hover {
+  color: var(--color-text-primary);
+}
+
+.tabActive {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.divider {
+  color: var(--color-border);
+}
+
+.statusText {
+  color: var(--color-text-secondary);
+}

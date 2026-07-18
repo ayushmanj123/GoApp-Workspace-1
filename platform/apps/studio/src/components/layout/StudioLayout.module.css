@@ -10,9 +10,36 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Override allotment sash colour to match theme */
+.allotment {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.leftPane {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sidePanel {
+  width: var(--side-panel-width);
+  min-width: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--color-border);
+}
+
+.sidePanelHidden {
+  display: none;
+}
+
 :global(.split-view-separator) {
   background: var(--color-border) !important;
 }

@@ -120,6 +120,18 @@ type entityCatalogRow struct {
 
 func (entityCatalogRow) TableName() string { return "entities" }
 
+// connectorCatalogRow is the minimal projection used to resolve a datasource
+// name to a REST or SQL connector when no matching entity exists.
+type connectorCatalogRow struct {
+	ID            uuid.UUID `gorm:"column:id"`
+	TenantID      uuid.UUID `gorm:"column:tenant_id"`
+	ApplicationID uuid.UUID `gorm:"column:application_id"`
+	Name          string    `gorm:"column:name"`
+	ConnectorType string    `gorm:"column:connector_type"`
+}
+
+func (connectorCatalogRow) TableName() string { return "connectors" }
+
 type controlPropertyRow struct {
 	PropertyName  string         `gorm:"column:property_name"`
 	PropertyValue datatypes.JSON `gorm:"column:property_value"`
@@ -139,11 +151,37 @@ func (r *PostgresMetadataRepository) ResolveEntity(ctx context.Context, tenantID
 	err := r.db.WithContext(ctx).
 		Where("tenant_id = ? AND application_id = ? AND name = ? AND deleted_at IS NULL", tenantID, appID, dataSourceName).
 		First(&entity).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+	if err == nil {
+		meta, err := r.LoadBindingMetadata(ctx, tenantID, appID, dataSourceName)
+		if err != nil && !errors.Is(err, ErrDataSourceNotFound) {
+			return nil, err
+		}
+		if meta == nil {
+			meta = &ControlBindingMetadata{DataSource: dataSourceName}
+		}
+		return &ResolvedBinding{
+			Name:       dataSourceName,
+			Kind:       DataSourceKindEntity,
+			EntityID:   entity.ID,
+			EntityName: entity.Name,
+			Metadata:   *meta,
+		}, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("databinding: resolve entity: %w", err)
+	}
+
+	// No matching entity: fall back to a REST or SQL connector with the same name.
+	var connector connectorCatalogRow
+	connErr := r.db.WithContext(ctx).
+		Table("connectors").
+		Where("tenant_id = ? AND application_id = ? AND name = ? AND connector_type IN ('rest','sql','storage') AND deleted_at IS NULL", tenantID, appID, dataSourceName).
+		First(&connector).Error
+	if errors.Is(connErr, gorm.ErrRecordNotFound) {
 		return nil, ErrDataSourceNotFound
 	}
-	if err != nil {
-		return nil, fmt.Errorf("databinding: resolve entity: %w", err)
+	if connErr != nil {
+		return nil, fmt.Errorf("databinding: resolve connector: %w", connErr)
 	}
 
 	meta, err := r.LoadBindingMetadata(ctx, tenantID, appID, dataSourceName)
@@ -154,11 +192,21 @@ func (r *PostgresMetadataRepository) ResolveEntity(ctx context.Context, tenantID
 		meta = &ControlBindingMetadata{DataSource: dataSourceName}
 	}
 
+	kind := DataSourceKindRest
+	switch connector.ConnectorType {
+	case "sql":
+		kind = DataSourceKindSql
+	case "storage":
+		kind = DataSourceKindStorage
+	}
+
 	return &ResolvedBinding{
-		Name:       dataSourceName,
-		Kind:       DataSourceKindEntity,
-		EntityID:   entity.ID,
-		EntityName: entity.Name,
+		Name: dataSourceName,
+		Kind: kind,
+		// EntityID is reused to carry the connector id through the generic
+		// QueryInput/DataSourceKey pipeline (see models.go).
+		EntityID:   connector.ID,
+		EntityName: connector.Name,
 		Metadata:   *meta,
 	}, nil
 }

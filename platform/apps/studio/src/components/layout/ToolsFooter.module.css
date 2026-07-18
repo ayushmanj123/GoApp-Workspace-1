@@ -1,0 +1,54 @@
+.footer {
+  display: flex;
+  align-items: center;
+  height: var(--tools-footer-height);
+  padding: 0 var(--space-4);
+  background: var(--color-bg-topbar);
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.toolBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-1) var(--space-2);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  transition: color var(--transition);
+}
+
+.toolBtn:hover:not(:disabled) {
+  color: var(--color-primary);
+}
+
+.toolBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.toolIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+}
+
+.toolBtn:hover:not(:disabled) .toolIcon {
+  color: var(--color-primary);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}

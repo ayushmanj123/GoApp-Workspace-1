@@ -17,7 +17,10 @@ var (
 type DataSourceKind string
 
 const (
-	DataSourceKindEntity DataSourceKind = "entity"
+	DataSourceKindEntity  DataSourceKind = "entity"
+	DataSourceKindRest    DataSourceKind = "rest"
+	DataSourceKindSql     DataSourceKind = "sql"
+	DataSourceKindStorage DataSourceKind = "storage"
 )
 
 // ControlBindingMetadata is control-level datasource configuration from metadata.
@@ -44,6 +47,8 @@ type EqualsFilter struct {
 }
 
 // QueryInput is the normalized runtime query passed to a DataSource.
+// EntityID is an opaque per-kind resource identifier: for DataSourceKindEntity
+// it is the entities.id row; for DataSourceKindRest it is the connectors.id row.
 type QueryInput struct {
 	TenantID       uuid.UUID
 	UserID         uuid.UUID
@@ -74,6 +79,7 @@ type QueryResult struct {
 }
 
 // DataSourceKey identifies a resource within a datasource implementation.
+// EntityID is reused across kinds (entity row id, connector id, ...).
 type DataSourceKey struct {
 	Kind     DataSourceKind
 	EntityID uuid.UUID

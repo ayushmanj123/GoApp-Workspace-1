@@ -152,7 +152,7 @@ func TestRequireRole(t *testing.T) {
 	}
 }
 
-func TestKeycloakValidatorStub(t *testing.T) {
+func TestKeycloakValidatorRejectsGarbageToken(t *testing.T) {
 	cfg := Config{
 		Mode:             ModeKeycloak,
 		KeycloakURL:      "http://localhost:8080",
@@ -163,6 +163,6 @@ func TestKeycloakValidatorStub(t *testing.T) {
 	validator := NewKeycloakTokenValidator(cfg)
 	_, err := validator.Validate(context.Background(), "any-token")
 	if err == nil {
-		t.Fatalf("expected keycloak validator stub to fail")
+		t.Fatalf("expected keycloak validator to reject garbage token")
 	}
 }

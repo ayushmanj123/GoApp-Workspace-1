@@ -1,79 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useStudioStore } from "../../store/studioStore";
 import { useApplicationStore } from "../../store/applicationStore";
+import { useHistoryStore } from "../../store/historyStore";
 import { publishApi } from "../../api/publish-api";
+import { Avatar, Button, IconButton, SearchInput } from "../ui";
+import { IconRedo, IconSave, IconUndo } from "../ui/icons";
 import styles from "./TopBar.module.css";
-
-const UndoIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path d="M3 7v6h6" />
-    <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" />
-  </svg>
-);
-
-const RedoIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path d="M21 7v6h-6" />
-    <path d="M3 17a9 9 0 019-9 9 9 0 016 2.3L21 13" />
-  </svg>
-);
-
-const SaveIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
-    <polyline points="17 21 17 13 7 13 7 21" />
-    <polyline points="7 3 7 8 15 8" />
-  </svg>
-);
-
-const PreviewIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <polygon points="5 3 19 12 5 21 5 3" />
-  </svg>
-);
-
-const PublishIcon = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path d="M12 19V5" />
-    <polyline points="5 12 12 5 19 12" />
-    <line x1="4" y1="21" x2="20" y2="21" />
-  </svg>
-);
 
 interface TopBarProps {
   onPreview: () => void;
@@ -81,24 +14,35 @@ interface TopBarProps {
   applicationId?: string | null;
 }
 
+const ZOOM_OPTIONS = [25, 50, 75, 100, 125, 150, 200];
+
 export function TopBar({
   onPreview,
   previewDisabled = false,
   applicationId = null,
 }: TopBarProps) {
+  const location = useLocation();
   const appName = useStudioStore((s) => s.appName);
   const saving = useStudioStore((s) => s.saving);
+  const zoom = useStudioStore((s) => s.zoom);
+  const setZoom = useStudioStore((s) => s.setZoom);
+  const setCommandPaletteOpen = useStudioStore((s) => s.setCommandPaletteOpen);
   const selectedScreenId = useApplicationStore((s) => s.selectedScreenId);
+  const controls = useApplicationStore((s) => s.controls);
+  const setControls = useApplicationStore((s) => s.setControlsFromHistory);
   const saveScreen = useApplicationStore((s) => s.saveScreen);
   const setSaving = useStudioStore((s) => s.setSaving);
   const setSaveMessage = useStudioStore((s) => s.setSaveMessage);
+  const canUndo = useHistoryStore((s) => s.canUndo);
+  const canRedo = useHistoryStore((s) => s.canRedo);
+  const undo = useHistoryStore((s) => s.undo);
+  const redo = useHistoryStore((s) => s.redo);
   const [publishing, setPublishing] = useState(false);
 
-  const handleSave = useCallback(async () => {
-    if (saving || !selectedScreenId) {
-      return;
-    }
+  const isComponents = location.pathname.startsWith("/studio/components");
 
+  const handleSave = useCallback(async () => {
+    if (saving || !selectedScreenId) return;
     setSaving(true);
     try {
       const result = await saveScreen();
@@ -111,16 +55,11 @@ export function TopBar({
   }, [saving, selectedScreenId, saveScreen, setSaving, setSaveMessage]);
 
   const handlePublish = useCallback(async () => {
-    if (!applicationId || publishing) {
-      return;
-    }
+    if (!applicationId || publishing) return;
     const confirmed = window.confirm(
       "Publish this application? A new immutable runtime version will be created.",
     );
-    if (!confirmed) {
-      return;
-    }
-
+    if (!confirmed) return;
     setPublishing(true);
     try {
       const result = await publishApi.publish(applicationId);
@@ -132,78 +71,111 @@ export function TopBar({
     }
   }, [applicationId, publishing, setSaveMessage]);
 
+  const handleUndo = () => {
+    const restored = undo(controls);
+    if (restored) setControls(restored);
+  };
+
+  const handleRedo = () => {
+    const restored = redo(controls);
+    if (restored) setControls(restored);
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "s") {
         event.preventDefault();
         void handleSave();
       }
+      if ((event.ctrlKey || event.metaKey) && event.key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        handleUndo();
+      }
+      if ((event.ctrlKey || event.metaKey) && (event.key === "y" || (event.key === "z" && event.shiftKey))) {
+        event.preventDefault();
+        handleRedo();
+      }
     };
-
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleSave]);
+  }, [handleSave, controls]);
 
   return (
     <header className={styles.topbar}>
-      {/* Logo */}
-      <div className={styles.logo}>
-        <span className={styles.logoMark}>GA</span>
-        <span className={styles.logoText}>Studio</span>
+      <div className={styles.left}>
+        <Link to="/studio" className={styles.logo} title="Back to Apps">
+          GoApps Studio
+        </Link>
+        {!isComponents && applicationId ? (
+          <>
+            <div className={styles.dividerVertical} />
+            <span className={styles.appName}>{appName}</span>
+          </>
+        ) : null}
+        {isComponents ? (
+          <>
+            <div className={styles.dividerVertical} />
+            <span className={styles.appName}>Component Library</span>
+          </>
+        ) : null}
       </div>
 
-      {/* App name */}
-      <div className={styles.appName} title={appName}>
-        {appName}
+      <div className={styles.center}>
+        <button type="button" onClick={() => setCommandPaletteOpen(true)}>
+          <SearchInput
+            readOnly
+            placeholder="Command Palette (Ctrl+K)"
+            shortcut="⌘K"
+            fullWidth
+            onClick={() => setCommandPaletteOpen(true)}
+          />
+        </button>
       </div>
 
-      {/* Toolbar actions */}
-      <div className={styles.toolbar}>
-        <button className={styles.iconBtn} title="Undo (Ctrl+Z)">
-          <UndoIcon />
-        </button>
-        <button className={styles.iconBtn} title="Redo (Ctrl+Y)">
-          <RedoIcon />
-        </button>
-
+      <div className={styles.right}>
+        <IconButton title="Undo (Ctrl+Z)" disabled={!canUndo} onClick={handleUndo}>
+          <IconUndo />
+        </IconButton>
+        <IconButton title="Redo (Ctrl+Y)" disabled={!canRedo} onClick={handleRedo}>
+          <IconRedo />
+        </IconButton>
         <div className={styles.divider} />
-
-        <button
-          className={styles.iconBtn}
-          title="Save (Ctrl+S)"
+        <select
+          className={styles.zoomSelect}
+          value={zoom}
+          onChange={(e) => setZoom(Number(e.target.value))}
+          aria-label="Zoom level"
+        >
+          {ZOOM_OPTIONS.map((z) => (
+            <option key={z} value={z}>
+              {z}%
+            </option>
+          ))}
+        </select>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => void handleSave()}
           disabled={saving || !selectedScreenId}
         >
-          <SaveIcon />
-          <span>{saving ? "Saving…" : "Save"}</span>
-        </button>
-        <button
-          className={styles.iconBtn}
-          title="Preview"
-          onClick={onPreview}
-          disabled={previewDisabled}
-        >
-          <PreviewIcon />
-          <span>Preview</span>
-        </button>
-
-        <div className={styles.divider} />
-
-        <button
-          className={styles.publishBtn}
-          title="Publish application"
+          <IconSave size={14} />
+          {saving ? "Saving…" : "Save"}
+        </Button>
+        {!previewDisabled && (
+          <Button variant="ghost" size="sm" onClick={onPreview}>
+            Preview
+          </Button>
+        )}
+        <Button
+          variant="primary"
+          size="sm"
           onClick={() => void handlePublish()}
           disabled={!applicationId || publishing}
           data-testid="publish-application"
         >
-          <PublishIcon />
-          <span>{publishing ? "Publishing…" : "Publish"}</span>
-        </button>
-      </div>
-
-      {/* User avatar */}
-      <div className={styles.avatar} title="Signed in">
-        <span>U</span>
+          {publishing ? "Publishing…" : "Publish"}
+        </Button>
+        <Avatar initials="AJ" title="Signed in" />
       </div>
     </header>
   );

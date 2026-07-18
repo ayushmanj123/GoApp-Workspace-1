@@ -92,6 +92,9 @@ func (v *valueEvaluator) evaluate(rtCtx *RuntimeFormulaContext, expression strin
 	}
 
 	if identifierPattern.MatchString(expression) {
+		if value, ok := lookupOverlay(rtCtx, expression); ok {
+			return value, nil
+		}
 		if value, ok := rtCtx.State.GetVariable(expression); ok {
 			return value, nil
 		}
@@ -139,6 +142,18 @@ func (v *valueEvaluator) evaluateDottedPath(rtCtx *RuntimeFormulaContext, expres
 	parts := strings.Split(expression, ".")
 	if len(parts) < 2 {
 		return nil, newFormulaError("INVALID_FORMULA", "invalid reference path", nil)
+	}
+	if rtCtx.Overlay != nil {
+		if root, ok := rtCtx.Overlay[parts[0]]; ok {
+			if len(parts) == 1 {
+				return root, nil
+			}
+			if value, err := walkFieldPath(root, parts[1:]); err != nil {
+				return nil, err
+			} else if value != nil {
+				return value, nil
+			}
+		}
 	}
 	if len(parts) >= 2 {
 		ref := parts[0] + "." + parts[1]
@@ -260,4 +275,12 @@ func userRecord(rtCtx *RuntimeFormulaContext) map[string]interface{} {
 		"Email":    email,
 		"Name":     fullName,
 	}
+}
+
+func lookupOverlay(rtCtx *RuntimeFormulaContext, name string) (any, bool) {
+	if rtCtx == nil || rtCtx.Overlay == nil {
+		return nil, false
+	}
+	value, ok := rtCtx.Overlay[name]
+	return value, ok
 }

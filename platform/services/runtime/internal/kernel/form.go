@@ -86,6 +86,7 @@ func toFormControl(session *RuntimeSession, control RuntimeControl) form.Control
 	entities := []string{}
 	if session != nil && session.Package != nil {
 		entities = append(entities, session.Package.Entities...)
+		entities = append(entities, session.Package.Connectors...)
 	}
 	return form.ControlMetadata{
 		Name:        control.Name,

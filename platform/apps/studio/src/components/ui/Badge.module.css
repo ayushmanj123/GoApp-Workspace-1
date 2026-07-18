@@ -1,0 +1,30 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.default {
+  background: var(--color-bg-muted);
+  color: var(--color-text-muted);
+}
+
+.primary {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+}
+
+.premium {
+  background: rgba(255, 149, 0, 0.12);
+  color: var(--color-warning);
+}
+
+.ai {
+  background: rgba(88, 86, 214, 0.15);
+  color: var(--color-primary);
+}

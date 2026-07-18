@@ -8,6 +8,7 @@ export interface ResolvedLayout {
   y: number;
   width: number;
   height: number;
+  zIndex: number;
   visible: boolean;
   displayMode: DisplayMode;
   disabled: boolean;
@@ -69,6 +70,7 @@ export function resolveControlLayout(control: ControlPackage): ResolvedLayout {
     y: readNumber(properties, "Y", control.y ?? 0),
     width: readNumber(properties, "Width", control.width ?? 0),
     height: readNumber(properties, "Height", control.height ?? 0),
+    zIndex: control.z_index ?? 0,
     visible: readVisible(properties),
     displayMode,
     disabled: displayMode === "Disabled",
@@ -82,6 +84,7 @@ export function absoluteLayoutStyle(layout: ResolvedLayout): CSSProperties {
     top: layout.y,
     width: layout.width > 0 ? layout.width : undefined,
     height: layout.height > 0 ? layout.height : undefined,
+    zIndex: layout.zIndex,
     boxSizing: "border-box",
   };
 }

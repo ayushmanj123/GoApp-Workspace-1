@@ -92,11 +92,40 @@ func cloneQueryResult(result *QueryResult) *QueryResult {
 
 // DataSourceRegistry selects a datasource implementation by kind.
 type DataSourceRegistry struct {
-	entity DataSource
+	entity  DataSource
+	rest    DataSource
+	sql     DataSource
+	storage DataSource
 }
 
 func NewDataSourceRegistry(entity DataSource) *DataSourceRegistry {
 	return &DataSourceRegistry{entity: entity}
+}
+
+// SetRest registers the REST connector datasource implementation. Kept as a
+// setter (rather than a constructor parameter) so existing callers of
+// NewDataSourceRegistry keep working unchanged.
+func (r *DataSourceRegistry) SetRest(rest DataSource) *DataSourceRegistry {
+	if r != nil {
+		r.rest = rest
+	}
+	return r
+}
+
+// SetSql registers the SQL connector datasource implementation.
+func (r *DataSourceRegistry) SetSql(sql DataSource) *DataSourceRegistry {
+	if r != nil {
+		r.sql = sql
+	}
+	return r
+}
+
+// SetStorage registers the storage (S3/MinIO) connector datasource implementation.
+func (r *DataSourceRegistry) SetStorage(storage DataSource) *DataSourceRegistry {
+	if r != nil {
+		r.storage = storage
+	}
+	return r
 }
 
 func (r *DataSourceRegistry) ForKind(kind DataSourceKind) (DataSource, error) {
@@ -106,6 +135,21 @@ func (r *DataSourceRegistry) ForKind(kind DataSourceKind) (DataSource, error) {
 			return nil, fmt.Errorf("databinding: entity datasource unavailable")
 		}
 		return r.entity, nil
+	case DataSourceKindRest:
+		if r.rest == nil {
+			return nil, fmt.Errorf("databinding: rest datasource unavailable")
+		}
+		return r.rest, nil
+	case DataSourceKindSql:
+		if r.sql == nil {
+			return nil, fmt.Errorf("databinding: sql datasource unavailable")
+		}
+		return r.sql, nil
+	case DataSourceKindStorage:
+		if r.storage == nil {
+			return nil, fmt.Errorf("databinding: storage datasource unavailable")
+		}
+		return r.storage, nil
 	default:
 		return nil, fmt.Errorf("databinding: unsupported datasource kind %q", kind)
 	}

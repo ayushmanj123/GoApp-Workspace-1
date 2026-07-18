@@ -59,11 +59,12 @@ type Application struct {
 func (Application) TableName() string { return "applications" }
 
 type Environment struct {
-	ID              uuid.UUID `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
-	TenantID        uuid.UUID `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
-	ApplicationID   uuid.UUID `gorm:"column:application_id;type:uuid;not null;index" json:"application_id"`
-	Name            string    `gorm:"column:name;not null" json:"name"`
-	EnvironmentType string    `gorm:"column:environment_type;not null" json:"environment_type"`
+	ID               uuid.UUID  `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	TenantID         uuid.UUID  `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
+	ApplicationID    uuid.UUID  `gorm:"column:application_id;type:uuid;not null;index" json:"application_id"`
+	Name             string     `gorm:"column:name;not null" json:"name"`
+	EnvironmentType  string     `gorm:"column:environment_type;not null" json:"environment_type"`
+	CurrentVersionID *uuid.UUID `gorm:"column:current_version_id;type:uuid" json:"current_version_id"`
 	AuditFields
 }
 
@@ -176,11 +177,32 @@ type Connector struct {
 	ConnectorType      string         `gorm:"column:connector_type;not null" json:"connector_type"`
 	Name               string         `gorm:"column:name;not null" json:"name"`
 	AuthenticationType string         `gorm:"column:authentication_type;not null" json:"authentication_type"`
-	DeletedAt          gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
+	// BaseURL and AuthConfig are connector-type specific.
+	// REST: {"type":"none"} or {"type":"header","header_name":"X","secret_id":"<uuid>"}.
+	// SQL:  {"type":"connection_string","secret_id":"<uuid>","table":"public.orders","primary_key":"id"}.
+	// Never persist header_value or connection_string plaintext after Phase 7.5/7.6.
+	BaseURL    string         `gorm:"column:base_url;not null;default:''" json:"base_url"`
+	AuthConfig datatypes.JSON `gorm:"column:auth_config;type:jsonb;not null;default:'{}'" json:"auth_config"`
+	DeletedAt  gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
 	AuditFields
 }
 
 func (Connector) TableName() string { return "connectors" }
+
+// Secret stores an encrypted value (AES-GCM) for connector auth and similar uses.
+// Plaintext is never returned on API responses.
+type Secret struct {
+	ID            uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey;uniqueIndex:ux_secret_tenant_id_id" json:"id"`
+	TenantID      uuid.UUID      `gorm:"column:tenant_id;type:uuid;not null;index;uniqueIndex:ux_secret_tenant_id_id" json:"tenant_id"`
+	ApplicationID *uuid.UUID     `gorm:"column:application_id;type:uuid;index" json:"application_id,omitempty"`
+	Name          string         `gorm:"column:name;not null" json:"name"`
+	Ciphertext    []byte         `gorm:"column:ciphertext;type:bytea;not null" json:"-"`
+	Nonce         []byte         `gorm:"column:nonce;type:bytea;not null" json:"-"`
+	DeletedAt     gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
+	AuditFields
+}
+
+func (Secret) TableName() string { return "secrets" }
 
 type ConnectorAction struct {
 	ID          uuid.UUID `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
@@ -275,3 +297,34 @@ type EntityField struct {
 }
 
 func (EntityField) TableName() string { return "entity_fields" }
+
+// SolutionPackage is an ALM package that references environment components.
+// Distinct from Package (publish artifact URL/hash).
+type SolutionPackage struct {
+	ID          uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	TenantID    uuid.UUID      `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
+	Name        string         `gorm:"column:name;not null" json:"name"`
+	DisplayName string         `gorm:"column:display_name;not null" json:"display_name"`
+	Description string         `gorm:"column:description;not null;default:''" json:"description"`
+	Version     string         `gorm:"column:version;not null;default:1.0.0" json:"version"`
+	Managed     bool           `gorm:"column:managed;not null;default:false" json:"managed"`
+	IsMaster    bool           `gorm:"column:is_master;not null;default:false" json:"is_master"`
+	Status      string         `gorm:"column:status;not null;default:draft" json:"status"`
+	DeletedAt   gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
+	AuditFields
+}
+
+func (SolutionPackage) TableName() string { return "solution_packages" }
+
+// SolutionPackageComponent is a reference from a package to an existing component.
+type SolutionPackageComponent struct {
+	ID            uuid.UUID  `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	TenantID      uuid.UUID  `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
+	PackageID     uuid.UUID  `gorm:"column:package_id;type:uuid;not null;index" json:"package_id"`
+	ComponentType string     `gorm:"column:component_type;not null" json:"component_type"`
+	ComponentID   uuid.UUID  `gorm:"column:component_id;type:uuid;not null" json:"component_id"`
+	CreatedOn     time.Time  `gorm:"column:created_on;not null;autoCreateTime" json:"created_on"`
+	CreatedBy     *uuid.UUID `gorm:"column:created_by;type:uuid" json:"created_by,omitempty"`
+}
+
+func (SolutionPackageComponent) TableName() string { return "solution_package_components" }

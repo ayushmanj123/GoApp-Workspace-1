@@ -506,13 +506,25 @@ Macro phases (product roadmap):
 |-------|------|--------|
 | 1 | Infrastructure | COMPLETE |
 | 2 | Metadata Service | COMPLETE (CRUD + runtime assembly; JWT deferred) |
-| 3 | Runtime Engine | COMPLETE (client-side `apps/runtime`; Go service health-only) |
+| 3 | Runtime Engine | COMPLETE (client `apps/runtime` + Go kernel/sessions/records) |
 | 4 | Canvas Studio | COMPLETE (Konva, Monaco, explorer, layers) |
 | 5 | Formula Engine | COMPLETE (literal + remote Power Fx, actions, forms) |
 | 6.0 | Entity Foundation | COMPLETE |
 | 6.1 | Publishing Pipeline | COMPLETE |
-| 7 | Connector Framework | NOT STARTED |
-| 8 | Enterprise Features | NOT STARTED |
+| 6.9 | Runtime Hardening | COMPLETE |
+| 7.0 | Core Loop Polish | COMPLETE (Open Runtime, seed screen, E2E validator) |
+| 7.1 | REST Connector Framework | COMPLETE (metadata CRUD + RestDataSource) |
+| 7.2 | Keycloak Production Auth | COMPLETE (JWKS validator + Studio/Runtime session login) |
+| 7.3 | Studio Connector Designer | COMPLETE (manager UI, Data panel, Items picker) |
+| 7.4 | Auth Trust Boundary Hardening | COMPLETE (gateway proxies, service auth, Keycloak realm) |
+| 7.5 | Connector Secrets | COMPLETE (encrypted secrets table, write-only Studio UX, runtime resolve) |
+| 7.6 | SQL Connector | COMPLETE (Postgres table binding, connection_string secrets, SqlDataSource) |
+| 7.7 | Runtime Productization | COMPLETE (runtime login + env-aware Open Runtime) |
+| 7.8 | ALM Studio Polish | COMPLETE (Versions modal: rollback / deprecate) |
+| 7.9 | Named SQL Queries | COMPLETE (list action SELECT override for SqlDataSource) |
+| 7.10 | REST OAuth | COMPLETE (oauth_client_credentials + Bearer token cache) |
+| 7.11 | Storage Connector | COMPLETE (S3/MinIO StorageDataSource list/get) |
+| 8.0 | Enterprise ALM | COMPLETE (unpublish/rollback/deprecate, environments + promote, audit events) |
 
 ---
 
@@ -526,8 +538,18 @@ Granular sub-phases use different numbering than macro phases:
 - **5.0 → 5.2** — Explorer tree, layers UX, Monaco formula editor
 - **6.0** — Entity foundation (schema + Studio + runtime package)
 - **6.1** — Publishing pipeline (immutable snapshots + publish service)
+- **7.0** — Core loop polish (seed screen, Open Runtime, create→publish→runtime)
+- **7.3** — Studio connector designer (manager UI + Items datasource picker)
+- **7.4** — Auth trust boundary (gateway proxies, service auth middleware, Keycloak PKCE realm)
+- **7.5** — Connector secrets (encrypted `secrets` table, write-only Studio UX, runtime resolve)
+- **7.6** — SQL connector (Postgres table binding, connection_string secrets, SqlDataSource)
+- **7.7** — Runtime productization (Keycloak/dev login + `environmentId` Open Runtime)
+- **7.8** — ALM Studio polish (Versions modal: rollback / deprecate)
+- **7.9** — Named SQL queries (`list` action SELECT override)
+- **7.10** — REST OAuth client credentials
+- **7.11** — Storage connector (S3/MinIO)
 
-Run: `node infrastructure/scripts/validate-phase-6.1.mjs`
+Run: `node infrastructure/scripts/validate-phase-7.11.mjs`
 
 ---
 
@@ -564,6 +586,44 @@ Metadata service (domain logic + persistence, :8082):
 
 ---
 
+# Phase 8.0 — Enterprise ALM
+
+Full details: `docs/enterprise-alm.md`.
+
+## APIs
+
+Publish service + metadata service (same routes on both, publish proxies to metadata):
+
+- `POST /api/v1/applications/:id/unpublish`
+- `POST /api/v1/applications/:id/versions/:versionId/rollback`
+- `POST /api/v1/applications/:id/versions/:versionId/deprecate`
+
+Metadata service only:
+
+- `GET/POST /api/v1/applications/:appId/environments`
+- `GET/PUT/DELETE /api/v1/applications/:appId/environments/:envId`
+- `POST /api/v1/applications/:appId/environments/:envId/promote`
+- `POST/GET /api/v1/audit-events`
+
+## Data model
+
+- `environments.current_version_id` — nullable FK to `application_versions`, independent of the app's global pointer
+- `audit_logs` — unchanged, append-only (migration `000002`); now written by ALM handlers via `AuditService`
+
+## Studio
+
+- `/studio/environments` — real `EnvironmentsManagerPage` (was a stub)
+- `apps/studio/src/api/publish-api.ts` — `unpublish`, `rollback`, `deprecate`
+- `apps/studio/src/api/environments-api.ts` — new
+- `VersionsModal` on AppCard — list / rollback / deprecate (Phase 7.8)
+
+## Out of scope (8.0)
+
+- `services/environment` / `services/audit` as real proxies (kept thin, like `services/publish` was for packages) — Studio and handlers talk to metadata directly
+- Richer audit payloads / search indexing across `services/audit` and `services/search`
+
+---
+
 # Current MVP Goal
 
 User can:
@@ -584,7 +644,7 @@ No Marketplace yet.
 
 Next focus:
 
-Connectors → Enterprise features
+Platform polish / MinIO publish artifacts / env-scoped secrets
 
 ---
 

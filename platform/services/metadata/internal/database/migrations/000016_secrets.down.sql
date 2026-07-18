@@ -1,0 +1,3 @@
+DROP POLICY IF EXISTS secrets_tenant_isolation ON secrets;
+ALTER TABLE secrets DISABLE ROW LEVEL SECURITY;
+DROP TABLE IF EXISTS secrets;

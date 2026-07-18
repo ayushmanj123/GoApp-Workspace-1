@@ -1,5 +1,6 @@
 /**
- * Start the Power Fx formula API on port 8085 (used by Studio/Runtime via /formula-api proxy).
+ * Start the Power Fx formula API on port 8091 (used by Studio/Runtime via /formula-api proxy).
+ * Port 8085 is reserved for the publish service.
  * Run: pnpm --filter @goapps/formula serve
  */
 import { spawn } from "node:child_process";
@@ -16,7 +17,7 @@ const localDotnet = path.join(
 );
 const dotnet = existsSync(localDotnet) ? localDotnet : "dotnet";
 const projectDir = path.join(packageRoot, "dotnet", "GoApps.PowerFx");
-const port = process.env.FORMULA_API_PORT ?? "8085";
+const port = process.env.FORMULA_API_PORT ?? "8091";
 
 const child = spawn(
   dotnet,

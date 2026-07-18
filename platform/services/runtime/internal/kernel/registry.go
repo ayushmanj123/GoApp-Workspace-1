@@ -136,6 +136,12 @@ type entityRow struct {
 
 func (entityRow) TableName() string { return "entities" }
 
+type connectorRow struct {
+	Name string `gorm:"column:name"`
+}
+
+func (connectorRow) TableName() string { return "connectors" }
+
 func (l *PostgresMetadataLoader) Load(ctx context.Context, tenantID, appID uuid.UUID, channel string) (*Package, error) {
 	_ = channel
 	if l == nil || l.db == nil {
@@ -277,11 +283,24 @@ func (l *PostgresMetadataLoader) Load(ctx context.Context, tenantID, appID uuid.
 		entityNames = append(entityNames, entity.Name)
 	}
 
+	connectors := []connectorRow{}
+	if err := l.db.WithContext(ctx).
+		Select("name").
+		Where("tenant_id = ? AND application_id = ? AND connector_type IN ('rest','sql','storage') AND deleted_at IS NULL", tenantID, appID).
+		Find(&connectors).Error; err != nil {
+		return nil, fmt.Errorf("load connectors: %w", err)
+	}
+	connectorNames := make([]string, 0, len(connectors))
+	for _, connector := range connectors {
+		connectorNames = append(connectorNames, connector.Name)
+	}
+
 	return &Package{
 		AppID:         appID,
 		OnStart:       app.OnStart,
 		Screens:       runtimeScreens,
 		Entities:      entityNames,
+		Connectors:    connectorNames,
 		Controls:      controlByName,
 		ScreensByName: screenByName,
 	}, nil

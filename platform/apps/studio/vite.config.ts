@@ -2,6 +2,9 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
+// Gateway (:8090) authenticates and routes to metadata / publish / runtime.
+const GATEWAY = "http://localhost:8090";
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -14,25 +17,27 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Proxy all /api calls to the metadata service — avoids CORS in development
+      // Metadata + most /api/v1 traffic via gateway
       "/api": {
-        target: "http://localhost:8082",
+        target: GATEWAY,
         changeOrigin: true,
       },
-      "/runtime-api": {
-        target: "http://localhost:8083",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/runtime-api/, ""),
-      },
+      // Studio publish client uses /publish-api/api/v1 → gateway /api/v1
       "/publish-api": {
-        target: "http://localhost:8085",
+        target: GATEWAY,
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/publish-api/, ""),
+        rewrite: (p) => p.replace(/^\/publish-api/, ""),
+      },
+      // Studio records client uses /runtime-api/api → gateway /api
+      "/runtime-api": {
+        target: GATEWAY,
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/runtime-api/, ""),
       },
       "/formula-api": {
-        target: "http://localhost:8085",
+        target: "http://localhost:8091",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/formula-api/, ""),
+        rewrite: (p) => p.replace(/^\/formula-api/, ""),
       },
     },
   },

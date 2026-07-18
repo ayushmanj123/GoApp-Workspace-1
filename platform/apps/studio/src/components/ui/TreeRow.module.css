@@ -1,0 +1,94 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 28px;
+  padding: 0 var(--space-2);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  transition: background var(--transition);
+}
+
+.row:hover {
+  background: var(--color-bg-hover);
+}
+
+.selected {
+  background: var(--color-bg-selected);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.indent {
+  flex-shrink: 0;
+}
+
+.chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.chevronPlaceholder {
+  width: 16px;
+  flex-shrink: 0;
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.row:hover .actions,
+.selected .actions {
+  opacity: 1;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: var(--color-text-muted);
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.actionBtn:hover {
+  background: var(--color-bg-muted);
+  color: var(--color-text-primary);
+}
+
+.hidden {
+  opacity: 0.4;
+}

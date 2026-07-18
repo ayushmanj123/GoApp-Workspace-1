@@ -1,8 +1,8 @@
+import { authHeaders } from "../auth/session";
+
 export const PUBLISH_BASE_URL =
   (import.meta.env.VITE_PUBLISH_API_BASE_URL as string | undefined) ??
   "/publish-api/api/v1";
-
-export const TENANT_ID = "00000000-0000-4000-8000-000000000001";
 
 export interface PublishResult {
   application_id: string;
@@ -20,6 +20,27 @@ export interface ApplicationVersionSummary {
   created_on: string;
 }
 
+export interface UnpublishResult {
+  application_id: string;
+  status: string;
+}
+
+export interface RollbackResult {
+  application_id: string;
+  version_id: string;
+  version: string;
+  status: string;
+}
+
+export interface DeprecateResult {
+  application_id: string;
+  version_id: string;
+  version: string;
+  status: string;
+  application_status: string;
+  was_current: boolean;
+}
+
 interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -34,8 +55,7 @@ async function publishRequest<T>(
   const res = await fetch(url, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
-      "X-Tenant-Id": TENANT_ID,
+      ...authHeaders(),
       ...init.headers,
     },
   });
@@ -57,5 +77,22 @@ export const publishApi = {
   listVersions: (applicationId: string) =>
     publishRequest<{ items: ApplicationVersionSummary[]; total: number }>(
       `/applications/${applicationId}/versions`,
+    ),
+
+  unpublish: (applicationId: string) =>
+    publishRequest<UnpublishResult>(`/applications/${applicationId}/unpublish`, {
+      method: "POST",
+    }),
+
+  rollback: (applicationId: string, versionId: string) =>
+    publishRequest<RollbackResult>(
+      `/applications/${applicationId}/versions/${versionId}/rollback`,
+      { method: "POST" },
+    ),
+
+  deprecate: (applicationId: string, versionId: string) =>
+    publishRequest<DeprecateResult>(
+      `/applications/${applicationId}/versions/${versionId}/deprecate`,
+      { method: "POST" },
     ),
 };

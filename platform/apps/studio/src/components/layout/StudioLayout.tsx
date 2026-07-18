@@ -1,30 +1,38 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import { useStudioStore } from "../../store/studioStore";
-import { useApplicationStore } from "../../store/applicationStore";
 import { TopBar } from "./TopBar";
+import { NavRail } from "./NavRail";
 import { ExplorerPanel } from "./ExplorerPanel";
+import { DataPanel } from "./DataPanel";
 import { CanvasPanel } from "../canvas/CanvasPanel";
 import { PropertyPanel } from "./PropertyPanel";
-import { StatusBar } from "./StatusBar";
+import { ToolsFooter } from "./ToolsFooter";
+import { CommandPalette } from "./CommandPalette";
 import { RuntimePreviewModal } from "../preview/RuntimePreviewModal";
+import { ComponentLibrary } from "../library/ComponentLibrary";
 import styles from "./StudioLayout.module.css";
 
 export function StudioLayout() {
-  const explorerCollapsed = useStudioStore((s) => s.explorerCollapsed);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { applicationId: routeApplicationId } = useParams<{ applicationId?: string }>();
+  const isLibraryView = location.pathname.startsWith("/studio/components");
   const propertiesCollapsed = useStudioStore((s) => s.propertiesCollapsed);
-  const activeAppId = useStudioStore((s) => s.activeAppId);
+  const sidePanelOpen = useStudioStore((s) => s.sidePanelOpen);
+  const activeNavItem = useStudioStore((s) => s.activeNavItem);
   const dirty = useStudioStore((s) => s.dirty);
-  const selectedApplicationId = useApplicationStore(
-    (s) => s.selectedApplicationId,
-  );
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  const applicationId = useMemo(
-    () => selectedApplicationId ?? activeAppId,
-    [selectedApplicationId, activeAppId],
-  );
+  const applicationId = isLibraryView ? null : (routeApplicationId ?? null);
+
+  useEffect(() => {
+    if (!isLibraryView && !routeApplicationId) {
+      navigate("/studio", { replace: true });
+    }
+  }, [isLibraryView, routeApplicationId, navigate]);
 
   const handlePreview = () => {
     if (dirty) {
@@ -38,6 +46,10 @@ export function StudioLayout() {
     setPreviewOpen(true);
   };
 
+  if (!isLibraryView && !routeApplicationId) {
+    return null;
+  }
+
   return (
     <div className={styles.root}>
       <TopBar
@@ -47,35 +59,45 @@ export function StudioLayout() {
       />
 
       <div className={styles.workArea}>
-        <Allotment proportionalLayout={false}>
-          {/* Explorer */}
-          <Allotment.Pane
-            minSize={explorerCollapsed ? 32 : 160}
-            preferredSize={explorerCollapsed ? 32 : 220}
-            maxSize={explorerCollapsed ? 32 : 400}
-            snap
-          >
-            <ExplorerPanel />
-          </Allotment.Pane>
+        {isLibraryView ? (
+          <ComponentLibrary />
+        ) : (
+          <Allotment proportionalLayout={false} className={styles.allotment}>
+            <Allotment.Pane
+              preferredSize={348}
+              minSize={280}
+              maxSize={500}
+            >
+              <div className={styles.leftPane}>
+                <NavRail />
+                <div
+                  className={
+                    sidePanelOpen ? styles.sidePanel : styles.sidePanelHidden
+                  }
+                >
+                  {activeNavItem === "data" ? <DataPanel /> : <ExplorerPanel />}
+                </div>
+              </div>
+            </Allotment.Pane>
 
-          {/* Canvas */}
-          <Allotment.Pane minSize={320}>
-            <CanvasPanel />
-          </Allotment.Pane>
+            <Allotment.Pane minSize={320}>
+              <CanvasPanel />
+            </Allotment.Pane>
 
-          {/* Properties */}
-          <Allotment.Pane
-            minSize={propertiesCollapsed ? 32 : 200}
-            preferredSize={propertiesCollapsed ? 32 : 260}
-            maxSize={propertiesCollapsed ? 32 : 480}
-            snap
-          >
-            <PropertyPanel />
-          </Allotment.Pane>
-        </Allotment>
+            <Allotment.Pane
+              minSize={propertiesCollapsed ? 32 : 240}
+              preferredSize={propertiesCollapsed ? 32 : 320}
+              maxSize={propertiesCollapsed ? 32 : 480}
+              snap
+            >
+              <PropertyPanel />
+            </Allotment.Pane>
+          </Allotment>
+        )}
       </div>
 
-      <StatusBar />
+      {!isLibraryView && <ToolsFooter />}
+      <CommandPalette />
       <RuntimePreviewModal
         open={previewOpen}
         applicationId={applicationId}

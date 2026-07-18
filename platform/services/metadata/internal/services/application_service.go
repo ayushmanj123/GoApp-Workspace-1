@@ -33,6 +33,18 @@ func (s *ApplicationService) Create(ctx context.Context, tenantID uuid.UUID, nam
 		logServiceError(ctx, tenantID, err, "application_service.Create failed")
 		return nil, fmt.Errorf("create application: %w", err)
 	}
+	// Seed a default screen so Studio opens with a usable canvas immediately.
+	screen := &models.Screen{
+		TenantID:      tenantID,
+		ApplicationID: app.ID,
+		Name:          "Screen1",
+		DisplayOrder:  0,
+		LayoutType:    "responsive",
+	}
+	if err := session.Screens().Create(ctx, screen); err != nil {
+		logServiceError(ctx, tenantID, err, "application_service.Create seed screen failed")
+		return nil, fmt.Errorf("create default screen: %w", err)
+	}
 	return app, nil
 }
 

@@ -145,7 +145,7 @@ export function FormulaProvider({
   useEffect(() => {
     void formulaEngine.initialize().catch((error) => {
       console.warn(
-        "[formula] engine initialization failed — is the formula API running on port 8085?",
+        "[formula] engine initialization failed — is the formula API running on port 8091?",
         error,
       );
     });

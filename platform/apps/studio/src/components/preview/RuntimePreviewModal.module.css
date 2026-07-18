@@ -1,69 +1,209 @@
 .overlay {
+
   position: fixed;
+
   inset: 0;
+
   z-index: 80;
+
   display: flex;
+
   align-items: center;
+
   justify-content: center;
+
   padding: 24px;
+
   background: rgba(17, 17, 27, 0.75);
+
   backdrop-filter: blur(8px);
+
 }
+
+
 
 .dialog {
+
   width: min(96vw, 1600px);
+
   height: min(92vh, 1100px);
+
   display: flex;
+
   flex-direction: column;
+
   overflow: hidden;
+
   border: 1px solid var(--color-border);
+
   border-radius: 14px;
+
   background: var(--color-bg-app);
+
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+
 }
+
+
 
 .header {
+
   display: flex;
+
   align-items: center;
+
   justify-content: space-between;
+
   gap: 16px;
+
   padding: 14px 18px;
+
   border-bottom: 1px solid var(--color-border);
+
   background: var(--color-bg-topbar);
+
 }
+
+
 
 .title {
+
   font-size: 13px;
+
   font-weight: 700;
+
   color: var(--color-text-primary);
+
 }
+
+
 
 .subtitle {
+
   margin-top: 2px;
+
   font-size: 11px;
+
   color: var(--color-text-muted);
+
 }
+
+
 
 .closeBtn {
+
   padding: 7px 12px;
+
   border-radius: var(--radius);
+
   background: var(--color-bg-hover);
+
   color: var(--color-text-primary);
+
   font-size: 12px;
+
   font-weight: 600;
+
 }
+
+
 
 .body {
+
   flex: 1;
+
   min-height: 0;
+
   overflow: auto;
-  background: #11111b;
+
+  background: var(--color-bg-canvas);
+
 }
 
-.emptyState {
-  display: grid;
-  place-items: center;
-  height: 100%;
-  color: var(--color-text-muted);
-  font-size: 13px;
+
+
+.previewHost {
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  min-height: 100%;
+
+  padding: 24px;
+
+  color: var(--color-text-primary);
+
 }
+
+
+
+.statusBanner {
+
+  width: 100%;
+
+  max-width: 1366px;
+
+  margin-bottom: 12px;
+
+  padding: 8px 12px;
+
+  border-radius: var(--radius-sm);
+
+  background: var(--color-bg-muted);
+
+  border: 1px solid var(--color-border);
+
+  color: var(--color-text-secondary);
+
+  font-size: 12px;
+
+  line-height: 1.4;
+
+}
+
+
+
+.statusBannerWarning {
+
+  background: rgba(255, 149, 0, 0.08);
+
+  border-color: rgba(255, 149, 0, 0.25);
+
+  color: var(--color-text-secondary);
+
+}
+
+
+
+.previewArtboard {
+
+  box-shadow: var(--shadow-soft, 0 4px 24px rgba(0, 0, 0, 0.06));
+
+  border: 1px solid var(--color-border);
+
+  border-radius: var(--radius-sm);
+
+  overflow: hidden;
+
+}
+
+
+
+.emptyState {
+
+  display: grid;
+
+  place-items: center;
+
+  height: 100%;
+
+  color: var(--color-text-muted);
+
+  font-size: 13px;
+
+}
+
+

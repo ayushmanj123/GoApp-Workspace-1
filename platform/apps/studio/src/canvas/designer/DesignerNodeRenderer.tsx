@@ -69,12 +69,16 @@ export function DesignerNodeRenderer({
   if (normalizeControlType(control.control_type) === "gallery") {
     props.templateControls = allControls
       .filter((item) => item.parent_control_id === control.id)
+      .slice()
+      .sort((a, b) => a.z_index - b.z_index)
       .map((item) => ({ ...item, children: [] }));
   }
 
   if (normalizeControlType(control.control_type) === "form") {
     props.templateControls = allControls
       .filter((item) => item.parent_control_id === control.id)
+      .slice()
+      .sort((a, b) => a.z_index - b.z_index)
       .map((item) => ({ ...item, children: [] }));
   }
 
@@ -89,6 +93,8 @@ export function DesignerNodeRenderer({
   if (normalizeControlType(control.control_type) === "container") {
     props.templateControls = allControls
       .filter((item) => item.parent_control_id === control.id)
+      .slice()
+      .sort((a, b) => a.z_index - b.z_index)
       .map((item) => ({ ...item, children: [] }));
   }
 

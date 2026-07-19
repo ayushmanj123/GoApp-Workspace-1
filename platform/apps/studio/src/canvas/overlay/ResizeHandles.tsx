@@ -87,7 +87,7 @@ export function ResizeHandles({ nodes, offset, zoom }: ResizeHandlesProps) {
 
   const onPointerDown = useCallback(
     (handle: ResizeHandle, event: React.PointerEvent) => {
-      if (!node) return;
+      if (!node || !node.resizable) return;
       event.stopPropagation();
       event.preventDefault();
       beginResize(node.controlId, handle);
@@ -146,7 +146,7 @@ export function ResizeHandles({ nodes, offset, zoom }: ResizeHandlesProps) {
     [node, nodes, zoom, beginResize, endResize, updateControl, setAlignmentGuides],
   );
 
-  if (!node || selectedCount !== 1) {
+  if (!node || !node.resizable || selectedCount !== 1) {
     return null;
   }
 

@@ -47,6 +47,9 @@ export interface InteractionState {
   /** Container under pointer during toolbox HTML5 drag or control reparent drag */
   dropTargetControlId: string | null;
 
+  /** Right-click context menu for a control */
+  contextMenu: { controlId: string; x: number; y: number } | null;
+
   alignmentGuides: { orientation: "h" | "v"; position: number }[];
 
   setActiveScreen: (screenId: string | null) => void;
@@ -55,6 +58,8 @@ export interface InteractionState {
   clearSelection: () => void;
   setHovered: (controlId: string | null) => void;
   setDropTarget: (controlId: string | null) => void;
+  openContextMenu: (controlId: string, x: number, y: number) => void;
+  closeContextMenu: () => void;
   beginDrag: (controlId: string, pointer: Point, origin: Point) => void;
   updateDrag: (pointer: Point) => void;
   endDrag: () => void;
@@ -80,6 +85,7 @@ export const useInteractionStore = create<InteractionState>((set, get) => ({
   marqueeRect: null,
   containerEditId: null,
   dropTargetControlId: null,
+  contextMenu: null,
   alignmentGuides: [],
 
   setActiveScreen: (screenId) => set({ activeScreenId: screenId }),
@@ -120,11 +126,21 @@ export const useInteractionStore = create<InteractionState>((set, get) => ({
 
   setDropTarget: (controlId) => set({ dropTargetControlId: controlId }),
 
+  openContextMenu: (controlId, x, y) =>
+    set({
+      contextMenu: { controlId, x, y },
+      selectedControlIds: [controlId],
+      primaryControlId: controlId,
+    }),
+
+  closeContextMenu: () => set({ contextMenu: null }),
+
   beginDrag: (controlId, pointer, origin) =>
     set({
       draggingControlId: controlId,
       dragStartPointer: pointer,
       dragOrigin: origin,
+      contextMenu: null,
     }),
 
   updateDrag: () => {

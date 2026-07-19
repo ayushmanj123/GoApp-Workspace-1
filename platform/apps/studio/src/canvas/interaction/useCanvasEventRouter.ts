@@ -12,6 +12,8 @@ import { useInteractionStore } from "./interactionStore";
 import { clampPositionToArtboard } from "./artboardClamp";
 import { snapPosition } from "./snapGuides";
 import { syncStudioSelection } from "./syncStudioSelection";
+import { isEditableKeyboardTarget } from "../../utils/editable-keyboard-target";
+import { isControlLocked } from "../../utils/control-lock";
 
 const DOUBLE_CLICK_MS = 400;
 
@@ -41,10 +43,14 @@ export function useCanvasEventRouter(
   onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
   onPointerMove: (event: React.PointerEvent<HTMLDivElement>) => void;
   onPointerLeave: () => void;
+  onContextMenu: (event: React.MouseEvent<HTMLDivElement>) => void;
 } {
   const updateControl = useApplicationStore((s) => s.updateControl);
+  const deleteControl = useApplicationStore((s) => s.deleteControl);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
   const lastClickRef = useRef<{ controlId: string; time: number } | null>(null);
+  /** Shift-snap preference for the active drag (updated on each move). */
+  const shiftSnapRef = useRef(false);
 
   const toArtboardPoint = useCallback(
     (clientX: number, clientY: number) => {
@@ -63,20 +69,29 @@ export function useCanvasEventRouter(
   );
 
   const applyDragPosition = useCallback(
-    (node: DesignerNode, absoluteX: number, absoluteY: number) => {
-      const snapped = snapPosition(
-        nodes,
-        node.controlId,
-        absoluteX,
-        absoluteY,
-        node.absoluteBounds.width,
-        node.absoluteBounds.height,
-      );
-      useInteractionStore.getState().setAlignmentGuides(snapped.guides);
+    (node: DesignerNode, absoluteX: number, absoluteY: number, snap: boolean) => {
+      let nextX = absoluteX;
+      let nextY = absoluteY;
+
+      if (snap) {
+        const snapped = snapPosition(
+          nodes,
+          node.controlId,
+          absoluteX,
+          absoluteY,
+          node.absoluteBounds.width,
+          node.absoluteBounds.height,
+        );
+        useInteractionStore.getState().setAlignmentGuides(snapped.guides);
+        nextX = snapped.x;
+        nextY = snapped.y;
+      } else {
+        useInteractionStore.getState().setAlignmentGuides([]);
+      }
 
       const clamped = clampPositionToArtboard(
-        snapped.x,
-        snapped.y,
+        nextX,
+        nextY,
         node.absoluteBounds.width,
         node.absoluteBounds.height,
       );
@@ -120,18 +135,26 @@ export function useCanvasEventRouter(
       absoluteX: number,
       absoluteY: number,
       containerEditId: string | null,
+      snap: boolean,
     ) => {
-      const snapped = snapPosition(
-        nodes,
-        node.controlId,
-        absoluteX,
-        absoluteY,
-        node.absoluteBounds.width,
-        node.absoluteBounds.height,
-      );
+      let nextX = absoluteX;
+      let nextY = absoluteY;
+      if (snap) {
+        const snapped = snapPosition(
+          nodes,
+          node.controlId,
+          absoluteX,
+          absoluteY,
+          node.absoluteBounds.width,
+          node.absoluteBounds.height,
+        );
+        nextX = snapped.x;
+        nextY = snapped.y;
+      }
+
       const clamped = clampPositionToArtboard(
-        snapped.x,
-        snapped.y,
+        nextX,
+        nextY,
         node.absoluteBounds.width,
         node.absoluteBounds.height,
       );
@@ -177,8 +200,17 @@ export function useCanvasEventRouter(
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isEditableKeyboardTarget(event.target)) {
+        return;
+      }
+
+      const state = useInteractionStore.getState();
+
       if (event.key === "Escape") {
-        const state = useInteractionStore.getState();
+        if (state.contextMenu) {
+          state.closeContextMenu();
+          return;
+        }
         if (state.containerEditId) {
           state.exitContainerEdit();
           state.setHovered(null);
@@ -188,11 +220,44 @@ export function useCanvasEventRouter(
           state.setHovered(null);
           syncStudioSelection();
         }
+        return;
+      }
+
+      if (event.key === "Delete" || event.key === "Backspace") {
+        const id = state.primaryControlId;
+        if (!id) {
+          return;
+        }
+        const control = useApplicationStore.getState().controls.find((c) => c.id === id);
+        if (isControlLocked(control)) {
+          return;
+        }
+        event.preventDefault();
+        void deleteControl(id).then(() => {
+          useInteractionStore.getState().clearSelection();
+          syncStudioSelection();
+        });
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [deleteControl]);
+
+  const onContextMenu = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      const point = toArtboardPoint(event.clientX, event.clientY);
+      const containerEditId = useInteractionStore.getState().containerEditId;
+      const hit = hitTestAtPoint(nodes, point.x, point.y, { containerEditId });
+      if (!hit) {
+        useInteractionStore.getState().closeContextMenu();
+        return;
+      }
+      useInteractionStore.getState().openContextMenu(hit.controlId, event.clientX, event.clientY);
+      syncStudioSelection();
+    },
+    [nodes, toArtboardPoint],
+  );
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -203,6 +268,8 @@ export function useCanvasEventRouter(
       if (target.dataset.resizeHandle === "true") {
         return;
       }
+
+      useInteractionStore.getState().closeContextMenu();
 
       const point = toArtboardPoint(event.clientX, event.clientY);
       const containerEditId = useInteractionStore.getState().containerEditId;
@@ -230,6 +297,7 @@ export function useCanvasEventRouter(
         syncStudioSelection();
 
         if (hit.draggable) {
+          shiftSnapRef.current = event.shiftKey;
           useInteractionStore
             .getState()
             .beginDrag(hit.controlId, point, {
@@ -243,6 +311,7 @@ export function useCanvasEventRouter(
             if (!dragState.draggingControlId || !dragState.dragOrigin || !dragState.dragStartPointer) {
               return;
             }
+            shiftSnapRef.current = ev.shiftKey;
             const current = toArtboardPoint(ev.clientX, ev.clientY);
             const dx = current.x - dragState.dragStartPointer.x;
             const dy = current.y - dragState.dragStartPointer.y;
@@ -252,7 +321,7 @@ export function useCanvasEventRouter(
             }
             const absX = dragState.dragOrigin.x + dx;
             const absY = dragState.dragOrigin.y + dy;
-            applyDragPosition(node, absX, absY);
+            applyDragPosition(node, absX, absY, ev.shiftKey);
             updateReparentDropTarget(node, absX, absY, dragState.containerEditId);
           };
 
@@ -269,6 +338,7 @@ export function useCanvasEventRouter(
                   dragState.dragOrigin.x + dx,
                   dragState.dragOrigin.y + dy,
                   dragState.containerEditId,
+                  ev.shiftKey || shiftSnapRef.current,
                 );
               }
             }
@@ -364,5 +434,5 @@ export function useCanvasEventRouter(
     useInteractionStore.getState().setHovered(null);
   }, []);
 
-  return { onPointerDown, onPointerMove, onPointerLeave };
+  return { onPointerDown, onPointerMove, onPointerLeave, onContextMenu };
 }

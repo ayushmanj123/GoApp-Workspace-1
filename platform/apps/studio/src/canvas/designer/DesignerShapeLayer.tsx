@@ -91,9 +91,11 @@ interface DesignerShapeLayerProps {
 
 export function DesignerShapeLayer({ nodes, offset, zoom }: DesignerShapeLayerProps) {
   const scale = zoom / 100;
-  const shapes = flattenDesignerNodes(nodes).filter((node) =>
-    isShapeControlType(node.type),
-  );
+  // Paint low z first so higher z_index appears on top (Konva last-child wins).
+  const shapes = flattenDesignerNodes(nodes)
+    .filter((node) => isShapeControlType(node.type))
+    .slice()
+    .sort((a, b) => a.zIndex - b.zIndex || a.controlId.localeCompare(b.controlId));
 
   return (
     <Layer listening={false}>

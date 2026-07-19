@@ -1,4 +1,4 @@
-import { type ChangeEvent, useEffect, useState } from "react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { Control } from "../../api/controls-api";
 import { FormulaEditorModal } from "../formula/FormulaEditorModal";
@@ -61,6 +61,15 @@ interface PropRowProps {
 }
 
 function PropRow({ label, type = "text", value, onChange }: PropRowProps) {
+  const [draft, setDraft] = useState(value);
+  const focusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!focusedRef.current) {
+      setDraft(value);
+    }
+  }, [value]);
+
   return (
     <div className={styles.propRow}>
       <label className={styles.propLabel}>{label}</label>
@@ -68,10 +77,21 @@ function PropRow({ label, type = "text", value, onChange }: PropRowProps) {
         className={styles.propInput}
         type={type}
         aria-label={label}
-        value={value}
-        onChange={(event: ChangeEvent<HTMLInputElement>) =>
-          onChange(event.currentTarget.value)
-        }
+        value={draft}
+        onFocus={() => {
+          focusedRef.current = true;
+        }}
+        onBlur={() => {
+          focusedRef.current = false;
+          if (draft !== value) {
+            onChange(draft);
+          }
+        }}
+        onChange={(event: ChangeEvent<HTMLInputElement>) => {
+          const next = event.currentTarget.value;
+          setDraft(next);
+          onChange(next);
+        }}
       />
     </div>
   );

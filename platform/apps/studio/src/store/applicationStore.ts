@@ -31,6 +31,7 @@ import {
   snapshotControlSubtree,
 } from "../utils/component-definition";
 import { createLocalControlId, isLocalControlId } from "../utils/control-ids";
+import { withLockedProperty } from "../utils/control-lock";
 import { buildUniqueScreenName, buildFallbackScreenName } from "../utils/screen-names";
 import { useStudioStore } from "./studioStore";
 import { useHistoryStore } from "./historyStore";
@@ -101,6 +102,8 @@ export interface ApplicationState {
     >,
   ) => void;
   applyLayerAction: (controlId: string, action: LayerAction) => void;
+  setControlLocked: (controlId: string, locked: boolean) => void;
+  duplicateControl: (controlId: string) => string | null;
   updateScreenOnVisible: (screenId: string, onVisible: string) => void;
   createControl: (
     controlType: ToolboxControlType,
@@ -545,6 +548,77 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     }));
     useStudioStore.getState().setDirty(true);
     useStudioStore.getState().setSaveMessage(null);
+  },
+
+  setControlLocked: (controlId, locked) => {
+    const control = get().controls.find((item) => item.id === controlId);
+    if (!control) {
+      return;
+    }
+    pushControlHistory(get().controls);
+    set((state) => ({
+      controls: state.controls.map((item) =>
+        item.id === controlId
+          ? {
+              ...item,
+              properties: withLockedProperty(item.properties, locked),
+            }
+          : item,
+      ),
+    }));
+    useStudioStore.getState().setDirty(true);
+    useStudioStore.getState().setSaveMessage(null);
+  },
+
+  duplicateControl: (controlId) => {
+    const { controls, selectedScreenId } = get();
+    if (!selectedScreenId) {
+      return null;
+    }
+    const source = controls.find((item) => item.id === controlId);
+    if (!source) {
+      return null;
+    }
+
+    pushControlHistory(controls);
+
+    const siblings = controls.filter(
+      (item) => item.parent_control_id === source.parent_control_id,
+    );
+    const nextZ =
+      siblings.length > 0
+        ? Math.max(...siblings.map((item) => item.z_index)) + 1
+        : source.z_index + 1;
+    const now = new Date().toISOString();
+    const clone: Control = {
+      ...source,
+      id: createLocalControlId(),
+      name: (() => {
+        const existing = controls.map((item) => item.name);
+        const base = `${source.name}_Copy`;
+        if (!existing.includes(base)) {
+          return base;
+        }
+        let index = 2;
+        while (existing.includes(`${source.name}_Copy${index}`)) {
+          index += 1;
+        }
+        return `${source.name}_Copy${index}`;
+      })(),
+      x: source.x + 16,
+      y: source.y + 16,
+      z_index: nextZ,
+      properties: source.properties ? { ...source.properties } : null,
+      deleted_at: null,
+      CreatedOn: now,
+      ModifiedOn: now,
+    };
+
+    set((state) => ({ controls: [...state.controls, clone] }));
+    useStudioStore.getState().selectControl(clone.id);
+    useStudioStore.getState().setDirty(true);
+    useStudioStore.getState().setSaveMessage(null);
+    return clone.id;
   },
 
   updateScreenOnVisible: (screenId, onVisible) => {

@@ -543,6 +543,7 @@ Macro phases (product roadmap):
 | 7.28 | search + lookup picker + typed Generate Fields | COMPLETE (Contains/StartsWith filters, lookup Dropdown Items, checkbox/datepicker Generate fields) |
 | 7.29 | DataTable + gallery paging | COMPLETE (DataTable control, pageSize/offset + Load more, QueryOverrides.Offset) |
 | 7.30 | Studio canvas UX polish | COMPLETE (single-line toolbox + Shapes flyout, designer chrome CSS, nest-any / insert-into-selection) |
+| 7.31 | Studio canvas editor UX | COMPLETE (context menu Lock/Duplicate/Remove/Layering, nest menu, Shift-snap, typing guards) |
 | 8.0 | Enterprise ALM | COMPLETE (unpublish/rollback/deprecate, environments + promote, audit events) |
 | 8.1 | MinIO publish artifacts | COMPLETE (snapshot blob uploaded to MinIO on publish; `packages.package_url`/`package_hash`; runtime prefers the artifact, falls back to `snapshot_json`) |
 | 8.2 | MinIO artifact GC | COMPLETE (ref-safe GC on Deprecate when unreferenced by app + envs; Unpublish stays pointer-only; `snapshot_json` retained) |
@@ -587,6 +588,7 @@ Granular sub-phases use different numbering than macro phases:
 - **7.28** — search filters + lookup picker + typed Generate Fields (`Contains`/`StartsWith`, lookup Dropdown Items formula, checkbox/datepicker/boolean Generate fields)
 - **7.29** — DataTable control + gallery/datatable paging (`pageSize`, `offset`, Load more, `QueryOverrides.Offset`)
 - **7.30** — Studio canvas UX polish (single-line toolbox + Shapes flyout, designer host CSS, container nest-any + insert-into-selection)
+- **7.31** — Studio canvas editor UX (context menu, nest menu, Shift-only snap guides, property typing guards)
 - **8.1** — MinIO publish artifacts (upload snapshot blob to MinIO on publish, record `packages.package_url`/`package_hash`, runtime prefers the artifact with `snapshot_json` fallback)
 - **8.2** — MinIO artifact GC (ref-safe deprecate GC; Unpublish never deletes blobs)
 
@@ -608,6 +610,7 @@ Run: `node infrastructure/scripts/validate-phase-7.27.mjs`
 Run: `node infrastructure/scripts/validate-phase-7.28.mjs`
 Run: `node infrastructure/scripts/validate-phase-7.29.mjs`
 Run: `node infrastructure/scripts/validate-phase-7.30.mjs`
+Run: `node infrastructure/scripts/validate-phase-7.31.mjs`
 Run: `node infrastructure/scripts/validate-phase-8.1.mjs`
 Run: `node infrastructure/scripts/validate-phase-8.2.mjs`
 
@@ -751,7 +754,7 @@ No Marketplace yet.
 
 Next focus:
 
-Workflow entity-change / record triggers (post 7.30).
+Workflow entity-change / record triggers (post 7.31).
 
 
 ---

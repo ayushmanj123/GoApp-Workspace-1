@@ -154,12 +154,8 @@ export function CanvasSurface() {
   const scaledW = ARTBOARD_W * scale;
   const scaledH = ARTBOARD_H * scale;
 
-  const { onPointerDown, onPointerMove, onPointerLeave } = useCanvasEventRouter(
-    containerRef,
-    designerNodes,
-    offset,
-    zoom,
-  );
+  const { onPointerDown, onPointerMove, onPointerLeave, onContextMenu } =
+    useCanvasEventRouter(containerRef, designerNodes, offset, zoom);
 
   const handleFit = () => {
     const padding = 80;
@@ -222,9 +218,12 @@ export function CanvasSurface() {
 
         <DesignerProvider>
           <div className={styles.controlOverlay}>
-            {designerNodes
-              .filter((node) => !isShapeControlType(node.type))
-              .map((node) => {
+            {(() => {
+              const htmlNodes = designerNodes
+                .filter((node) => !isShapeControlType(node.type))
+                .slice()
+                .sort((a, b) => a.zIndex - b.zIndex || a.controlId.localeCompare(b.controlId));
+              return htmlNodes.map((node) => {
               const screen = toScreenBounds(node.absoluteBounds, offset, zoom);
               return (
                 <div
@@ -235,6 +234,7 @@ export function CanvasSurface() {
                     top: screen.top,
                     width: screen.width,
                     height: screen.height,
+                    zIndex: node.zIndex,
                   }}
                 >
                   <DesignerNodeRenderer
@@ -243,7 +243,8 @@ export function CanvasSurface() {
                   />
                 </div>
               );
-            })}
+            });
+            })()}
           </div>
         </DesignerProvider>
 
@@ -252,6 +253,7 @@ export function CanvasSurface() {
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerLeave={onPointerLeave}
+          onContextMenu={onContextMenu}
         />
 
         <OverlaySystem

@@ -2,6 +2,7 @@ import { SelectionOutline } from "./SelectionOutline";
 import { ResizeHandles } from "./ResizeHandles";
 import { MarqueeSelection } from "./MarqueeSelection";
 import { AlignmentGuides } from "./AlignmentGuides";
+import { ControlContextMenu } from "./ControlContextMenu";
 import { useInteractionStore } from "../interaction/interactionStore";
 import { syncStudioSelection } from "../interaction/syncStudioSelection";
 import type { DesignerNode } from "../designer/DesignerNode";
@@ -30,7 +31,7 @@ export function OverlaySystem({
     <div className={styles.overlayRoot}>
       {containerEditId && (
         <div className={styles.containerEditBanner} data-testid="container-edit-banner">
-          Editing Container — Esc to exit{" "}
+          Editing Container — Drop or insert tools here · Esc to exit{" "}
           <button
             type="button"
             onClick={() => {
@@ -51,6 +52,7 @@ export function OverlaySystem({
       <MarqueeSelection offset={offset} zoom={zoom} />
       <SelectionOutline nodes={nodes} offset={offset} zoom={zoom} />
       <ResizeHandles nodes={nodes} offset={offset} zoom={zoom} />
+      <ControlContextMenu />
     </div>
   );
 }

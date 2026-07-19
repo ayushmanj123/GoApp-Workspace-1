@@ -66,16 +66,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     let msg = res.statusText || "Request failed";
     try {
       const body = (await res.json()) as { error?: string | ApiErrorBody };
-      // #region agent log
-      fetch('http://127.0.0.1:7840/ingest/130eab88-94ac-4f4f-9bd0-61f1155336b0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03a9e4'},body:JSON.stringify({sessionId:'03a9e4',runId:'post-fix',hypothesisId:'A',location:'metadata-client.ts:!res.ok',message:'API non-OK response',data:{path,status:res.status,errorType:typeof body.error,errorIsObject:body.error!==null&&typeof body.error==='object',errorValue:body.error,formattedMsg:formatApiError(body.error,msg),statusText:res.statusText},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       msg = formatApiError(body.error, msg);
     } catch {
       // ignore parse errors
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7840/ingest/130eab88-94ac-4f4f-9bd0-61f1155336b0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03a9e4'},body:JSON.stringify({sessionId:'03a9e4',runId:'post-fix',hypothesisId:'A',location:'metadata-client.ts:throw-ApiError',message:'Throwing ApiError with msg',data:{path,status:res.status,msgType:typeof msg,msgIsObject:msg!==null&&typeof msg==='object',msgString:String(msg)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     throw new ApiError(res.status, msg);
   }
 
@@ -83,11 +77,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (res.status === 204) return undefined as T;
 
   const body = (await res.json()) as ApiResponse<T>;
-  // #region agent log
-  if (path.includes('/environments')) {
-    fetch('http://127.0.0.1:7840/ingest/130eab88-94ac-4f4f-9bd0-61f1155336b0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'03a9e4'},body:JSON.stringify({sessionId:'03a9e4',runId:'post-fix',hypothesisId:'B',location:'metadata-client.ts:ok-body',message:'Environments OK-path body',data:{path,status:res.status,success:body.success,errorType:typeof body.error,hasData:body.data!=null},timestamp:Date.now()})}).catch(()=>{});
-  }
-  // #endregion
   if (!body.success)
     throw new ApiError(
       res.status,

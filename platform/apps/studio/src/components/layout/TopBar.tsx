@@ -4,6 +4,7 @@ import { useStudioStore } from "../../store/studioStore";
 import { useApplicationStore } from "../../store/applicationStore";
 import { useHistoryStore } from "../../store/historyStore";
 import { publishApi } from "../../api/publish-api";
+import { isEditableKeyboardTarget } from "../../utils/editable-keyboard-target";
 import { Avatar, Button, IconButton, SearchInput } from "../ui";
 import { IconRedo, IconSave, IconUndo } from "../ui/icons";
 import styles from "./TopBar.module.css";
@@ -83,6 +84,10 @@ export function TopBar({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Don't steal keys from property/formula editors (including Ctrl+Z text undo).
+      if (isEditableKeyboardTarget(event.target)) {
+        return;
+      }
       if ((event.ctrlKey || event.metaKey) && event.key === "s") {
         event.preventDefault();
         void handleSave();

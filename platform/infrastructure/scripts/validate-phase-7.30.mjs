@@ -103,7 +103,7 @@ function main() {
   );
   record(
     "Test 7 — container edit banner",
-    overlay.includes("Editing Container — Esc to exit"),
+    overlay.includes("Editing Container") && overlay.includes("Esc to exit"),
     "OverlaySystem.tsx",
   );
 

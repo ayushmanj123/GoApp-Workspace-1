@@ -6,6 +6,7 @@ import {
   type DesignerNode,
   isContainerType,
 } from "./DesignerNode";
+import { isControlLocked } from "../../utils/control-lock";
 
 function toBounds(control: Control): DesignerBounds {
   return {
@@ -32,6 +33,7 @@ function buildNode(
 
   const container = isContainerType(treeNode.control_type);
   const registrySupported = supportsStudioRegistryRendering(treeNode.control_type);
+  const locked = isControlLocked(treeNode);
 
   const children = treeNode.children.map((child) => buildNode(child, absoluteBounds));
 
@@ -47,8 +49,8 @@ function buildNode(
     isContainer: container,
     selectable: registrySupported || !treeNode.parent_control_id,
     // Nested children are hittable in container-edit; allow drag so they can reparent
-    draggable: registrySupported || !treeNode.parent_control_id || container,
-    resizable: !treeNode.parent_control_id || container,
+    draggable: !locked && (registrySupported || !treeNode.parent_control_id || container),
+    resizable: !locked && (!treeNode.parent_control_id || container),
     absoluteBounds,
     control: treeNode,
   };

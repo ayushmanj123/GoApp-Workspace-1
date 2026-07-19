@@ -1,12 +1,13 @@
-# Studio Controls (Phases 7.27 / 7.30)
+# Studio Controls (Phases 7.27 / 7.30 / 7.31)
 
-Phase 7.27 expanded the Studio toolbox with interactive HTML controls and Konva decorative shape primitives. Phase 7.30 polished canvas UX: single-line toolbox, Shapes flyout, designer chrome CSS, and Power Apps–like container nesting.
+Phase 7.27 expanded the Studio toolbox with interactive HTML controls and Konva decorative shape primitives. Phase 7.30 polished canvas UX: single-line toolbox, Shapes flyout, designer chrome CSS, and Power Apps–like container nesting. Phase 7.31 adds a Konva-style context menu, Shift-only snap guides, and simpler nest actions.
 
 Run validation:
 
 ```bash
 node infrastructure/scripts/validate-phase-7.27.mjs
 node infrastructure/scripts/validate-phase-7.30.mjs
+node infrastructure/scripts/validate-phase-7.31.mjs
 ```
 
 ## Toolbox (7.30)
@@ -14,6 +15,13 @@ node infrastructure/scripts/validate-phase-7.30.mjs
 - One centered tools row with `flex-wrap: nowrap` and horizontal scroll when needed (`ToolsFooter`).
 - Decorative shapes live under a single **Shapes** button → flyout (Rectangle, Ellipse, Line, Arrow, Shape Image, Star). The menu is **portaled to `document.body`** with `position: fixed` so it is not clipped by the canvas/`overflow` ancestors. Drag payload remains `application/goapps-control`.
 - Footer height: `--tools-footer-height` (~52px).
+
+## Canvas editor chrome (7.31)
+
+- Right-click context menu: Lock, Duplicate, Remove, Layering (To Front / Forward / Backward / To back).
+- Container: Insert into Container… · Non-container: Nest into Container…
+- Drag: free move by default; hold **Shift** for snap + alignment guides.
+- Property panel / formula bar typing is not stolen by canvas hotkeys.
 
 ## Interactive HTML controls
 
@@ -44,9 +52,21 @@ Host CSS (`StudioControlRenderer.module.css`) stretches only fill controls (butt
 1. **Drop** — drop any toolbox control (HTML or shape) onto a container on the canvas to nest (`parent_control_id` + local x/y).
 2. **Insert-into-selection** — with a container selected (or while in container-edit mode, or with a nested child selected), clicking a toolbox tool / shape nests the new control inside that container with a small offset.
 
-Children use **absolute** coordinates inside the parent. Nested shapes position via designer `absoluteBounds` so they track the container. Double-click a container to edit nested children; banner: “Editing Container — Esc to exit”.
+Children use **absolute** coordinates inside the parent. Nested shapes position via designer `absoluteBounds` so they track the container. Double-click a container to edit nested children; banner: “Editing Container — Drop or insert tools here · Esc to exit”.
 
 DataTable can be a **child of** a Container; it is not itself a nest target for cell children.
+
+### Canvas context menu (7.31)
+
+Right-click a control for **Lock**, **Duplicate**, **Remove**, and **Layering** (To Front / Forward / Backward / To back). Containers also get **Insert into Container…**; other controls get **Nest into Container…** (pick a target). Delete/Backspace removes the selection when focus is not in an input.
+
+### Drag snap / alignment guides (7.31)
+
+Controls move freely by default. Hold **Shift** while dragging to enable 8px grid + edge snap and show alignment guide lines.
+
+### Studio typing (7.31)
+
+Property Panel and Formula Bar accept typing while focused. Canvas designer control previews stay non-interactive (use Runtime Preview to type into live inputs).
 
 #### Nesting model (current vs next)
 
@@ -58,6 +78,7 @@ DataTable can be a **child of** a Container; it is not itself a nest target for 
 | Nested shapes follow parent via `absoluteBounds` | Done |
 | Visual drop highlight while dragging over a container | Done (`dropTargetControlId` + outline) |
 | Reparent via drag existing control into/out of container | Done (pointer drag → `updateControl` parent + local x/y) |
+| Context Insert / Nest into Container | Done (right-click menu) |
 | Explorer tree nest/un-nest / Indent commands | **Next** |
 | Auto-layout packing (`direction` horizontal/vertical) | Deferred |
 

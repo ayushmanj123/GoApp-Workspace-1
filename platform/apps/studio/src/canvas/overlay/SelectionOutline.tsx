@@ -73,7 +73,10 @@ export function SelectionOutline({ nodes, offset, zoom }: SelectionOutlineProps)
             }}
           >
             {selectedControlIds.length === 1 && (
-              <span className={styles.selectionLabel}>{node.control.name}</span>
+              <span className={styles.selectionLabel}>
+                {node.control.name}
+                {node.control.properties?.locked === true ? " (locked)" : ""}
+              </span>
             )}
           </div>
         );

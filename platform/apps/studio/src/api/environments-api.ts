@@ -28,6 +28,19 @@ export interface PromoteEnvironmentPayload {
   version_id: string;
 }
 
+export interface EnvironmentSecretOverride {
+  id?: string;
+  environment_id: string;
+  connector_id: string;
+  base_secret_id: string;
+  has_override: boolean;
+}
+
+export interface UpsertEnvironmentSecretOverridePayload {
+  connector_id: string;
+  value: string;
+}
+
 export const environmentsApi = {
   list: (applicationId: string) =>
     apiClient.get<PagedData<EnvironmentRecord>>(
@@ -68,5 +81,29 @@ export const environmentsApi = {
     apiClient.post<EnvironmentRecord>(
       `/applications/${applicationId}/environments/${environmentId}/promote`,
       payload,
+    ),
+
+  listSecretOverrides: (applicationId: string, environmentId: string) =>
+    apiClient.get<PagedData<EnvironmentSecretOverride>>(
+      `/applications/${applicationId}/environments/${environmentId}/secret-overrides`,
+    ),
+
+  upsertSecretOverride: (
+    applicationId: string,
+    environmentId: string,
+    payload: UpsertEnvironmentSecretOverridePayload,
+  ) =>
+    apiClient.put<EnvironmentSecretOverride>(
+      `/applications/${applicationId}/environments/${environmentId}/secret-overrides`,
+      payload,
+    ),
+
+  deleteSecretOverride: (
+    applicationId: string,
+    environmentId: string,
+    connectorId: string,
+  ) =>
+    apiClient.delete(
+      `/applications/${applicationId}/environments/${environmentId}/secret-overrides/${connectorId}`,
     ),
 };

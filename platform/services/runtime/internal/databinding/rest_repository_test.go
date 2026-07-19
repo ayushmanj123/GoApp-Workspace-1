@@ -14,7 +14,7 @@ func TestResolveAuthSecretKeepsLegacyHeaderValue(t *testing.T) {
 		HeaderName:  "X-Api-Key",
 		HeaderValue: "legacy-plain",
 	}
-	if err := r.resolveAuthSecret(context.Background(), uuid.New(), auth); err != nil {
+	if err := r.resolveAuthSecret(context.Background(), uuid.New(), uuid.Nil, nil, uuid.Nil, auth); err != nil {
 		t.Fatalf("resolveAuthSecret: %v", err)
 	}
 	if auth.HeaderValue != "legacy-plain" {
@@ -28,7 +28,7 @@ func TestResolveAuthSecretRequiresMasterKey(t *testing.T) {
 		Type:     "header",
 		SecretID: uuid.New().String(),
 	}
-	err := r.resolveAuthSecret(context.Background(), uuid.New(), auth)
+	err := r.resolveAuthSecret(context.Background(), uuid.New(), uuid.Nil, nil, uuid.Nil, auth)
 	if err == nil {
 		t.Fatalf("expected error when master key is missing")
 	}

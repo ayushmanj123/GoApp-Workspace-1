@@ -60,12 +60,17 @@ func (s *Service) Load(ctx context.Context, sessionID, tenantID, userID, appID u
 		return nil, ErrGalleryNotFound
 	}
 	source := ReadItemsFormula(control.Formulas, control.Properties)
+	filter := ReadFilterFormula(control.Formulas, control.Properties)
+	sort := ReadSortFormula(control.Formulas, control.Properties)
+	limit := ReadLimitProperty(control.Formulas, control.Properties)
+	pageSize := ReadPageSizeProperty(control.Formulas, control.Properties)
+	offset := ReadOffsetProperty(control.Formulas, control.Properties)
 	state := &State{
 		Source: source,
 		Items:  []map[string]interface{}{},
 	}
 	if source != "" {
-		items, err := s.resolveItems(ctx, tenantID, userID, appID, source, control.EntityNames, nil)
+		items, err := s.resolveItems(ctx, tenantID, userID, appID, source, filter, sort, limit, pageSize, offset, control.EntityNames, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -106,14 +111,19 @@ func (s *Service) ReloadForSource(ctx context.Context, sessionID, tenantID, user
 	}
 	reloaded := make([]string, 0)
 	for _, control := range controls {
-		if !IsGalleryControl(control.ControlType) {
+		if !IsItemsControl(control.ControlType) {
 			continue
 		}
 		itemsSource := ReadItemsFormula(control.Formulas, control.Properties)
 		if !stringsEqualFold(itemsSource, source) {
 			continue
 		}
-		items, err := s.resolveItems(ctx, tenantID, userID, appID, itemsSource, control.EntityNames, stateManager)
+		filter := ReadFilterFormula(control.Formulas, control.Properties)
+		sort := ReadSortFormula(control.Formulas, control.Properties)
+		limit := ReadLimitProperty(control.Formulas, control.Properties)
+		pageSize := ReadPageSizeProperty(control.Formulas, control.Properties)
+		offset := ReadOffsetProperty(control.Formulas, control.Properties)
+		items, err := s.resolveItems(ctx, tenantID, userID, appID, itemsSource, filter, sort, limit, pageSize, offset, control.EntityNames, stateManager)
 		if err != nil {
 			return reloaded, err
 		}
@@ -137,6 +147,11 @@ func (s *Service) resolveItems(
 	ctx context.Context,
 	tenantID, userID, appID uuid.UUID,
 	source string,
+	filter string,
+	sort string,
+	limit int,
+	pageSize int,
+	offset int,
 	entities []string,
 	stateManager state.FormulaStateManager,
 ) ([]map[string]interface{}, error) {
@@ -148,7 +163,21 @@ func (s *Service) resolveItems(
 		if s.querier == nil {
 			return nil, errors.New("datasource querier is unavailable")
 		}
-		result, err := s.querier.QueryDataSource(ctx, tenantID, userID, appID, source, databinding.QueryOverrides{})
+		overrides := databinding.QueryOverrides{
+			Filter: stringsTrimSpace(filter),
+			Sort:   stringsTrimSpace(sort),
+		}
+		effectiveLimit := limit
+		if pageSize > 0 {
+			effectiveLimit = pageSize
+		}
+		if effectiveLimit > 0 {
+			overrides.Limit = effectiveLimit
+		}
+		if offset > 0 {
+			overrides.Offset = offset
+		}
+		result, err := s.querier.QueryDataSource(ctx, tenantID, userID, appID, source, overrides)
 		if err != nil {
 			return nil, err
 		}
@@ -167,6 +196,26 @@ func (s *Service) resolveItems(
 				continue
 			}
 			items = append(items, map[string]interface{}{"Value": item})
+		}
+		filter = stringsTrimSpace(filter)
+		if filter != "" {
+			expr, err := databinding.ParseFilterExpr(filter)
+			if err != nil {
+				return nil, err
+			}
+			filtered := make([]map[string]interface{}, 0, len(items))
+			for _, item := range items {
+				if databinding.MatchFilterExpr(item, expr) {
+					filtered = append(filtered, item)
+				}
+			}
+			items = filtered
+		}
+		if limit > 0 && len(items) > limit {
+			items = items[:limit]
+		}
+		if pageSize > 0 && len(items) > pageSize {
+			items = items[:pageSize]
 		}
 		return items, nil
 	}

@@ -227,6 +227,60 @@ func TestSessionExpirationReleasesResources(t *testing.T) {
 	}
 }
 
+// TestEvaluateExpressionNavigateUpdatesCurrentScreen verifies that the
+// session-scoped evaluate path (kernel.EvaluateExpression, backing
+// POST /api/runtime/session/:sessionId/evaluate) performs real navigation:
+// Navigate() must not return NAVIGATION_NOT_IMPLEMENTED, and the session's
+// CurrentScreen must reflect the target screen afterwards (Phase 7.15).
+func TestEvaluateExpressionNavigateUpdatesCurrentScreen(t *testing.T) {
+	appID := uuid.New()
+	loader := &fakeMetadataLoader{pkg: navigationTestPackage(appID)}
+	kernel := newTestKernel(loader)
+
+	start, err := kernel.StartSession(context.Background(), uuid.New(), uuid.New(), StartSessionRequest{
+		AppID:  appID,
+		Screen: "Home",
+	})
+	if err != nil {
+		t.Fatalf("StartSession: %v", err)
+	}
+
+	result, _, err := kernel.EvaluateExpression(context.Background(), start.SessionID, "Home", "Navigate(Details)", nil)
+	if err != nil {
+		t.Fatalf("EvaluateExpression Navigate: %v", err)
+	}
+	_ = result
+
+	session, ok := kernel.Session(start.SessionID)
+	if !ok {
+		t.Fatal("expected session to still exist")
+	}
+	if session.CurrentScreen != "Details" {
+		t.Fatalf("expected CurrentScreen=Details after Navigate, got %q", session.CurrentScreen)
+	}
+	previous, ok := session.State.GetVariable("varPreviousScreen")
+	if !ok || previous != "Home" {
+		t.Fatalf("expected varPreviousScreen=Home, got %#v ok=%v", previous, ok)
+	}
+}
+
+func navigationTestPackage(appID uuid.UUID) *Package {
+	homeID := uuid.New()
+	detailsID := uuid.New()
+	return &Package{
+		AppID: appID,
+		Screens: []RuntimeScreen{
+			{ID: homeID, Name: "Home"},
+			{ID: detailsID, Name: "Details"},
+		},
+		ScreensByName: map[string]RuntimeScreen{
+			"home":    {ID: homeID, Name: "Home"},
+			"details": {ID: detailsID, Name: "Details"},
+		},
+		Controls: map[string]RuntimeControl{},
+	}
+}
+
 func TestScreenOnVisibleEvent(t *testing.T) {
 	appID := uuid.New()
 	kernel := newTestKernel(&fakeMetadataLoader{})

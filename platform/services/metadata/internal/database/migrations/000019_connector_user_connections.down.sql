@@ -1,0 +1,2 @@
+DROP POLICY IF EXISTS connector_user_connections_tenant_isolation ON connector_user_connections;
+DROP TABLE IF EXISTS connector_user_connections;

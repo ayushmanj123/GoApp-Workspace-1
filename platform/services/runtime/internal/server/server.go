@@ -115,13 +115,19 @@ func New(cfg config.Config) (*RuntimeApp, error) {
 	repo := records.NewPostgresRepository(db)
 	svc := records.NewService(repo, repo)
 	metadataRepo := databinding.NewPostgresMetadataRepository(db)
+	// Published/environmentId sessions resolve connector config from the
+	// frozen publish snapshot instead of the live connectors table, so
+	// editing a connector in Studio after publish doesn't change what an
+	// already-published app serves until it is republished (Phase 7.13).
+	snapshotConnectors := databinding.NewSnapshotConnectorSource(db)
+	metadataRepo.SetSnapshotSource(snapshotConnectors)
 	resolver := databinding.NewResolver(metadataRepo)
 	entityDS := databinding.NewEntityDataSource(svc)
-	restRepo := databinding.NewPostgresRestConnectorRepository(db)
+	restRepo := databinding.NewSnapshotAwareRestConnectorRepository(databinding.NewPostgresRestConnectorRepository(db), snapshotConnectors)
 	restDS := databinding.NewRestDataSource(restRepo, nil)
-	sqlRepo := databinding.NewPostgresSqlConnectorRepository(db)
+	sqlRepo := databinding.NewSnapshotAwareSqlConnectorRepository(databinding.NewPostgresSqlConnectorRepository(db), snapshotConnectors)
 	sqlDS := databinding.NewSqlDataSource(sqlRepo)
-	storageRepo := databinding.NewPostgresStorageConnectorRepository(db)
+	storageRepo := databinding.NewSnapshotAwareStorageConnectorRepository(databinding.NewPostgresStorageConnectorRepository(db), snapshotConnectors)
 	storageDS := databinding.NewStorageDataSource(storageRepo)
 	dataSources := databinding.NewDataSourceRegistry(entityDS).SetRest(restDS).SetSql(sqlDS).SetStorage(storageDS)
 	bindingSvc := databinding.NewService(resolver, dataSources)

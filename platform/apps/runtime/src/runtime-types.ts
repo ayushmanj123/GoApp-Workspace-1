@@ -41,6 +41,7 @@ export interface RuntimeApplication {
   on_start?: string;
   screens: RuntimeScreen[];
   entities?: RuntimeEntity[];
+  connectors?: RuntimeConnector[];
   created_on?: string;
 }
 
@@ -52,6 +53,25 @@ export interface RuntimeEntity {
 export interface RuntimeEntityField {
   name: string;
   field_type: string;
+}
+
+// RuntimeConnector is the frozen (publish-time) view of a connector.
+// auth_config is sanitized: secret_id references only, never plaintext
+// secrets (header_value, client_secret, connection_string, secret_access_key).
+export interface RuntimeConnector {
+  id: string;
+  name: string;
+  connector_type: string;
+  authentication_type: string;
+  base_url?: string;
+  auth_config?: Record<string, any>;
+  actions?: RuntimeConnectorAction[];
+}
+
+export interface RuntimeConnectorAction {
+  action_name: string;
+  http_method: string;
+  endpoint: string;
 }
 
 export type AppPackage = RuntimeApplication;

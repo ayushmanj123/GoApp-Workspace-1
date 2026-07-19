@@ -116,11 +116,15 @@ Local development uses Docker Compose for PostgreSQL, Redis, MinIO, and Keycloak
 | 7.2 Keycloak production auth | Complete |
 | 7.3 Studio connector designer | Complete |
 | 7.4 Auth trust boundary hardening | Complete |
+| 7.18 Richer Filter / LookUp | Complete |
+| 7.19 Deeper Filter / Or / comparisons | Complete |
+| 7.20 Entity DB WHERE pushdown | Complete |
 | 8.0 Enterprise ALM | Complete |
+| 8.1 MinIO publish artifacts | Complete |
+| 8.2 MinIO artifact GC | Complete |
 
 ## Deferred
 
 - Power Fx full parity
-- MinIO publish package artifacts
 - Real-time collaboration / WebSocket push
 - Marketplace and AI features

@@ -11,9 +11,19 @@
   pointer-events: none;
 }
 
-.host button,
-.host input,
-.host span {
+/* Only stretch single-child fill controls — not nested Toggle/Checkbox chrome */
+.host > button,
+.host > :global(.fillControl) {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.host > input[type="text"],
+.host > input[type="date"],
+.host > input:not([type]),
+.host > select,
+.host > textarea {
   width: 100%;
   height: 100%;
   box-sizing: border-box;

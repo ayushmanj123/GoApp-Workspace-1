@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   entitiesApi,
   type EntityFieldType,
 } from "../../../api/entities-api";
+import { useTenantTablesContext } from "./TenantTablesContext";
 import shellStyles from "../../preview/RuntimePreviewModal.module.css";
 import modalStyles from "../../layout/InsertComponentModal.module.css";
 
-const FIELD_TYPES: EntityFieldType[] = ["text", "number", "boolean", "date"];
+const FIELD_TYPES: EntityFieldType[] = ["text", "number", "boolean", "date", "lookup"];
 
 interface AddTableFieldModalProps {
   open: boolean;
@@ -14,6 +15,10 @@ interface AddTableFieldModalProps {
   entityName: string;
   onClose: () => void;
   onCreated: () => void;
+  /** Preselects the field type — used by the "New relationship" entry point. */
+  initialFieldType?: EntityFieldType;
+  /** Overrides the modal header, e.g. "New Relationship". */
+  title?: string;
 }
 
 export function AddTableFieldModal({
@@ -22,18 +27,34 @@ export function AddTableFieldModal({
   entityName,
   onClose,
   onCreated,
+  initialFieldType = "text",
+  title = "Add Field",
 }: AddTableFieldModalProps) {
+  const { tables } = useTenantTablesContext();
   const [name, setName] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [fieldType, setFieldType] = useState<EntityFieldType>("text");
+  const [fieldType, setFieldType] = useState<EntityFieldType>(initialFieldType);
+  const [relatedEntityId, setRelatedEntityId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (open) {
+      setFieldType(initialFieldType);
+      setRelatedEntityId("");
+    }
+  }, [open, initialFieldType]);
+
   if (!open || !entityId) return null;
+
+  const relatedTables = tables.filter((t) => t.id !== entityId);
+  const isLookup = fieldType === "lookup";
+  const canSubmit =
+    name.trim().length > 0 && displayName.trim().length > 0 && (!isLookup || relatedEntityId.length > 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !displayName.trim()) return;
+    if (!canSubmit) return;
     setSaving(true);
     setError(null);
     try {
@@ -41,10 +62,12 @@ export function AddTableFieldModal({
         name: name.trim(),
         display_name: displayName.trim(),
         field_type: fieldType,
+        ...(isLookup ? { related_entity_id: relatedEntityId } : {}),
       });
       setName("");
       setDisplayName("");
-      setFieldType("text");
+      setFieldType(initialFieldType);
+      setRelatedEntityId("");
       onClose();
       onCreated();
     } catch (err) {
@@ -61,10 +84,10 @@ export function AddTableFieldModal({
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label={`Add Field to ${entityName}`}
+        aria-label={`${title} — ${entityName}`}
       >
         <header className={shellStyles.header}>
-          <div className={shellStyles.title}>Add Field — {entityName}</div>
+          <div className={shellStyles.title}>{title} — {entityName}</div>
         </header>
         <form className={modalStyles.body} onSubmit={(e) => void handleSubmit(e)}>
           <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
@@ -100,6 +123,26 @@ export function AddTableFieldModal({
               ))}
             </select>
           </label>
+          {isLookup ? (
+            <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
+              Related Table
+              <select
+                style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px" }}
+                value={relatedEntityId}
+                onChange={(e) => setRelatedEntityId(e.target.value)}
+                required
+              >
+                <option value="" disabled>
+                  Select a table…
+                </option>
+                {relatedTables.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.display_name || t.name} ({t.application_name})
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           {error ? (
             <p className={modalStyles.empty} style={{ color: "var(--color-danger)" }}>
               {error}
@@ -113,7 +156,7 @@ export function AddTableFieldModal({
               type="submit"
               className={modalStyles.itemBtn}
               style={{ width: "auto", marginLeft: 8 }}
-              disabled={saving || !name.trim() || !displayName.trim()}
+              disabled={saving || !canSubmit}
             >
               Add
             </button>

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/goapps-platform/shared/auth"
 	"github.com/goapps-platform/shared/response"
@@ -32,6 +33,7 @@ func (s *Service) QueryDataSource(ctx context.Context, tenantID, userID, appID u
 	}
 	query.TenantID = tenantID
 	query.UserID = userID
+	query.EnvironmentID = coalesceEnvironmentID(query.EnvironmentID, ctx)
 
 	key := cacheKey(tenantID, appID, dataSourceName, query)
 	if cache := requestCacheFromContext(ctx); cache != nil {
@@ -99,6 +101,26 @@ func (h *Handler) QueryDataSource(c *fiber.Ctx) error {
 	}
 
 	ctx := WithRequestCache(c.UserContext())
+	hasEnvironment := false
+	if envRaw := strings.TrimSpace(c.Query("environmentId")); envRaw != "" {
+		if envID, err := uuid.Parse(envRaw); err == nil {
+			ctx = WithEnvironmentID(ctx, &envID)
+			hasEnvironment = true
+		}
+	}
+	// Defaults to "draft" (live DB) to preserve prior behavior for callers
+	// that don't pass channel; pass ?channel=published (implied whenever an
+	// environmentId is set) to read frozen connector config from the last
+	// publish snapshot (Phase 7.13).
+	channel := strings.TrimSpace(c.Query("channel"))
+	if channel == "" {
+		if hasEnvironment {
+			channel = "published"
+		} else {
+			channel = "draft"
+		}
+	}
+	ctx = WithChannel(ctx, channel)
 	result, err := h.svc.QueryDataSource(ctx, ac.TenantID, ac.UserID, appID, name, overrides)
 	if err != nil {
 		return mapServiceError(c, err)

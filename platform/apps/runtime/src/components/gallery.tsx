@@ -5,6 +5,7 @@ import {
   useGallerySelectionStore,
 } from "../formula/formula-context";
 import { useResolvedGalleryRecords } from "../hooks/use-resolved-gallery-items";
+import { usePagedRecords } from "../hooks/use-paged-records";
 import {
   firstStringLikeField,
   readItemsFormula,
@@ -20,10 +21,11 @@ const STUDIO_PLACEHOLDER_RECORDS = [{ Name: "Item 1" }, { Name: "Item 2" }];
 export const Gallery: React.FC<{
   name?: string;
   items?: unknown;
+  pageSize?: unknown;
   templateControls?: ControlPackage[];
   disabled?: boolean;
   readOnly?: boolean;
-}> = ({ name, items, templateControls = [], disabled = false }) => {
+}> = ({ name, items, pageSize, templateControls = [], disabled = false }) => {
   const records = useResolvedGalleryRecords(items);
   const selectionStore = useGallerySelectionStore();
   const isStudioCanvas = useIsDesignSurface();
@@ -41,6 +43,10 @@ export const Gallery: React.FC<{
         : [];
 
   const hasTemplate = templateControls.length > 0;
+  const { visibleRecords, hasMore, loadMore } = usePagedRecords(
+    displayRecords,
+    pageSize,
+  );
 
   const handleRowClick = useCallback(
     (record: Record<string, unknown>, index: number) => {
@@ -70,13 +76,20 @@ export const Gallery: React.FC<{
     <div
       style={{
         ...fillParentStyle(),
-        overflow: "auto",
-        border: "1px solid #d0d0d0",
-        borderRadius: 4,
-        padding: 4,
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      {displayRecords.map((record, index) => (
+      <div
+        style={{
+          flex: 1,
+          overflow: "auto",
+          border: "1px solid #d0d0d0",
+          borderRadius: 4,
+          padding: 4,
+        }}
+      >
+      {visibleRecords.map((record, index) => (
         <div
           key={`${index}-${JSON.stringify(record)}`}
           onClick={canSelect ? () => handleRowClick(record, index) : undefined}
@@ -105,6 +118,22 @@ export const Gallery: React.FC<{
           )}
         </div>
       ))}
+      </div>
+      {hasMore ? (
+        <button
+          type="button"
+          onClick={loadMore}
+          style={{
+            marginTop: 4,
+            alignSelf: "flex-start",
+            padding: "4px 10px",
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          Load more
+        </button>
+      ) : null}
     </div>
   );
 };

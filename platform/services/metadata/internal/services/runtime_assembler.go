@@ -10,7 +10,7 @@ import (
 )
 
 // Assemble runtime DTOs from models
-func assembleRuntimeApplication(app *models.Application, screens []models.Screen, controls []models.Control, props []models.ControlProperty, formulas []models.Formula, componentDefs []models.ComponentDefinition, entities []models.Entity, entityFields []models.EntityField) (*contracts.RuntimeApplication, error) {
+func assembleRuntimeApplication(app *models.Application, screens []models.Screen, controls []models.Control, props []models.ControlProperty, formulas []models.Formula, componentDefs []models.ComponentDefinition, entities []models.Entity, entityFields []models.EntityField, connectors []models.Connector, connectorActions []models.ConnectorAction) (*contracts.RuntimeApplication, error) {
 	if app == nil {
 		return nil, fmt.Errorf("assemble runtime application: nil application")
 	}
@@ -88,6 +88,7 @@ func assembleRuntimeApplication(app *models.Application, screens []models.Screen
 	}
 
 	ram.Entities = assembleRuntimeEntities(entities, entityFields)
+	ram.Connectors = assembleRuntimeConnectors(connectors, connectorActions)
 
 	return ram, nil
 }
@@ -105,6 +106,33 @@ func assembleRuntimeEntities(entities []models.Entity, fields []models.EntityFie
 			re.Fields = append(re.Fields, contracts.RuntimeEntityField{Name: f.Name, FieldType: f.FieldType})
 		}
 		out = append(out, re)
+	}
+	return out
+}
+
+// assembleRuntimeConnectors freezes connectors + actions into the runtime
+// package. auth_config is sanitized via redactAuthConfig so publish snapshots
+// (Phase 7.13) never carry plaintext secrets, only secret_id references.
+func assembleRuntimeConnectors(connectors []models.Connector, actions []models.ConnectorAction) []contracts.RuntimeConnector {
+	actionsByConnector := map[string][]models.ConnectorAction{}
+	for _, a := range actions {
+		actionsByConnector[a.ConnectorID.String()] = append(actionsByConnector[a.ConnectorID.String()], a)
+	}
+	out := make([]contracts.RuntimeConnector, 0, len(connectors))
+	for _, c := range connectors {
+		authJSON, _ := redactAuthConfig(c.AuthConfig)
+		rc := contracts.RuntimeConnector{
+			ID:                 c.ID,
+			Name:               c.Name,
+			ConnectorType:      c.ConnectorType,
+			AuthenticationType: c.AuthenticationType,
+			BaseURL:            c.BaseURL,
+			AuthConfig:         authJSON,
+		}
+		for _, a := range actionsByConnector[c.ID.String()] {
+			rc.Actions = append(rc.Actions, contracts.RuntimeConnectorAction{ActionName: a.ActionName, HTTPMethod: a.HTTPMethod, Endpoint: a.Endpoint})
+		}
+		out = append(out, rc)
 	}
 	return out
 }

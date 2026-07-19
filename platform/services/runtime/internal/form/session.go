@@ -29,6 +29,7 @@ type State struct {
 	DirtyFields      map[string]interface{}
 	ValidationErrors []ValidationIssue
 	DataSource       string
+	DataSourceKind   string
 	EntityID         uuid.UUID
 	ItemFormula      string
 	GalleryName      string
@@ -91,6 +92,7 @@ func cloneState(state *State) *State {
 	cloned := &State{
 		Mode:             state.Mode,
 		DataSource:       state.DataSource,
+		DataSourceKind:   state.DataSourceKind,
 		EntityID:         state.EntityID,
 		ItemFormula:      state.ItemFormula,
 		GalleryName:      state.GalleryName,

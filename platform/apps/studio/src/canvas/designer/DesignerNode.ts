@@ -25,7 +25,7 @@ export interface DesignerNode {
   control: Control;
 }
 
-const CONTAINER_TYPES = new Set(["gallery", "form", "component"]);
+const CONTAINER_TYPES = new Set(["gallery", "form", "component", "container"]);
 
 export function isContainerType(controlType: string): boolean {
   return CONTAINER_TYPES.has(controlType.trim().toLowerCase().replace(/_/g, ""));

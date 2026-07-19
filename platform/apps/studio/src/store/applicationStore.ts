@@ -24,6 +24,7 @@ import {
   type ToolboxControlType,
 } from "../control-defaults";
 import { buildPropertiesPayload } from "../utils/control-properties";
+import { resolveFormEntity, buildFormFieldControls } from "../utils/generate-form-fields";
 import { computeLayerUpdates, type LayerAction } from "../utils/layer-actions";
 import {
   computeComponentBounds,
@@ -101,7 +102,15 @@ export interface ApplicationState {
   ) => void;
   applyLayerAction: (controlId: string, action: LayerAction) => void;
   updateScreenOnVisible: (screenId: string, onVisible: string) => void;
-  createControl: (controlType: ToolboxControlType) => void;
+  createControl: (
+    controlType: ToolboxControlType,
+    options?: {
+      parent_control_id?: string | null;
+      x?: number;
+      y?: number;
+    },
+  ) => void;
+  generateFormFields: (formControlId: string) => void;
   deleteControl: (controlId: string) => Promise<void>;
   setControlsFromHistory: (controls: Control[]) => void;
 
@@ -548,7 +557,7 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     useStudioStore.getState().setSaveMessage(null);
   },
 
-  createControl: (controlType) => {
+  createControl: (controlType, options) => {
     const { controls, selectedScreenId } = get();
     if (!selectedScreenId) {
       return;
@@ -557,7 +566,11 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     pushControlHistory(controls);
 
     const defaults = getControlDefaults(controlType);
-    const positionOffset = (controls.length % 5) * 24;
+    const parentId = options?.parent_control_id ?? null;
+    const siblingCount = parentId
+      ? controls.filter((item) => item.parent_control_id === parentId).length
+      : 0;
+    const positionOffset = siblingCount * 24;
     const nextZIndex =
       controls.length > 0
         ? Math.max(...controls.map((control) => control.z_index)) + 1
@@ -567,14 +580,18 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
       id: createLocalControlId(),
       tenant_id: TENANT_ID,
       screen_id: selectedScreenId,
-      parent_control_id: null,
+      parent_control_id: parentId,
       control_type: defaults.control_type,
       name: buildControlName(
         controlType,
         controls.map((item) => item.name),
       ),
-      x: defaults.x + positionOffset,
-      y: defaults.y + positionOffset,
+      x:
+        options?.x ??
+        (parentId ? 12 + positionOffset : defaults.x + (controls.length % 5) * 24),
+      y:
+        options?.y ??
+        (parentId ? 12 + positionOffset : defaults.y + (controls.length % 5) * 24),
       width: defaults.width,
       height: defaults.height,
       z_index: nextZIndex,
@@ -586,6 +603,57 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
 
     set((state) => ({ controls: [...state.controls, control] }));
     useStudioStore.getState().selectControl(control.id);
+    useStudioStore.getState().setDirty(true);
+    useStudioStore.getState().setSaveMessage(null);
+  },
+
+  generateFormFields: (formControlId) => {
+    const { controls, entities, entityFieldsByEntityId } = get();
+    const form = controls.find((item) => item.id === formControlId);
+    if (!form) {
+      return;
+    }
+
+    const entity = resolveFormEntity(form, entities);
+    if (!entity) {
+      return;
+    }
+
+    const fields = entityFieldsByEntityId[entity.id] ?? [];
+    if (fields.length === 0) {
+      return;
+    }
+
+    pushControlHistory(controls);
+
+    const existingNames = controls.map((item) => item.name);
+    let nextZIndex =
+      controls.length > 0
+        ? Math.max(...controls.map((control) => control.z_index)) + 1
+        : 1;
+    const now = new Date().toISOString();
+    const generated = buildFormFieldControls({
+      form,
+      fields,
+      entities,
+      existingNames,
+      nextZIndex,
+      now,
+    });
+
+    const formUpdates: Partial<Control> = {};
+    if (generated.requiredFormHeight > form.height) {
+      formUpdates.height = generated.requiredFormHeight;
+    }
+
+    set((state) => ({
+      controls: [
+        ...state.controls.map((item) =>
+          item.id === formControlId ? { ...item, ...formUpdates } : item,
+        ),
+        ...generated.controls,
+      ],
+    }));
     useStudioStore.getState().setDirty(true);
     useStudioStore.getState().setSaveMessage(null);
   },

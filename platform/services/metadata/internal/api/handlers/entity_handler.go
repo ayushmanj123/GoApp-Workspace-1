@@ -118,8 +118,16 @@ func (h *entityHandler) CreateField(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(api.APIResponse{Success: false, Error: "tenant missing"})
 	}
+	var relatedEntityID *uuid.UUID
+	if req.RelatedEntityID != nil && *req.RelatedEntityID != "" {
+		parsed, err := uuid.Parse(*req.RelatedEntityID)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: "invalid related_entity_id"})
+		}
+		relatedEntityID = &parsed
+	}
 	ctx := context.Background()
-	field, err := h.svc.CreateField(ctx, tid, entityID, req.Name, req.DisplayName, req.FieldType)
+	field, err := h.svc.CreateField(ctx, tid, entityID, req.Name, req.DisplayName, req.FieldType, relatedEntityID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(api.APIResponse{Success: false, Error: err.Error()})
 	}
@@ -170,6 +178,17 @@ func (h *entityHandler) UpdateField(c *fiber.Ctx) error {
 	}
 	if req.FieldType != nil {
 		updates["field_type"] = *req.FieldType
+	}
+	if req.RelatedEntityID != nil {
+		if *req.RelatedEntityID == "" {
+			updates["related_entity_id"] = (*uuid.UUID)(nil)
+		} else {
+			parsed, err := uuid.Parse(*req.RelatedEntityID)
+			if err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: "invalid related_entity_id"})
+			}
+			updates["related_entity_id"] = &parsed
+		}
 	}
 	if len(updates) == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: "no fields to update"})

@@ -3,6 +3,7 @@ package repositories
 
 import (
 	"context"
+	"time"
 
 	"github.com/goapps-platform/metadata-service/internal/models"
 	"github.com/google/uuid"
@@ -38,6 +39,14 @@ type CollectionRepository interface{ TenantRepositoryContract[models.Collection]
 type ConnectorRepository interface{ TenantRepositoryContract[models.Connector] }
 type ConnectorActionRepository interface{ TenantRepositoryContract[models.ConnectorAction] }
 type SecretRepository interface{ TenantRepositoryContract[models.Secret] }
+type EnvironmentSecretOverrideRepository interface {
+	TenantRepositoryContract[models.EnvironmentSecretOverride]
+}
+type ConnectorUserConnectionRepository interface {
+	TenantRepositoryContract[models.ConnectorUserConnection]
+}
+type WorkflowRepository interface{ TenantRepositoryContract[models.Workflow] }
+type WorkflowRunRepository interface{ TenantRepositoryContract[models.WorkflowRun] }
 type PermissionRepository interface{ TenantRepositoryContract[models.Permission] }
 type AuditLogRepository interface{ TenantRepositoryContract[models.AuditLog] }
 type PackageRepository interface{ TenantRepositoryContract[models.Package] }
@@ -68,6 +77,10 @@ type TenantSession interface {
 	Connectors() ConnectorRepository
 	ConnectorActions() ConnectorActionRepository
 	Secrets() SecretRepository
+	EnvironmentSecretOverrides() EnvironmentSecretOverrideRepository
+	ConnectorUserConnections() ConnectorUserConnectionRepository
+	Workflows() WorkflowRepository
+	WorkflowRuns() WorkflowRunRepository
 	Permissions() PermissionRepository
 	AuditLogs() AuditLogRepository
 	Packages() PackageRepository
@@ -84,4 +97,8 @@ type TenantSession interface {
 type Store interface {
 	Tenants() TenantRepository
 	WithTenant(ctx context.Context, tenantID uuid.UUID) TenantSession
+	// FindWorkflowByIDUnscoped loads a workflow by id without tenant JWT (webhook/scheduler).
+	FindWorkflowByIDUnscoped(ctx context.Context, id uuid.UUID) (*models.Workflow, error)
+	// ClaimDueScheduledWorkflows locks due schedule rows, advances next_run_at, returns claimed rows.
+	ClaimDueScheduledWorkflows(ctx context.Context, now time.Time, limit int) ([]models.Workflow, error)
 }

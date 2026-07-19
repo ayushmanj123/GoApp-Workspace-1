@@ -117,10 +117,163 @@ const Timer: ComponentDefinition = {
   renderDesigner: noop,
 };
 
+const Checkbox: ComponentDefinition = {
+  type: "Checkbox",
+  category: "input",
+  properties: makeProps([
+    { name: "text", type: "string", default: "Checkbox" },
+    { name: "checked", type: "boolean", default: false },
+  ]),
+  events: [onChangeEvent],
+  renderRuntime: noop,
+  renderDesigner: noop,
+};
+
+const Toggle: ComponentDefinition = {
+  type: "Toggle",
+  category: "input",
+  properties: makeProps([
+    { name: "text", type: "string", default: "Toggle" },
+    { name: "checked", type: "boolean", default: false },
+  ]),
+  events: [onChangeEvent],
+  renderRuntime: noop,
+  renderDesigner: noop,
+};
+
+const Image: ComponentDefinition = {
+  type: "Image",
+  category: "display",
+  properties: makeProps([
+    { name: "src", type: "string", default: "" },
+    { name: "alt", type: "string", default: "" },
+  ]),
+  events: [],
+  renderRuntime: noop,
+  renderDesigner: noop,
+};
+
+const Icon: ComponentDefinition = {
+  type: "Icon",
+  category: "display",
+  properties: makeProps([
+    { name: "icon", type: "string", default: "star" },
+    { name: "color", type: "string", default: "#333333" },
+  ]),
+  events: [],
+  renderRuntime: noop,
+  renderDesigner: noop,
+};
+
+const DatePicker: ComponentDefinition = {
+  type: "DatePicker",
+  category: "input",
+  properties: makeProps([
+    { name: "value", type: "string", default: "" },
+  ]),
+  events: [onChangeEvent],
+  renderRuntime: noop,
+  renderDesigner: noop,
+};
+
+const shapeFillStroke = [
+  { name: "fill", type: "string", default: "#4A90D9" },
+  { name: "stroke", type: "string", default: "#1a1a1a" },
+  { name: "strokeWidth", type: "number", default: 1 },
+  { name: "opacity", type: "number", default: 1 },
+];
+
+const ShapeRectangle: ComponentDefinition = {
+  type: "ShapeRectangle",
+  category: "display",
+  properties: makeProps(shapeFillStroke),
+  events: [],
+  renderRuntime: noop,
+  renderDesigner: noop,
+};
+
+const ShapeEllipse: ComponentDefinition = {
+  type: "ShapeEllipse",
+  category: "display",
+  properties: makeProps(shapeFillStroke),
+  events: [],
+  renderRuntime: noop,
+  renderDesigner: noop,
+};
+
+const ShapeLine: ComponentDefinition = {
+  type: "ShapeLine",
+  category: "display",
+  properties: makeProps([
+    { name: "stroke", type: "string", default: "#333333" },
+    { name: "strokeWidth", type: "number", default: 2 },
+    { name: "opacity", type: "number", default: 1 },
+  ]),
+  events: [],
+  renderRuntime: noop,
+  renderDesigner: noop,
+};
+
+const ShapeArrow: ComponentDefinition = {
+  type: "ShapeArrow",
+  category: "display",
+  properties: makeProps([
+    { name: "stroke", type: "string", default: "#333333" },
+    { name: "strokeWidth", type: "number", default: 2 },
+    { name: "opacity", type: "number", default: 1 },
+  ]),
+  events: [],
+  renderRuntime: noop,
+  renderDesigner: noop,
+};
+
+const ShapeImage: ComponentDefinition = {
+  type: "ShapeImage",
+  category: "display",
+  properties: makeProps([
+    { name: "src", type: "string", default: "" },
+    { name: "opacity", type: "number", default: 1 },
+  ]),
+  events: [],
+  renderRuntime: noop,
+  renderDesigner: noop,
+};
+
+const ShapeStar: ComponentDefinition = {
+  type: "ShapeStar",
+  category: "display",
+  properties: makeProps([
+    ...shapeFillStroke,
+    { name: "numPoints", type: "number", default: 5 },
+    { name: "innerRadius", type: "number", default: 16 },
+  ]),
+  events: [],
+  renderRuntime: noop,
+  renderDesigner: noop,
+};
+
 // Register v1 components
-[Button, Label, TextInput, Dropdown, Container, Gallery, Form, Timer].forEach(
-  (c) => registry.register(c),
-);
+[
+  Button,
+  Label,
+  TextInput,
+  Dropdown,
+  Container,
+  Gallery,
+  Form,
+  Timer,
+  Checkbox,
+  Toggle,
+  Image,
+  Icon,
+  DatePicker,
+  ShapeRectangle,
+  ShapeEllipse,
+  ShapeLine,
+  ShapeArrow,
+  ShapeImage,
+  ShapeStar,
+].forEach((c) => registry.register(c));
 
 export const V1 = {
   Button,
@@ -131,4 +284,15 @@ export const V1 = {
   Gallery,
   Form,
   Timer,
+  Checkbox,
+  Toggle,
+  Image,
+  Icon,
+  DatePicker,
+  ShapeRectangle,
+  ShapeEllipse,
+  ShapeLine,
+  ShapeArrow,
+  ShapeImage,
+  ShapeStar,
 };

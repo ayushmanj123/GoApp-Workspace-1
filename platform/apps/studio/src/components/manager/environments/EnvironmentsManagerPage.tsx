@@ -7,6 +7,7 @@ import {
 import { Badge, Button, SearchInput } from "../../ui";
 import { CreateEnvironmentModal } from "./CreateEnvironmentModal";
 import { PromoteEnvironmentModal } from "./PromoteEnvironmentModal";
+import { EnvSecretsModal } from "./EnvSecretsModal";
 import styles from "./environments-manager.module.css";
 
 const TYPE_BADGE_CLASS: Record<string, string> = {
@@ -25,6 +26,7 @@ export function EnvironmentsManagerPage() {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [promoteTarget, setPromoteTarget] = useState<EnvironmentRecord | null>(null);
+  const [secretsTarget, setSecretsTarget] = useState<EnvironmentRecord | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
 
   useEffect(() => {
@@ -196,6 +198,14 @@ export function EnvironmentsManagerPage() {
                 <Button
                   variant="secondary"
                   size="sm"
+                  onClick={() => setSecretsTarget(env)}
+                  data-testid={`env-secrets-${env.id}`}
+                >
+                  Secrets
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setPromoteTarget(env)}
                 >
                   Promote
@@ -226,6 +236,12 @@ export function EnvironmentsManagerPage() {
         environment={promoteTarget}
         onClose={() => setPromoteTarget(null)}
         onPromoted={() => void loadEnvironments()}
+      />
+      <EnvSecretsModal
+        open={secretsTarget !== null}
+        applicationId={selectedAppId}
+        environment={secretsTarget}
+        onClose={() => setSecretsTarget(null)}
       />
     </div>
   );

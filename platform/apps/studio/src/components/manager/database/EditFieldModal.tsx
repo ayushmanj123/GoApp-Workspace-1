@@ -4,10 +4,11 @@ import {
   type EntityFieldRecord,
   type EntityFieldType,
 } from "../../../api/entities-api";
+import { useTenantTablesContext } from "./TenantTablesContext";
 import shellStyles from "../../preview/RuntimePreviewModal.module.css";
 import modalStyles from "../../layout/InsertComponentModal.module.css";
 
-const FIELD_TYPES: EntityFieldType[] = ["text", "number", "boolean", "date"];
+const FIELD_TYPES: EntityFieldType[] = ["text", "number", "boolean", "date", "lookup"];
 
 interface EditFieldModalProps {
   open: boolean;
@@ -17,9 +18,11 @@ interface EditFieldModalProps {
 }
 
 export function EditFieldModal({ open, field, onClose, onSaved }: EditFieldModalProps) {
+  const { tables } = useTenantTablesContext();
   const [name, setName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [fieldType, setFieldType] = useState<EntityFieldType>("text");
+  const [relatedEntityId, setRelatedEntityId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,14 +31,20 @@ export function EditFieldModal({ open, field, onClose, onSaved }: EditFieldModal
       setName(field.name);
       setDisplayName(field.display_name);
       setFieldType(field.field_type);
+      setRelatedEntityId(field.related_entity_id ?? "");
     }
   }, [field]);
 
   if (!open || !field) return null;
 
+  const relatedTables = tables.filter((t) => t.id !== field.entity_id);
+  const isLookup = fieldType === "lookup";
+  const canSubmit =
+    name.trim().length > 0 && displayName.trim().length > 0 && (!isLookup || relatedEntityId.length > 0);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !displayName.trim()) return;
+    if (!canSubmit) return;
     setSaving(true);
     setError(null);
     try {
@@ -43,6 +52,7 @@ export function EditFieldModal({ open, field, onClose, onSaved }: EditFieldModal
         name: name.trim(),
         display_name: displayName.trim(),
         field_type: fieldType,
+        related_entity_id: isLookup ? relatedEntityId : "",
       });
       onClose();
       onSaved();
@@ -99,6 +109,26 @@ export function EditFieldModal({ open, field, onClose, onSaved }: EditFieldModal
               ))}
             </select>
           </label>
+          {isLookup ? (
+            <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
+              Related Table
+              <select
+                style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px" }}
+                value={relatedEntityId}
+                onChange={(e) => setRelatedEntityId(e.target.value)}
+                required
+              >
+                <option value="" disabled>
+                  Select a table…
+                </option>
+                {relatedTables.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.display_name || t.name} ({t.application_name})
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           {error ? (
             <p className={modalStyles.empty} style={{ color: "var(--color-danger)" }}>
               {error}
@@ -112,7 +142,7 @@ export function EditFieldModal({ open, field, onClose, onSaved }: EditFieldModal
               type="submit"
               className={modalStyles.itemBtn}
               style={{ width: "auto", marginLeft: 8 }}
-              disabled={saving || !name.trim() || !displayName.trim()}
+              disabled={saving || !canSubmit}
             >
               {saving ? "Saving…" : "Save"}
             </button>

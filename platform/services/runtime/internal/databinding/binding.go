@@ -35,15 +35,15 @@ func requestCacheFromContext(ctx context.Context) *RequestCache {
 
 func cacheKey(tenantID, appID uuid.UUID, dataSourceName string, query QueryInput) string {
 	payload := struct {
-		TenantID       string         `json:"tenantId"`
-		AppID          string         `json:"appId"`
-		DataSource     string         `json:"dataSource"`
-		EntityID       string         `json:"entityId"`
-		Limit          int            `json:"limit"`
-		Offset         int            `json:"offset"`
-		Filters        []EqualsFilter `json:"filters"`
-		OrderBy        string         `json:"orderBy"`
-		OrderDirection string         `json:"orderDirection"`
+		TenantID       string     `json:"tenantId"`
+		AppID          string     `json:"appId"`
+		DataSource     string     `json:"dataSource"`
+		EntityID       string     `json:"entityId"`
+		Limit          int        `json:"limit"`
+		Offset         int        `json:"offset"`
+		FilterExpr     FilterExpr `json:"filterExpr"`
+		OrderBy        string     `json:"orderBy"`
+		OrderDirection string     `json:"orderDirection"`
 	}{
 		TenantID:       tenantID.String(),
 		AppID:          appID.String(),
@@ -51,7 +51,7 @@ func cacheKey(tenantID, appID uuid.UUID, dataSourceName string, query QueryInput
 		EntityID:       query.EntityID.String(),
 		Limit:          query.Limit,
 		Offset:         query.Offset,
-		Filters:        query.Filters,
+		FilterExpr:     query.FilterExpr,
 		OrderBy:        query.OrderBy,
 		OrderDirection: query.OrderDirection,
 	}

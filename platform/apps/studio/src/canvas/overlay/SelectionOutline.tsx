@@ -13,11 +13,33 @@ interface SelectionOutlineProps {
 export function SelectionOutline({ nodes, offset, zoom }: SelectionOutlineProps) {
   const selectedControlIds = useInteractionStore((s) => s.selectedControlIds);
   const hoveredControlId = useInteractionStore((s) => s.hoveredControlId);
+  const dropTargetControlId = useInteractionStore((s) => s.dropTargetControlId);
 
   return (
     <>
+      {dropTargetControlId
+        ? (() => {
+            const node = findDesignerNode(nodes, dropTargetControlId);
+            if (!node) return null;
+            const bounds = toScreenBounds(node.absoluteBounds, offset, zoom);
+            return (
+              <div
+                className={styles.dropTargetOutline}
+                data-testid="drop-target-outline"
+                style={{
+                  left: bounds.left,
+                  top: bounds.top,
+                  width: bounds.width,
+                  height: bounds.height,
+                }}
+              />
+            );
+          })()
+        : null}
+
       {hoveredControlId &&
         !selectedControlIds.includes(hoveredControlId) &&
+        hoveredControlId !== dropTargetControlId &&
         (() => {
           const node = findDesignerNode(nodes, hoveredControlId);
           if (!node) return null;

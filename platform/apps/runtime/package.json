@@ -15,10 +15,8 @@
     "@goapps/formula": "workspace:*",
     "@goapps/sdk": "workspace:*",
     "@goapps/shared": "workspace:*",
-    "konva": "^9.3.16",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-konva": "^18.2.10",
     "react-router-dom": "^6.14.0"
   },
   "devDependencies": {

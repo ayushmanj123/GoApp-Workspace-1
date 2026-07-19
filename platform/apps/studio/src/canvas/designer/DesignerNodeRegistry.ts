@@ -46,7 +46,8 @@ function buildNode(
     children,
     isContainer: container,
     selectable: registrySupported || !treeNode.parent_control_id,
-    draggable: !treeNode.parent_control_id || container,
+    // Nested children are hittable in container-edit; allow drag so they can reparent
+    draggable: registrySupported || !treeNode.parent_control_id || container,
     resizable: !treeNode.parent_control_id || container,
     absoluteBounds,
     control: treeNode,

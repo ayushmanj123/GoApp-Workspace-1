@@ -36,6 +36,16 @@
   pointer-events: none;
 }
 
+.dropTargetOutline {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 2;
+}
+
 .multiOutline {
   border-color: var(--color-primary-hover);
 }

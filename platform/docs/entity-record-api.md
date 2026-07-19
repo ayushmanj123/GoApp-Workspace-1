@@ -98,6 +98,7 @@ Field values must match entity field types:
 | `number` | number | integer or float |
 | `boolean` | boolean | |
 | `date` | string | `YYYY-MM-DD` |
+| `lookup` | string | UUID of a record in the field's `related_entity_id` entity (many-to-one relationship) |
 
 ### List (`GET`)
 
@@ -149,6 +150,20 @@ Before create or update, the runtime service:
 4. Enforces `is_required` fields from `entity_fields` on create and after merge on update.
 5. Validates value types against `field_type`.
 
+## Relationships (lookup fields)
+
+Phase 7.14 adds minimal many-to-one relationships via a `lookup` field type — no separate
+graph/relationship designer. An entity field with `field_type: "lookup"` carries a
+`related_entity_id` (uuid) pointing at another entity in the same tenant. Record values for a
+`lookup` field are the uuid of the related entity's record (validated as a UUID string, not
+resolved/joined by the runtime service).
+
+Metadata service field CRUD (`POST /entities/:entityId/fields`, `PUT /entity-fields/:id`) accepts
+an optional `related_entity_id`, required when `field_type` is `lookup` and cleared automatically
+if the field type changes away from `lookup`. Studio's Database Manager surfaces these as a
+"Relationships" panel on each table (list of lookup fields + related table, and a
+"New relationship" action that creates a lookup field against another table).
+
 ## Storage
 
 Single table `entity_records`:
@@ -164,7 +179,7 @@ Single table `entity_records`:
 | `modified_on` / `modified_by` | | Audit |
 | `deleted_on` / `deleted_by` | | Soft delete |
 
-Migrations live in the metadata service (`000010_entity_records`, `000011_entity_fields_is_required`) because metadata and runtime share one PostgreSQL database.
+Migrations live in the metadata service (`000010_entity_records`, `000011_entity_fields_is_required`, `000018_entity_lookup_fields`) because metadata and runtime share one PostgreSQL database.
 
 ## Optimistic concurrency
 

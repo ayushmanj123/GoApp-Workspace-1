@@ -10,7 +10,7 @@ import {
   expandDefinitionForInstance,
   readComponentDefinitionId,
 } from "../../utils/component-definition";
-import registry from "../../../../../packages/ui/src/registry.component-registry";
+import { renderStudioDesignerPreview } from "./register-designer-renderers";
 import styles from "../../components/canvas/StudioControlRenderer.module.css";
 
 ensureStudioRegistry();
@@ -18,6 +18,30 @@ ensureStudioRegistry();
 interface DesignerNodeRendererProps {
   control: Control;
   selected?: boolean;
+}
+
+function FallbackBox({ label }: { label: string }) {
+  return (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        boxSizing: "border-box",
+        border: "1px solid #c8c8c8",
+        borderRadius: 4,
+        background: "#f0f0f0",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 11,
+        color: "#555",
+        userSelect: "none",
+        pointerEvents: "none",
+      }}
+    >
+      {label}
+    </div>
+  );
 }
 
 export function DesignerNodeRenderer({
@@ -28,29 +52,9 @@ export function DesignerNodeRenderer({
   const componentDefinitions = useApplicationStore((s) => s.componentDefinitions);
 
   const resolvedType = resolveRegistryType(control.control_type);
-  const definition = registry.get(resolvedType);
 
-  if (!supportsStudioRegistryRendering(control.control_type) || !definition) {
-    return (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          boxSizing: "border-box",
-          border: "1px dashed #6c7086",
-          borderRadius: 3,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 11,
-          color: "#6c7086",
-          userSelect: "none",
-          pointerEvents: "none",
-        }}
-      >
-        {control.name || resolvedType}
-      </div>
-    );
+  if (!supportsStudioRegistryRendering(control.control_type)) {
+    return <FallbackBox label={control.name || resolvedType} />;
   }
 
   const props: Record<string, unknown> = { ...(control.properties ?? {}) };
@@ -82,32 +86,17 @@ export function DesignerNodeRenderer({
     }
   }
 
-  const rendered = definition.renderDesigner(props);
-
-  if (rendered === null || rendered === undefined) {
-    return (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          boxSizing: "border-box",
-          border: "1px dashed #6c7086",
-          borderRadius: 3,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 11,
-          color: "#6c7086",
-          userSelect: "none",
-          pointerEvents: "none",
-        }}
-      >
-        {control.name || resolvedType}
-      </div>
-    );
+  if (normalizeControlType(control.control_type) === "container") {
+    props.templateControls = allControls
+      .filter((item) => item.parent_control_id === control.id)
+      .map((item) => ({ ...item, children: [] }));
   }
 
-  return (
-    <div className={styles.host}>{rendered}</div>
-  );
+  const rendered = renderStudioDesignerPreview(resolvedType, props);
+
+  if (rendered === null || rendered === undefined) {
+    return <FallbackBox label={control.name || resolvedType} />;
+  }
+
+  return <div className={styles.host}>{rendered}</div>;
 }

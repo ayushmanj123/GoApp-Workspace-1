@@ -2,8 +2,11 @@ package kernel
 
 import (
 	"context"
+	"errors"
+	"log"
 	"strings"
 
+	"github.com/goapps-platform/runtime-service/internal/databinding"
 	"github.com/goapps-platform/runtime-service/internal/gallery"
 	"github.com/goapps-platform/runtime-service/internal/reactive"
 	"github.com/google/uuid"
@@ -69,7 +72,7 @@ func (k *RuntimeKernel) galleryControl(sessionID uuid.UUID, controlID string) (*
 	if !ok {
 		return nil, RuntimeControl{}, ErrControlNotFound
 	}
-	if !gallery.IsGalleryControl(control.ControlType) {
+	if !gallery.IsItemsControl(control.ControlType) {
 		return nil, RuntimeControl{}, ErrControlNotFound
 	}
 	return session, control, nil
@@ -79,15 +82,21 @@ func (k *RuntimeKernel) loadScreenGalleries(ctx context.Context, session *Runtim
 	if k == nil || k.registry == nil || k.registry.Gallery == nil || session == nil || session.Package == nil {
 		return nil
 	}
+	ctx = databinding.WithEnvironmentID(ctx, session.EnvironmentID)
 	screenName = strings.TrimSpace(screenName)
 	for _, control := range uniqueControls(session.Package) {
-		if !gallery.IsGalleryControl(control.ControlType) {
+		if !gallery.IsItemsControl(control.ControlType) {
 			continue
 		}
 		if screenName != "" && !strings.EqualFold(control.Screen, screenName) {
 			continue
 		}
 		if _, err := k.registry.Gallery.Load(ctx, session.ID, session.TenantID, session.UserID, session.AppID, toGalleryControl(session, control)); err != nil {
+			if errors.Is(err, databinding.ErrConnectorUserOAuthRequired) ||
+				strings.Contains(err.Error(), databinding.ErrConnectorUserOAuthRequired.Error()) {
+				log.Printf("kernel: gallery %s waiting for per-user oauth: %v", control.Name, err)
+				continue
+			}
 			return err
 		}
 	}
@@ -148,7 +157,7 @@ func toGalleryControl(session *RuntimeSession, control RuntimeControl) gallery.C
 func galleryControlsForPackage(pkg *Package) []gallery.ControlMetadata {
 	controls := make([]gallery.ControlMetadata, 0)
 	for _, control := range uniqueControls(pkg) {
-		if !gallery.IsGalleryControl(control.ControlType) {
+		if !gallery.IsItemsControl(control.ControlType) {
 			continue
 		}
 		controls = append(controls, toGalleryControl(&RuntimeSession{Package: pkg}, control))

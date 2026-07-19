@@ -1,10 +1,13 @@
 package formula
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/goapps-platform/runtime-service/internal/databinding"
+	"github.com/google/uuid"
 )
 
 // Dispatcher routes formulas to runtime function handlers.
@@ -39,6 +42,8 @@ func (d *Dispatcher) Dispatch(rtCtx *RuntimeFormulaContext, formula string) (any
 		return d.execUpdateContext(rtCtx, trimmed)
 	case strings.HasPrefix(strings.ToUpper(trimmed), "PATCH("):
 		return d.execPatch(rtCtx, trimmed)
+	case strings.HasPrefix(strings.ToUpper(trimmed), "REMOVE("):
+		return d.execRemove(rtCtx, trimmed)
 	case strings.HasPrefix(strings.ToUpper(trimmed), "DEFAULTS("):
 		return d.execDefaults(rtCtx, trimmed)
 	case strings.HasPrefix(strings.ToUpper(trimmed), "CLEAR("):
@@ -51,6 +56,10 @@ func (d *Dispatcher) Dispatch(rtCtx *RuntimeFormulaContext, formula string) (any
 		return d.execCountRows(rtCtx, trimmed)
 	case strings.HasPrefix(strings.ToUpper(trimmed), "NAVIGATE("):
 		return d.execNavigate(rtCtx, trimmed)
+	case strings.HasPrefix(strings.ToUpper(trimmed), "LOOKUP("):
+		return d.execLookUp(rtCtx, trimmed)
+	case strings.HasPrefix(strings.ToUpper(trimmed), "FILTER("):
+		return d.execFilter(rtCtx, trimmed)
 	case strings.HasPrefix(strings.ToUpper(trimmed), "SUBMITFORM("):
 		return d.execSubmitForm(rtCtx, trimmed)
 	case strings.HasPrefix(strings.ToUpper(trimmed), "RESETFORM("):
@@ -309,15 +318,17 @@ func (d *Dispatcher) execPatch(rtCtx *RuntimeFormulaContext, formula string) (an
 			return nil, newFormulaError("INVALID_FORMULA", "invalid recordId in Patch()", nil)
 		}
 		version := 0
-		switch typed := record["version"].(type) {
-		case float64:
-			version = int(typed)
-		case int:
-			version = typed
-		case int64:
-			version = int(typed)
-		default:
-			return nil, newFormulaError("INVALID_FORMULA", "version is required for Patch() updates", nil)
+		if raw, hasVersion := record["version"]; hasVersion {
+			switch typed := raw.(type) {
+			case float64:
+				version = int(typed)
+			case int:
+				version = typed
+			case int64:
+				version = int(typed)
+			default:
+				return nil, newFormulaError("INVALID_FORMULA", "version is required for Patch() updates", nil)
+			}
 		}
 		item, updateErr := source.Update(rtCtx.Ctx, rtCtx.User.TenantID, rtCtx.User.UserID, key, recordID, patch, version)
 		if updateErr != nil {
@@ -341,6 +352,147 @@ func (d *Dispatcher) execPatch(rtCtx *RuntimeFormulaContext, formula string) (an
 	return result, nil
 }
 
+func (d *Dispatcher) execRemove(rtCtx *RuntimeFormulaContext, formula string) (any, error) {
+	dataSource, secondArg, ok := parseTwoArgCall(formula, "Remove")
+	if !ok {
+		return nil, newFormulaError("INVALID_FORMULA", "invalid Remove() formula", nil)
+	}
+	if rtCtx.Resolver == nil || rtCtx.DataSources == nil {
+		return nil, newFormulaError("RUNTIME_ERROR", "data services are unavailable", nil)
+	}
+
+	binding, _, err := rtCtx.Resolver.Resolve(rtCtx.Ctx, rtCtx.User.TenantID, rtCtx.App.AppID, dataSource, databinding.QueryOverrides{})
+	if err != nil {
+		if errors.Is(err, databinding.ErrDataSourceNotFound) {
+			return nil, newFormulaError("DATASOURCE_NOT_FOUND", err.Error(), nil)
+		}
+		return nil, newFormulaError("RUNTIME_ERROR", err.Error(), nil)
+	}
+
+	source, err := rtCtx.DataSources.ForKind(binding.Kind)
+	if err != nil {
+		return nil, newFormulaError("RUNTIME_ERROR", err.Error(), nil)
+	}
+	key := databinding.DataSourceKey{Kind: binding.Kind, EntityID: binding.EntityID}
+
+	if binding.Kind == databinding.DataSourceKindStorage {
+		deleter, ok := source.(interface {
+			DeleteByObjectKey(ctx context.Context, tenantID, userID uuid.UUID, key databinding.DataSourceKey, objectKey string) error
+		})
+		if !ok {
+			return nil, newFormulaError("RUNTIME_ERROR", "storage delete is unavailable", nil)
+		}
+		objectKey, keyErr := resolveRemoveObjectKey(d, rtCtx, secondArg)
+		if keyErr != nil {
+			return nil, keyErr
+		}
+		if delErr := deleter.DeleteByObjectKey(rtCtx.Ctx, rtCtx.User.TenantID, rtCtx.User.UserID, key, objectKey); delErr != nil {
+			return nil, mapRuntimeDataError(delErr)
+		}
+	} else {
+		recordID, idErr := resolveRemoveRecordID(d, rtCtx, secondArg)
+		if idErr != nil {
+			return nil, idErr
+		}
+		if delErr := source.Delete(rtCtx.Ctx, rtCtx.User.TenantID, rtCtx.User.UserID, key, recordID); delErr != nil {
+			return nil, mapRuntimeDataError(delErr)
+		}
+	}
+
+	if rtCtx.Events != nil {
+		rtCtx.RecordRefresh(rtCtx.Events.DatasourceChanged(rtCtx.Session.SessionID, rtCtx.App.AppID, dataSource))
+	}
+	return true, nil
+}
+
+func resolveRemoveRecordID(d *Dispatcher, rtCtx *RuntimeFormulaContext, secondArg string) (uuid.UUID, error) {
+	trimmed := strings.TrimSpace(secondArg)
+	if strings.HasPrefix(trimmed, "{") {
+		record, err := parseRecordObject(trimmed)
+		if err != nil {
+			return uuid.Nil, err
+		}
+		return recordIDFromMap(record)
+	}
+	value, err := d.evaluator.evaluate(rtCtx, trimmed)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	switch typed := value.(type) {
+	case string:
+		return parseUUID(strings.TrimSpace(typed))
+	case map[string]interface{}:
+		return recordIDFromMap(typed)
+	case databinding.DataItem:
+		return recordIDFromMap(map[string]interface{}(typed))
+	default:
+		return uuid.Nil, newFormulaError("INVALID_FORMULA", "Remove() second argument must be a recordId or record", nil)
+	}
+}
+
+func recordIDFromMap(record map[string]interface{}) (uuid.UUID, error) {
+	if record == nil {
+		return uuid.Nil, newFormulaError("INVALID_FORMULA", "Remove() requires a recordId", nil)
+	}
+	for _, field := range []string{"recordId", "id"} {
+		if raw, ok := record[field]; ok && raw != nil {
+			text := strings.TrimSpace(fmt.Sprint(raw))
+			if text == "" {
+				continue
+			}
+			id, err := parseUUID(text)
+			if err != nil {
+				continue
+			}
+			return id, nil
+		}
+	}
+	return uuid.Nil, newFormulaError("INVALID_FORMULA", "Remove() record must include recordId", nil)
+}
+
+func resolveRemoveObjectKey(d *Dispatcher, rtCtx *RuntimeFormulaContext, secondArg string) (string, error) {
+	trimmed := strings.TrimSpace(secondArg)
+	if strings.HasPrefix(trimmed, "{") {
+		record, err := parseRecordObject(trimmed)
+		if err != nil {
+			return "", err
+		}
+		return objectKeyFromRecord(record)
+	}
+	value, err := d.evaluator.evaluate(rtCtx, trimmed)
+	if err != nil {
+		return "", err
+	}
+	switch typed := value.(type) {
+	case string:
+		if strings.TrimSpace(typed) == "" {
+			return "", newFormulaError("INVALID_FORMULA", "Remove() requires an object key", nil)
+		}
+		return strings.TrimSpace(typed), nil
+	case map[string]interface{}:
+		return objectKeyFromRecord(typed)
+	case databinding.DataItem:
+		return objectKeyFromRecord(map[string]interface{}(typed))
+	default:
+		return "", newFormulaError("INVALID_FORMULA", "Remove() second argument must be a key or record", nil)
+	}
+}
+
+func objectKeyFromRecord(record map[string]interface{}) (string, error) {
+	if record == nil {
+		return "", newFormulaError("INVALID_FORMULA", "Remove() requires an object key", nil)
+	}
+	for _, field := range []string{"key", "id"} {
+		if raw, ok := record[field]; ok && raw != nil {
+			key := strings.TrimSpace(fmt.Sprint(raw))
+			if key != "" {
+				return key, nil
+			}
+		}
+	}
+	return "", newFormulaError("INVALID_FORMULA", "Remove() record must include key or id", nil)
+}
+
 func (d *Dispatcher) execNavigate(rtCtx *RuntimeFormulaContext, formula string) (any, error) {
 	screen, ok := parseSingleIdentifierCall(formula, "Navigate")
 	if !ok {
@@ -357,6 +509,98 @@ func (d *Dispatcher) execNavigate(rtCtx *RuntimeFormulaContext, formula string) 
 		return nil, newFormulaError("NAVIGATION_NOT_IMPLEMENTED", err.Error(), nil)
 	}
 	return true, nil
+}
+
+func (d *Dispatcher) execLookUp(rtCtx *RuntimeFormulaContext, formula string) (any, error) {
+	dataSource, predicate, ok := parseTwoArgCall(formula, "LookUp")
+	if !ok {
+		return nil, newFormulaError("INVALID_FORMULA", "invalid LookUp() formula", nil)
+	}
+	if rtCtx.Resolver == nil || rtCtx.DataSources == nil {
+		return nil, newFormulaError("RUNTIME_ERROR", "data services are unavailable", nil)
+	}
+	expr, err := databinding.ParseFilterExpr(predicate)
+	if err != nil {
+		return nil, newFormulaError("INVALID_FORMULA", err.Error(), nil)
+	}
+	if expr.Empty() {
+		return nil, newFormulaError("INVALID_FORMULA", "LookUp() requires a predicate", nil)
+	}
+
+	binding, query, err := rtCtx.Resolver.Resolve(rtCtx.Ctx, rtCtx.User.TenantID, rtCtx.App.AppID, dataSource, databinding.QueryOverrides{
+		Filter: predicate,
+		Limit:  1,
+	})
+	if err != nil {
+		if errors.Is(err, databinding.ErrDataSourceNotFound) {
+			return nil, newFormulaError("DATASOURCE_NOT_FOUND", err.Error(), nil)
+		}
+		return nil, mapRuntimeDataError(err)
+	}
+	query.TenantID = rtCtx.User.TenantID
+	query.UserID = rtCtx.User.UserID
+	query.Limit = 1
+	query.FilterExpr = expr
+
+	source, err := rtCtx.DataSources.ForKind(binding.Kind)
+	if err != nil {
+		return nil, newFormulaError("RUNTIME_ERROR", err.Error(), nil)
+	}
+	result, err := source.Query(rtCtx.Ctx, query)
+	if err != nil {
+		return nil, mapRuntimeDataError(err)
+	}
+	if result == nil || len(result.Items) == 0 {
+		return nil, nil
+	}
+	return dereferenceDataItem(&result.Items[0]), nil
+}
+
+func (d *Dispatcher) execFilter(rtCtx *RuntimeFormulaContext, formula string) (any, error) {
+	dataSource, predicate, ok := parseTwoArgCall(formula, "Filter")
+	if !ok {
+		return nil, newFormulaError("INVALID_FORMULA", "invalid Filter() formula", nil)
+	}
+	if rtCtx.Resolver == nil || rtCtx.DataSources == nil {
+		return nil, newFormulaError("RUNTIME_ERROR", "data services are unavailable", nil)
+	}
+	expr, err := databinding.ParseFilterExpr(predicate)
+	if err != nil {
+		return nil, newFormulaError("INVALID_FORMULA", err.Error(), nil)
+	}
+	if expr.Empty() {
+		return nil, newFormulaError("INVALID_FORMULA", "Filter() requires a predicate", nil)
+	}
+
+	binding, query, err := rtCtx.Resolver.Resolve(rtCtx.Ctx, rtCtx.User.TenantID, rtCtx.App.AppID, dataSource, databinding.QueryOverrides{
+		Filter: predicate,
+	})
+	if err != nil {
+		if errors.Is(err, databinding.ErrDataSourceNotFound) {
+			return nil, newFormulaError("DATASOURCE_NOT_FOUND", err.Error(), nil)
+		}
+		return nil, mapRuntimeDataError(err)
+	}
+	query.TenantID = rtCtx.User.TenantID
+	query.UserID = rtCtx.User.UserID
+	query.FilterExpr = expr
+
+	source, err := rtCtx.DataSources.ForKind(binding.Kind)
+	if err != nil {
+		return nil, newFormulaError("RUNTIME_ERROR", err.Error(), nil)
+	}
+	result, err := source.Query(rtCtx.Ctx, query)
+	if err != nil {
+		return nil, mapRuntimeDataError(err)
+	}
+	if result == nil || len(result.Items) == 0 {
+		return []any{}, nil
+	}
+	rows := make([]any, 0, len(result.Items))
+	for i := range result.Items {
+		rows = append(rows, dereferenceDataItem(&result.Items[i]))
+	}
+	return rows, nil
 }
 
 func (d *Dispatcher) execSubmitForm(rtCtx *RuntimeFormulaContext, formula string) (any, error) {

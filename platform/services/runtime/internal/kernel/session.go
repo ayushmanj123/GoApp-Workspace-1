@@ -59,6 +59,7 @@ type RuntimeSession struct {
 	TenantID      uuid.UUID
 	UserID        uuid.UUID
 	Channel       string
+	EnvironmentID *uuid.UUID
 	Package       *Package
 	State         state.FormulaStateManager
 	CurrentScreen string
@@ -76,9 +77,10 @@ func (s *RuntimeSession) Touch() {
 
 // StartSessionRequest starts a new runtime session.
 type StartSessionRequest struct {
-	AppID   uuid.UUID `json:"appId"`
-	Channel string    `json:"channel,omitempty"`
-	Screen  string    `json:"screen,omitempty"`
+	AppID         uuid.UUID  `json:"appId"`
+	Channel       string     `json:"channel,omitempty"`
+	Screen        string     `json:"screen,omitempty"`
+	EnvironmentID *uuid.UUID `json:"environmentId,omitempty"`
 }
 
 // StartSessionResponse is returned when a runtime session is created.

@@ -204,6 +204,34 @@ type Secret struct {
 
 func (Secret) TableName() string { return "secrets" }
 
+// EnvironmentSecretOverride stores an env-specific ciphertext for a base secret.
+type EnvironmentSecretOverride struct {
+	ID            uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	TenantID      uuid.UUID      `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
+	EnvironmentID uuid.UUID      `gorm:"column:environment_id;type:uuid;not null;index" json:"environment_id"`
+	BaseSecretID  uuid.UUID      `gorm:"column:base_secret_id;type:uuid;not null;index" json:"base_secret_id"`
+	Ciphertext    []byte         `gorm:"column:ciphertext;type:bytea;not null" json:"-"`
+	Nonce         []byte         `gorm:"column:nonce;type:bytea;not null" json:"-"`
+	DeletedAt     gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
+	AuditFields
+}
+
+func (EnvironmentSecretOverride) TableName() string { return "environment_secret_overrides" }
+
+// ConnectorUserConnection stores a per-user OAuth refresh secret for a connector
+// when auth_config.connection_scope is "user".
+type ConnectorUserConnection struct {
+	ID              uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	TenantID        uuid.UUID      `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
+	ConnectorID     uuid.UUID      `gorm:"column:connector_id;type:uuid;not null;index" json:"connector_id"`
+	UserID          uuid.UUID      `gorm:"column:user_id;type:uuid;not null;index" json:"user_id"`
+	RefreshSecretID uuid.UUID      `gorm:"column:refresh_secret_id;type:uuid;not null" json:"refresh_secret_id"`
+	DeletedAt       gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
+	AuditFields
+}
+
+func (ConnectorUserConnection) TableName() string { return "connector_user_connections" }
+
 type ConnectorAction struct {
 	ID          uuid.UUID `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
 	TenantID    uuid.UUID `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
@@ -215,6 +243,44 @@ type ConnectorAction struct {
 }
 
 func (ConnectorAction) TableName() string { return "connector_actions" }
+
+// Workflow is an app-scoped automation definition (Phase 7.23+).
+type Workflow struct {
+	ID                uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey;uniqueIndex:ux_workflows_tenant_id_id" json:"id"`
+	TenantID          uuid.UUID      `gorm:"column:tenant_id;type:uuid;not null;index;uniqueIndex:ux_workflows_tenant_id_id" json:"tenant_id"`
+	ApplicationID     uuid.UUID      `gorm:"column:application_id;type:uuid;not null;index" json:"application_id"`
+	Name              string         `gorm:"column:name;not null" json:"name"`
+	Definition        datatypes.JSON `gorm:"column:definition;type:jsonb;not null;default:'{}'" json:"definition"`
+	TriggerType       string         `gorm:"column:trigger_type;not null;default:manual" json:"trigger_type"`
+	ScheduleCron      *string        `gorm:"column:schedule_cron" json:"schedule_cron,omitempty"`
+	ScheduleTimezone  *string        `gorm:"column:schedule_timezone" json:"schedule_timezone,omitempty"`
+	ScheduleEnabled   bool           `gorm:"column:schedule_enabled;not null;default:false" json:"schedule_enabled"`
+	ScheduleNextRunAt *time.Time     `gorm:"column:schedule_next_run_at" json:"schedule_next_run_at,omitempty"`
+	WebhookEnabled    bool           `gorm:"column:webhook_enabled;not null;default:false" json:"webhook_enabled"`
+	WebhookSecretID   *uuid.UUID     `gorm:"column:webhook_secret_id;type:uuid" json:"webhook_secret_id,omitempty"`
+	DeletedAt         gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
+	AuditFields
+}
+
+func (Workflow) TableName() string { return "workflows" }
+
+// WorkflowRun is a single execution of a workflow.
+type WorkflowRun struct {
+	ID             uuid.UUID       `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	TenantID       uuid.UUID       `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
+	WorkflowID     uuid.UUID       `gorm:"column:workflow_id;type:uuid;not null;index" json:"workflow_id"`
+	Status         string          `gorm:"column:status;not null" json:"status"`
+	TriggerSource  string          `gorm:"column:trigger_source;not null;default:manual" json:"trigger_source"`
+	TriggerPayload datatypes.JSON  `gorm:"column:trigger_payload;type:jsonb" json:"trigger_payload,omitempty"`
+	TriggeredBy    *uuid.UUID      `gorm:"column:triggered_by;type:uuid" json:"triggered_by,omitempty"`
+	StartedOn      time.Time       `gorm:"column:started_on;not null" json:"started_on"`
+	FinishedOn     *time.Time      `gorm:"column:finished_on" json:"finished_on,omitempty"`
+	Result         datatypes.JSON  `gorm:"column:result;type:jsonb;not null;default:'{}'" json:"result"`
+	DeletedAt      gorm.DeletedAt  `gorm:"column:deleted_at;index" json:"deleted_at"`
+	AuditFields
+}
+
+func (WorkflowRun) TableName() string { return "workflow_runs" }
 
 type Permission struct {
 	ID             uuid.UUID `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
@@ -285,14 +351,15 @@ type Entity struct {
 func (Entity) TableName() string { return "entities" }
 
 type EntityField struct {
-	ID          uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
-	TenantID    uuid.UUID      `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
-	EntityID    uuid.UUID      `gorm:"column:entity_id;type:uuid;not null;index" json:"entity_id"`
-	Name        string         `gorm:"column:name;not null" json:"name"`
-	DisplayName string         `gorm:"column:display_name;not null" json:"display_name"`
-	FieldType   string         `gorm:"column:field_type;not null" json:"field_type"`
-	IsRequired  bool           `gorm:"column:is_required;not null;default:false" json:"is_required"`
-	DeletedAt   gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
+	ID              uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	TenantID        uuid.UUID      `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
+	EntityID        uuid.UUID      `gorm:"column:entity_id;type:uuid;not null;index" json:"entity_id"`
+	Name            string         `gorm:"column:name;not null" json:"name"`
+	DisplayName     string         `gorm:"column:display_name;not null" json:"display_name"`
+	FieldType       string         `gorm:"column:field_type;not null" json:"field_type"`
+	IsRequired      bool           `gorm:"column:is_required;not null;default:false" json:"is_required"`
+	RelatedEntityID *uuid.UUID     `gorm:"column:related_entity_id;type:uuid" json:"related_entity_id,omitempty"`
+	DeletedAt       gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
 	AuditFields
 }
 

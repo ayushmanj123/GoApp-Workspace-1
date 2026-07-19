@@ -31,9 +31,11 @@ export function CreateConnectorModal({
   const [table, setTable] = useState("");
   const [primaryKey, setPrimaryKey] = useState("id");
   const [tokenUrl, setTokenUrl] = useState("");
+  const [authorizationUrl, setAuthorizationUrl] = useState("");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [scope, setScope] = useState("");
+  const [connectionScope, setConnectionScope] = useState<"app" | "user">("app");
   const [endpoint, setEndpoint] = useState("localhost:9000");
   const [bucket, setBucket] = useState("");
   const [accessKeyId, setAccessKeyId] = useState("");
@@ -56,9 +58,11 @@ export function CreateConnectorModal({
     setTable("");
     setPrimaryKey("id");
     setTokenUrl("");
+    setAuthorizationUrl("");
     setClientId("");
     setClientSecret("");
     setScope("");
+    setConnectionScope("app");
     setEndpoint("localhost:9000");
     setBucket("");
     setAccessKeyId("");
@@ -116,6 +120,17 @@ export function CreateConnectorModal({
           client_secret: clientSecret.trim(),
           ...(scope.trim() ? { scope: scope.trim() } : {}),
         };
+      } else if (authType === "oauth_authorization_code") {
+        authentication_type = "oauth_authorization_code";
+        auth_config = {
+          type: "oauth_authorization_code",
+          authorization_url: authorizationUrl.trim(),
+          token_url: tokenUrl.trim(),
+          client_id: clientId.trim(),
+          client_secret: clientSecret.trim(),
+          connection_scope: connectionScope,
+          ...(scope.trim() ? { scope: scope.trim() } : {}),
+        };
       }
 
       const connector = await connectorsApi.create(applicationId, {
@@ -148,7 +163,12 @@ export function CreateConnectorModal({
           ? !!headerValue.trim()
           : authType === "oauth_client_credentials"
             ? !!tokenUrl.trim() && !!clientId.trim() && !!clientSecret.trim()
-            : true);
+            : authType === "oauth_authorization_code"
+              ? !!authorizationUrl.trim() &&
+                !!tokenUrl.trim() &&
+                !!clientId.trim() &&
+                !!clientSecret.trim()
+              : true);
 
   return (
     <div className={shellStyles.overlay} onMouseDown={onClose}>
@@ -312,6 +332,7 @@ export function CreateConnectorModal({
                   <option value="none">None</option>
                   <option value="header">Static header</option>
                   <option value="oauth_client_credentials">OAuth client credentials</option>
+                  <option value="oauth_authorization_code">OAuth authorization code</option>
                 </select>
               </label>
               {authType === "header" ? (
@@ -338,8 +359,21 @@ export function CreateConnectorModal({
                   </label>
                 </>
               ) : null}
-              {authType === "oauth_client_credentials" ? (
+              {authType === "oauth_client_credentials" ||
+              authType === "oauth_authorization_code" ? (
                 <>
+                  {authType === "oauth_authorization_code" ? (
+                    <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
+                      Authorization URL
+                      <input
+                        style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px" }}
+                        value={authorizationUrl}
+                        onChange={(e) => setAuthorizationUrl(e.target.value)}
+                        placeholder="https://idp.example.com/oauth/authorize"
+                        required
+                      />
+                    </label>
+                  ) : null}
                   <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
                     Token URL
                     <input
@@ -378,6 +412,29 @@ export function CreateConnectorModal({
                       onChange={(e) => setScope(e.target.value)}
                     />
                   </label>
+                  {authType === "oauth_authorization_code" ? (
+                    <>
+                      <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
+                        Connection scope
+                        <select
+                          style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px" }}
+                          value={connectionScope}
+                          onChange={(e) =>
+                            setConnectionScope(e.target.value === "user" ? "user" : "app")
+                          }
+                          data-testid="connector-create-connection-scope"
+                        >
+                          <option value="app">App (shared — Connect once in Studio)</option>
+                          <option value="user">Per-user (each runtime user Connects)</option>
+                        </select>
+                      </label>
+                      <p style={{ fontSize: 11, color: "#666", marginTop: 0 }}>
+                        {connectionScope === "user"
+                          ? "After create, runtime users will be prompted to Connect. You can also Connect as yourself on the detail page for testing."
+                          : "After create, open the connector and click Connect to authorize the app-level account."}
+                      </p>
+                    </>
+                  ) : null}
                 </>
               ) : null}
             </>

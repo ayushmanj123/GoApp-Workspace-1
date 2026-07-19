@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import type { ControlPackage } from "../../../../../runtime/src/runtime-types";
-import { readDesignerDisplay } from "../designer-display";
 import type { Control } from "../../../api/controls-api";
 
 const boxStyle: React.CSSProperties = {
@@ -12,12 +11,11 @@ const boxStyle: React.CSSProperties = {
   border: "1px solid #d0d0d0",
   borderRadius: 4,
   padding: 4,
+  background: "#ffffff",
 };
 
 export function DesignerGallery({
-  items,
   templateControls = [],
-  selected,
   renderChild,
 }: {
   items?: unknown;
@@ -25,19 +23,10 @@ export function DesignerGallery({
   selected?: boolean;
   renderChild?: (control: Control) => ReactNode;
 }) {
-  const itemsLabel = readDesignerDisplay(items, "Items");
   const rows = ["Item 1", "Item 2"];
 
   return (
-    <div
-      style={{
-        ...boxStyle,
-        outline: selected ? "2px solid #89b4fa" : undefined,
-      }}
-    >
-      <div style={{ fontSize: 10, color: "#6c7086", marginBottom: 4 }}>
-        Gallery — {itemsLabel}
-      </div>
+    <div style={boxStyle}>
       {rows.map((row, index) => (
         <div
           key={row}
@@ -65,7 +54,7 @@ export function DesignerGallery({
               </div>
             ))
           ) : (
-            <span style={{ fontSize: 12 }}>{row}</span>
+            <span style={{ fontSize: 12, color: "#333" }}>{row}</span>
           )}
         </div>
       ))}
@@ -73,11 +62,70 @@ export function DesignerGallery({
   );
 }
 
+export function DesignerDataTable({
+  items: _items,
+  pageSize: _pageSize,
+}: {
+  items?: unknown;
+  pageSize?: unknown;
+  selected?: boolean;
+}) {
+  const rows = [
+    { Name: "Alice", Status: "Active" },
+    { Name: "Bob", Status: "Pending" },
+  ];
+  const columns = ["Name", "Status"];
+
+  return (
+    <div style={boxStyle}>
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          fontSize: 11,
+        }}
+      >
+        <thead>
+          <tr>
+            {columns.map((column) => (
+              <th
+                key={column}
+                style={{
+                  textAlign: "left",
+                  padding: "4px 6px",
+                  borderBottom: "1px solid #ddd",
+                  background: "#f5f5f5",
+                }}
+              >
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.Name}>
+              {columns.map((column) => (
+                <td
+                  key={column}
+                  style={{
+                    padding: "4px 6px",
+                    borderBottom: "1px solid #eee",
+                  }}
+                >
+                  {String(row[column as keyof typeof row] ?? "")}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function DesignerForm({
-  item,
-  mode,
   templateControls = [],
-  selected,
   renderChild,
 }: {
   item?: unknown;
@@ -86,34 +134,40 @@ export function DesignerForm({
   selected?: boolean;
   renderChild?: (control: Control) => ReactNode;
 }) {
-  const itemLabel = readDesignerDisplay(item, "Item");
-  const modeLabel = readDesignerDisplay(mode, "View");
-
   return (
-    <div
-      style={{
-        ...boxStyle,
-        outline: selected ? "2px solid #89b4fa" : undefined,
-      }}
-    >
-      <div style={{ fontSize: 10, color: "#6c7086", marginBottom: 4 }}>
-        Form — {itemLabel} ({modeLabel})
-      </div>
+    <div style={boxStyle}>
       <div style={{ position: "relative", minHeight: 48 }}>
-        {templateControls.map((control) => (
+        {templateControls.length === 0 ? (
           <div
-            key={control.id}
             style={{
-              position: "absolute",
-              left: control.x,
-              top: control.y,
-              width: control.width,
-              height: control.height,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: 48,
+              padding: 8,
+              fontSize: 11,
+              color: "#888",
+              textAlign: "center",
             }}
           >
-            {renderChild ? renderChild(control as Control) : null}
+            Drop fields or Generate fields
           </div>
-        ))}
+        ) : (
+          templateControls.map((control) => (
+            <div
+              key={control.id}
+              style={{
+                position: "absolute",
+                left: control.x,
+                top: control.y,
+                width: control.width,
+                height: control.height,
+              }}
+            >
+              {renderChild ? renderChild(control as Control) : null}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
@@ -121,7 +175,6 @@ export function DesignerForm({
 
 export function DesignerComponent({
   templateControls = [],
-  selected,
   renderChild,
 }: {
   templateControls?: ControlPackage[] | Control[];
@@ -136,7 +189,6 @@ export function DesignerComponent({
         width: "100%",
         height: "100%",
         minHeight: 24,
-        outline: selected ? "2px solid #89b4fa" : undefined,
       }}
     >
       {templateControls.map((control) => (
@@ -153,6 +205,49 @@ export function DesignerComponent({
           {renderChild ? renderChild(control as Control) : null}
         </div>
       ))}
+    </div>
+  );
+}
+
+export function DesignerContainer({
+  templateControls = [],
+  renderChild,
+  direction,
+}: {
+  direction?: unknown;
+  templateControls?: ControlPackage[] | Control[];
+  selected?: boolean;
+  renderChild?: (control: Control) => ReactNode;
+}) {
+  const dir = typeof direction === "string" ? direction : "vertical";
+  return (
+    <div
+      style={{
+        ...boxStyle,
+        display: "flex",
+        flexDirection: dir === "horizontal" ? "row" : "column",
+        gap: 4,
+        position: "relative",
+      }}
+    >
+      {templateControls.length > 0 ? (
+        templateControls.map((control) => (
+          <div
+            key={control.id}
+            style={{
+              position: "absolute",
+              left: control.x,
+              top: control.y,
+              width: control.width,
+              height: control.height,
+            }}
+          >
+            {renderChild ? renderChild(control as Control) : null}
+          </div>
+        ))
+      ) : (
+        <span style={{ fontSize: 11, color: "#888" }}>Container</span>
+      )}
     </div>
   );
 }

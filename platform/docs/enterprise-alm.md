@@ -12,21 +12,43 @@ and Publish service (`services/publish`, public proxy, `:8085`) both expose:
 | Method | Path | Effect |
 |--------|------|--------|
 | `POST` | `/api/v1/applications/:id/publish` | Create a new immutable version + snapshot; app becomes `published` |
-| `POST` | `/api/v1/applications/:id/unpublish` | Clear `applications.current_version_id`; app becomes `draft`. Versions and snapshots are kept. |
+| `POST` | `/api/v1/applications/:id/unpublish` | Clear `applications.current_version_id`; app becomes `draft`. Versions, snapshots, and MinIO publish artifacts are kept (pointer-only; never GC). |
 | `GET`  | `/api/v1/applications/:id/versions` | List versions |
 | `GET`  | `/api/v1/applications/:id/versions/:versionId` | Get one version + manifest |
 | `POST` | `/api/v1/applications/:id/versions/:versionId/rollback` | Point `current_version_id` at a previously `released` version; app becomes `published` again |
-| `POST` | `/api/v1/applications/:id/versions/:versionId/deprecate` | Set `application_versions.status = deprecated`. If it was the current version, the application's pointer is cleared and it reverts to `draft`. |
+| `POST` | `/api/v1/applications/:id/versions/:versionId/deprecate` | Set `application_versions.status = deprecated`. If it was the current version, the application's pointer is cleared and it reverts to `draft`. When the version is unreferenced by the app and every environment, best-effort MinIO GC may delete that version's publish artifact and `packages` row (`snapshot_json` is kept). |
 
 Rules enforced by `PublishService` (`internal/services/publish_service.go`):
 
 - `rollback` requires the target version to belong to the application, have
   `status = released`, and have an existing immutable snapshot — the same
   guarantee the `published` runtime channel relies on.
-- `deprecate` never deletes a version; it only flips its status and, if
+- `deprecate` never deletes a version row; it only flips its status and, if
   necessary, detaches the application's current pointer so runtime traffic
-  stops resolving to it.
-- `unpublish` is non-destructive: it only touches the application row.
+  stops resolving to it. Separately, Phase 8.2 may best-effort delete the
+  MinIO publish blob (and `packages` metadata) when the version is no longer
+  referenced by `applications.current_version_id` or any
+  `environments.current_version_id`. `application_snapshots.snapshot_json` is
+  never deleted.
+- `unpublish` is non-destructive: it only touches the application row and
+  never garbage-collects MinIO artifacts (envs may still point at versions).
+
+## Publish artifacts (Phases 8.1 / 8.2)
+
+On publish, the metadata service uploads the snapshot JSON to MinIO and records
+`packages.package_url` / `packages.package_hash` (Phase 8.1). Runtime prefers
+the artifact and falls back to `snapshot_json`.
+
+Artifact lifecycle (Phase 8.2):
+
+| Operation | Blob GC? |
+|-----------|----------|
+| Unpublish | No — pointer-only |
+| Deprecate (version still referenced by app or any environment) | No |
+| Deprecate (unreferenced) | Yes — best-effort `RemoveObject` + delete `packages` row; keep `snapshot_json` |
+
+GC failures are logged and never fail Deprecate (same soft-fail policy as
+upload on publish).
 
 The Publish service (`services/publish`) is a thin HTTP proxy — it forwards
 these calls to the metadata service with the tenant/request headers intact
@@ -105,6 +127,22 @@ apply exactly as they do for every other metadata table.
 
 `audit_logs` has no update/delete endpoint by design — the table is
 append-only at the database level.
+
+## Environment-scoped connector secrets (Phase 7.12)
+
+Connectors still store one app-level `secret_id` in `auth_config`. Per-environment
+overrides live in `environment_secret_overrides` (AES-GCM, same master key).
+
+| Method | Path | Effect |
+|--------|------|--------|
+| `GET` | `/api/v1/applications/:appId/environments/:envId/secret-overrides` | List connectors that have a base secret; `has_override` when set |
+| `PUT` | `/api/v1/applications/:appId/environments/:envId/secret-overrides` | Upsert override `{ connector_id, value }` (write-only) |
+| `DELETE` | `/api/v1/applications/:appId/environments/:envId/secret-overrides/:connectorId` | Remove override (falls back to app-default) |
+
+Studio: Environments → **Secrets** on an environment row.
+
+Runtime: pass `?environmentId=` when opening the app (and on session start).
+Connector queries decrypt the env override when present, otherwise the base secret.
 
 Audit writes are hooked directly into the ALM handlers (same Go process, same
 tenant context — no HTTP round-trip):

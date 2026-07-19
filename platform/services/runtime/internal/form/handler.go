@@ -226,7 +226,7 @@ func mapHandlerError(c *fiber.Ctx, err error) error {
 	switch {
 	case errors.Is(err, ErrFormNotFound):
 		return c.Status(fiber.StatusNotFound).JSON(response.Fail("NOT_FOUND", err.Error(), requestID(c)))
-	case errors.Is(err, ErrInvalidMode), errors.Is(err, ErrRecordUnavailable):
+	case errors.Is(err, ErrInvalidMode), errors.Is(err, ErrRecordUnavailable), errors.Is(err, ErrStorageEditMode):
 		return c.Status(fiber.StatusBadRequest).JSON(response.Fail("BAD_REQUEST", err.Error(), requestID(c)))
 	case errors.Is(err, ErrValidationFailed):
 		return c.Status(fiber.StatusBadRequest).JSON(response.Fail("VALIDATION_FAILED", err.Error(), requestID(c)))

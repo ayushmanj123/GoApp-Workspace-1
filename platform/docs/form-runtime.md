@@ -30,7 +30,17 @@ Each form maintains a per-session mode:
 | `Edit` | Editable record with dirty tracking |
 | `New` | Blank record for create on submit |
 
-Modes are changed through the mode API or formulas (`NewForm`, `EditForm`, `ViewForm`).
+Modes are changed through the mode API or formulas (`NewForm`, `EditForm`, `ViewForm`). The runtime client (`apps/runtime`) renders `View`, `Edit`, and `New` modes; `New` starts with a blank record and editable template children.
+
+## Studio form designer (Phase 7.26)
+
+### Nest controls on drop
+
+Dragging a toolbox control onto a Form or Gallery sets `parent_control_id` and local `x`/`y` relative to the container. Double-click a container to enter container-edit mode; drops and selection stay scoped to that container until Escape.
+
+### Generate fields
+
+When a Form’s **DataSource** (or entity **Item** binding) resolves to an application entity, the Property panel **Data** tab shows **Generate fields**. This creates flat Label + TextInput children under the Form with `Default = ThisItem.FieldName` for each entity column (no DataCard model).
 
 ## Current item
 
@@ -90,6 +100,7 @@ POST /api/runtime/session/{sessionId}/form/{controlId}/submit
 
 - `Edit` mode → `RecordService.Update` (Patch semantics)
 - `New` mode → `RecordService.Create`
+- SQL / REST / Storage connector-bound forms route through `DataSourceRegistry` Create/Update (same path as `Patch()`)
 
 Successful submit publishes `DatasourceChanged` for gallery reload and `FormChanged` for dependent controls.
 

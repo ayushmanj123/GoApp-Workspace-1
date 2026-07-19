@@ -42,57 +42,58 @@ func (d *EntityDataSource) Kind() DataSourceKind {
 }
 
 func (d *EntityDataSource) Query(ctx context.Context, input QueryInput) (*QueryResult, error) {
-	fetchLimit := input.Limit + input.Offset
-	if fetchLimit <= 0 {
-		fetchLimit = 50
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 50
 	}
-	if len(input.Filters) > 0 {
-		if fetchLimit < 1000 {
-			fetchLimit = 1000
-		}
+	if limit > 200 {
+		limit = 200
 	}
-	if fetchLimit > 1000 {
-		fetchLimit = 1000
+	offset := input.Offset
+	if offset < 0 {
+		offset = 0
 	}
 
 	listOpts := records.ListOptions{
-		Limit:          fetchLimit,
-		Offset:         0,
+		Limit:          limit,
+		Offset:         offset,
 		OrderBy:        input.OrderBy,
 		OrderDirection: input.OrderDirection,
+		FilterExpr:     toRecordsFilterExpr(input.FilterExpr),
 	}
 
-	rows, _, err := d.records.List(ctx, input.TenantID, input.EntityID, listOpts)
+	rows, total, err := d.records.List(ctx, input.TenantID, input.EntityID, listOpts)
 	if err != nil {
 		return nil, err
 	}
 
-	filtered := make([]records.EntityRecord, 0, len(rows))
+	items := make([]DataItem, 0, len(rows))
 	for _, row := range rows {
-		if matchesFilters(row.Data, input.Filters) {
-			filtered = append(filtered, row)
-		}
-	}
-
-	total := int64(len(filtered))
-	start := input.Offset
-	if start > len(filtered) {
-		start = len(filtered)
-	}
-	end := start + input.Limit
-	if input.Limit <= 0 {
-		end = len(filtered)
-	}
-	if end > len(filtered) {
-		end = len(filtered)
-	}
-
-	items := make([]DataItem, 0, end-start)
-	for _, row := range filtered[start:end] {
 		items = append(items, toDataItem(row))
 	}
 
 	return &QueryResult{Items: items, Count: total}, nil
+}
+
+// toRecordsFilterExpr maps databinding.FilterExpr into records.FilterExpr
+// (separate types avoid an import cycle between the packages).
+func toRecordsFilterExpr(expr FilterExpr) records.FilterExpr {
+	if expr.Empty() {
+		return records.FilterExpr{}
+	}
+	leaves := make([]records.FilterLeaf, 0, len(expr.Leaves))
+	for _, leaf := range expr.Leaves {
+		leaves = append(leaves, records.FilterLeaf{
+			Field: leaf.Field,
+			Op:    string(leaf.Op),
+			Value: leaf.Value,
+		})
+	}
+	combinator := string(expr.Combinator)
+	if combinator == "" {
+		combinator = "And"
+	}
+	return records.FilterExpr{Combinator: combinator, Leaves: leaves}
 }
 
 func (d *EntityDataSource) Get(ctx context.Context, tenantID, userID uuid.UUID, key DataSourceKey, recordID uuid.UUID) (*DataItem, error) {
@@ -136,22 +137,6 @@ func toDataItem(record records.EntityRecord) DataItem {
 	item["entityId"] = record.EntityID.String()
 	item["version"] = record.Version
 	return item
-}
-
-func matchesFilters(data map[string]interface{}, filters []EqualsFilter) bool {
-	if len(filters) == 0 {
-		return true
-	}
-	for _, filter := range filters {
-		value, ok := data[filter.Field]
-		if !ok {
-			return false
-		}
-		if !valuesEqual(value, filter.Value) {
-			return false
-		}
-	}
-	return true
 }
 
 func valuesEqual(actual interface{}, expected string) bool {

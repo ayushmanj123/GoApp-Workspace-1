@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goapps-platform/runtime-service/internal/databinding"
 	"github.com/goapps-platform/runtime-service/internal/formula"
 	runtimemetrics "github.com/goapps-platform/runtime-service/internal/metrics"
 	"github.com/goapps-platform/runtime-service/internal/reactive"
@@ -75,13 +76,14 @@ func (k *RuntimeKernel) StartSession(ctx context.Context, tenantID, userID uuid.
 	}
 
 	session := &RuntimeSession{
-		ID:       sessionID,
-		AppID:    req.AppID,
-		TenantID: tenantID,
-		UserID:   userID,
-		Channel:  channel,
-		Package:  pkg,
-		State:    manager,
+		ID:            sessionID,
+		AppID:         req.AppID,
+		TenantID:      tenantID,
+		UserID:        userID,
+		Channel:       channel,
+		EnvironmentID: req.EnvironmentID,
+		Package:       pkg,
+		State:         manager,
 	}
 	session.Dependencies = buildDependencies(pkg)
 	if k.registry.Properties != nil {
@@ -223,6 +225,8 @@ func (k *RuntimeKernel) buildFormulaContext(ctx context.Context, session *Runtim
 	if screen == "" {
 		screen = session.CurrentScreen
 	}
+	ctx = databinding.WithEnvironmentID(ctx, session.EnvironmentID)
+	ctx = databinding.WithChannel(ctx, session.Channel)
 	nav := &sessionNavigation{
 		NavigationService: &reactive.NavigationService{
 			Publisher: k.registry.Reactive.Notifier,

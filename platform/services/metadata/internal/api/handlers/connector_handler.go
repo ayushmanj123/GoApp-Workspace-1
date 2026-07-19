@@ -150,6 +150,87 @@ func (h *connectorHandler) Delete(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
+func (h *connectorHandler) StartOAuth(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: "invalid id"})
+	}
+	tid, err := tenant.GetTenantID(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(api.APIResponse{Success: false, Error: "tenant missing"})
+	}
+	userID := tenant.GetUserID(c)
+	if userID == nil || *userID == uuid.Nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(api.APIResponse{Success: false, Error: "user missing"})
+	}
+	var body struct {
+		ReturnTo string `json:"return_to"`
+	}
+	_ = c.BodyParser(&body)
+	result, err := h.svc.StartOAuthAuthorizationCode(context.Background(), tid, id, *userID, body.ReturnTo)
+	if err != nil {
+		status := fiber.StatusInternalServerError
+		if isClientAuthConfigError(err) || strings.Contains(err.Error(), "authentication_type") || strings.Contains(err.Error(), "user id") {
+			status = fiber.StatusBadRequest
+		}
+		return c.Status(status).JSON(api.APIResponse{Success: false, Error: err.Error()})
+	}
+	return c.JSON(api.APIResponse{Success: true, Data: result})
+}
+
+func (h *connectorHandler) OAuthCallback(c *fiber.Ctx) error {
+	code := c.Query("code")
+	state := c.Query("state")
+	if errParam := c.Query("error"); errParam != "" {
+		desc := c.Query("error_description")
+		return c.Status(fiber.StatusBadRequest).SendString("oauth error: " + errParam + " " + desc)
+	}
+	redirectURL, err := h.svc.CompleteOAuthCallback(context.Background(), code, state)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString(err.Error())
+	}
+	return c.Redirect(redirectURL, fiber.StatusFound)
+}
+
+func (h *connectorHandler) GetOAuthConnection(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: "invalid id"})
+	}
+	tid, err := tenant.GetTenantID(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(api.APIResponse{Success: false, Error: "tenant missing"})
+	}
+	userID := uuid.Nil
+	if uid := tenant.GetUserID(c); uid != nil {
+		userID = *uid
+	}
+	status, err := h.svc.GetOAuthConnectionStatus(context.Background(), tid, id, userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(api.APIResponse{Success: false, Error: err.Error()})
+	}
+	return c.JSON(api.APIResponse{Success: true, Data: status})
+}
+
+func (h *connectorHandler) DeleteOAuthConnection(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: "invalid id"})
+	}
+	tid, err := tenant.GetTenantID(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(api.APIResponse{Success: false, Error: "tenant missing"})
+	}
+	userID := uuid.Nil
+	if uid := tenant.GetUserID(c); uid != nil {
+		userID = *uid
+	}
+	if err := h.svc.DisconnectOAuthConnection(context.Background(), tid, id, userID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(api.APIResponse{Success: false, Error: err.Error()})
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
 func (h *connectorHandler) CreateAction(c *fiber.Ctx) error {
 	var req api.CreateConnectorActionRequest
 	if err := c.BodyParser(&req); err != nil {

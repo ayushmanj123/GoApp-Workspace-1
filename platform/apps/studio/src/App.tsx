@@ -2,7 +2,6 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { StudioLayout } from "./components/layout/StudioLayout";
 import { ManagerLayout } from "./components/manager/ManagerLayout";
 import { AppsDashboard } from "./components/manager/apps/AppsDashboard";
-import { ManagerStubPage } from "./components/manager/ManagerStubPage";
 import { DatabaseManagerPage } from "./components/manager/database/DatabaseManagerPage";
 import { TablesListView } from "./components/manager/database/TablesListView";
 import { TablePropertyView } from "./components/manager/database/TablePropertyView";
@@ -13,6 +12,9 @@ import { EnvironmentsManagerPage } from "./components/manager/environments/Envir
 import { ConnectorsManagerPage } from "./components/manager/connectors/ConnectorsManagerPage";
 import { ConnectorsListView } from "./components/manager/connectors/ConnectorsListView";
 import { ConnectorDetailView } from "./components/manager/connectors/ConnectorDetailView";
+import { WorkflowsManagerPage } from "./components/manager/workflows/WorkflowsManagerPage";
+import { WorkflowsListView } from "./components/manager/workflows/WorkflowsListView";
+import { WorkflowDetailView } from "./components/manager/workflows/WorkflowDetailView";
 import { LoginPage } from "./auth/LoginPage";
 import { RequireAuth } from "./auth/RequireAuth";
 
@@ -35,15 +37,10 @@ export default function App() {
             <Route index element={<PackagesListView />} />
             <Route path=":packageId" element={<PackageDetailView />} />
           </Route>
-          <Route
-            path="workflows"
-            element={
-              <ManagerStubPage
-                title="Workflow Manager"
-                description="Design and monitor automated workflows across your app ecosystem."
-              />
-            }
-          />
+          <Route path="workflows" element={<WorkflowsManagerPage />}>
+            <Route index element={<WorkflowsListView />} />
+            <Route path=":workflowId" element={<WorkflowDetailView />} />
+          </Route>
           <Route path="environments" element={<EnvironmentsManagerPage />} />
         </Route>
         <Route path="/studio/components" element={<StudioLayout />} />

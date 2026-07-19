@@ -107,6 +107,12 @@ func (r *PostgresRepository) List(ctx context.Context, tenantID, entityID uuid.U
 	base := r.db.WithContext(ctx).Model(&recordRow{}).
 		Where("tenant_id = ? AND entity_id = ? AND deleted_on IS NULL", tenantID, entityID)
 
+	filtered, err := applyFilterExpr(base, opts.FilterExpr)
+	if err != nil {
+		return nil, 0, err
+	}
+	base = filtered
+
 	var total int64
 	if err := base.Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("records: count: %w", err)

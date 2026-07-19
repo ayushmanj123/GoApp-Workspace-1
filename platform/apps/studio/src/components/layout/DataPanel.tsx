@@ -56,6 +56,8 @@ export function DataPanel() {
           className={styles.collapseBtn}
           onClick={toggleExplorer}
           title={collapsed ? "Expand Data" : "Collapse Data"}
+          aria-label={collapsed ? "Expand Data" : "Collapse Data"}
+          aria-expanded={!collapsed}
         >
           {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
         </button>

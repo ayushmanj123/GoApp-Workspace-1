@@ -8,6 +8,7 @@ import (
 	"github.com/goapps-platform/metadata-service/internal/config"
 	"github.com/goapps-platform/metadata-service/internal/database"
 	"github.com/goapps-platform/metadata-service/internal/repositories"
+	"github.com/goapps-platform/metadata-service/internal/services"
 	"github.com/goapps-platform/shared/auth"
 	"github.com/goapps-platform/shared/server"
 	"github.com/gofiber/fiber/v2"
@@ -38,13 +39,20 @@ func New(cfg config.Config) *fiber.App {
 	}
 
 	store := repositories.NewGormStore(db)
-	api.RegisterRoutes(
+	wfSvc := api.RegisterRoutes(
 		app,
 		store,
 		auth.Middleware(cfg.Auth, validator),
 		auth.RequireAuthenticated(),
 		syncAuthLocals,
 	)
+
+	if cfg.WorkflowSchedulerEnabled && wfSvc != nil {
+		scheduler := services.NewWorkflowScheduler(store, wfSvc, logger)
+		scheduler.Start()
+		logger.Info("workflow scheduler started")
+	}
+
 	return app
 }
 

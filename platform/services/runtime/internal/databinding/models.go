@@ -40,12 +40,6 @@ type ResolvedBinding struct {
 	Metadata   ControlBindingMetadata
 }
 
-// EqualsFilter is a simple field=value predicate supported in v1.
-type EqualsFilter struct {
-	Field string
-	Value string
-}
-
 // QueryInput is the normalized runtime query passed to a DataSource.
 // EntityID is an opaque per-kind resource identifier: for DataSourceKindEntity
 // it is the entities.id row; for DataSourceKindRest it is the connectors.id row.
@@ -53,9 +47,10 @@ type QueryInput struct {
 	TenantID       uuid.UUID
 	UserID         uuid.UUID
 	EntityID       uuid.UUID
+	EnvironmentID  *uuid.UUID
 	Limit          int
 	Offset         int
-	Filters        []EqualsFilter
+	FilterExpr     FilterExpr
 	OrderBy        string
 	OrderDirection string
 }

@@ -6,6 +6,7 @@ export type AuthenticationType =
   | "header"
   | "connection_string"
   | "oauth_client_credentials"
+  | "oauth_authorization_code"
   | "s3";
 export type HttpMethod =
   | "GET"
@@ -24,11 +25,14 @@ export interface ConnectorAuthConfig {
   client_secret?: string;
   secret_access_key?: string;
   secret_id?: string;
+  refresh_secret_id?: string;
   table?: string;
   primary_key?: string;
   token_url?: string;
+  authorization_url?: string;
   client_id?: string;
   scope?: string;
+  connection_scope?: "app" | "user";
   endpoint?: string;
   bucket?: string;
   access_key_id?: string;
@@ -46,6 +50,7 @@ export interface ConnectorRecord {
   base_url: string;
   auth_config?: ConnectorAuthConfig | Record<string, unknown> | null;
   has_secret?: boolean;
+  has_connection?: boolean;
   created_on?: string;
   modified_on?: string;
   CreatedOn?: string;
@@ -124,4 +129,18 @@ export const connectorsApi = {
     apiClient.put<ConnectorActionRecord>(`/connector-actions/${id}`, payload),
 
   removeAction: (id: string) => apiClient.delete(`/connector-actions/${id}`),
+
+  startOAuth: (connectorId: string, returnTo: "studio" | "runtime" = "studio") =>
+    apiClient.post<{ authorize_url: string; state: string }>(
+      `/connectors/${connectorId}/oauth/start`,
+      { return_to: returnTo },
+    ),
+
+  getOAuthConnection: (connectorId: string) =>
+    apiClient.get<{ connected: boolean; connection_scope: string }>(
+      `/connectors/${connectorId}/oauth/connection`,
+    ),
+
+  disconnectOAuth: (connectorId: string) =>
+    apiClient.delete(`/connectors/${connectorId}/oauth/connection`),
 };

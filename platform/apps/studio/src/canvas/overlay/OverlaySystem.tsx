@@ -3,6 +3,7 @@ import { ResizeHandles } from "./ResizeHandles";
 import { MarqueeSelection } from "./MarqueeSelection";
 import { AlignmentGuides } from "./AlignmentGuides";
 import { useInteractionStore } from "../interaction/interactionStore";
+import { syncStudioSelection } from "../interaction/syncStudioSelection";
 import type { DesignerNode } from "../designer/DesignerNode";
 import type { ArtboardOffset } from "../CoordinateSystem";
 import styles from "./overlay.module.css";
@@ -28,9 +29,15 @@ export function OverlaySystem({
   return (
     <div className={styles.overlayRoot}>
       {containerEditId && (
-        <div className={styles.containerEditBanner}>
-          Editing container —{" "}
-          <button type="button" onClick={() => exitContainerEdit()}>
+        <div className={styles.containerEditBanner} data-testid="container-edit-banner">
+          Editing Container — Esc to exit{" "}
+          <button
+            type="button"
+            onClick={() => {
+              exitContainerEdit();
+              syncStudioSelection();
+            }}
+          >
             Exit
           </button>
         </div>

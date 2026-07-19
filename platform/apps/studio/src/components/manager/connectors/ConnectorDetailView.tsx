@@ -33,6 +33,18 @@ function parseAuthConfig(
       scope: cfg.scope ?? "",
     };
   }
+  if (cfg.type === "oauth_authorization_code") {
+    return {
+      type: "oauth_authorization_code",
+      secret_id: cfg.secret_id,
+      refresh_secret_id: cfg.refresh_secret_id,
+      token_url: cfg.token_url ?? "",
+      authorization_url: cfg.authorization_url ?? "",
+      client_id: cfg.client_id ?? "",
+      scope: cfg.scope ?? "",
+      connection_scope: cfg.connection_scope === "user" ? "user" : "app",
+    };
+  }
   if (cfg.type === "s3") {
     return {
       type: "s3",
@@ -72,9 +84,14 @@ export function ConnectorDetailView() {
   const [primaryKey, setPrimaryKey] = useState("id");
   const [hasSecret, setHasSecret] = useState(false);
   const [tokenUrl, setTokenUrl] = useState("");
+  const [authorizationUrl, setAuthorizationUrl] = useState("");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [scope, setScope] = useState("");
+  const [connectionScope, setConnectionScope] = useState<"app" | "user">("app");
+  const [hasConnection, setHasConnection] = useState(false);
+  const [oauthConnecting, setOauthConnecting] = useState(false);
+  const [oauthBanner, setOauthBanner] = useState<string | null>(null);
   const [endpoint, setEndpoint] = useState("");
   const [bucket, setBucket] = useState("");
   const [accessKeyId, setAccessKeyId] = useState("");
@@ -95,6 +112,7 @@ export function ConnectorDetailView() {
       setName(conn.name);
       setBaseUrl(conn.base_url ?? "");
       setHasSecret(Boolean(conn.has_secret));
+      setHasConnection(Boolean(conn.has_connection));
       const cfg = parseAuthConfig(conn.auth_config);
 
       if (conn.connector_type === "sql") {
@@ -115,18 +133,33 @@ export function ConnectorDetailView() {
         setActions([]);
       } else {
         setAuthType(
-          conn.authentication_type === "oauth_client_credentials"
-            ? "oauth_client_credentials"
-            : conn.authentication_type === "header"
-              ? "header"
-              : "none",
+          conn.authentication_type === "oauth_authorization_code"
+            ? "oauth_authorization_code"
+            : conn.authentication_type === "oauth_client_credentials"
+              ? "oauth_client_credentials"
+              : conn.authentication_type === "header"
+                ? "header"
+                : "none",
         );
         setHeaderName(cfg.header_name ?? "X-Api-Key");
         setHeaderValue("");
         setTokenUrl(cfg.token_url ?? "");
+        setAuthorizationUrl(cfg.authorization_url ?? "");
         setClientId(cfg.client_id ?? "");
         setClientSecret("");
         setScope(cfg.scope ?? "");
+        setConnectionScope(cfg.connection_scope === "user" ? "user" : "app");
+        if (
+          conn.authentication_type === "oauth_authorization_code" &&
+          cfg.connection_scope === "user"
+        ) {
+          try {
+            const status = await connectorsApi.getOAuthConnection(connectorId);
+            if (!cancelled) setHasConnection(Boolean(status.connected));
+          } catch {
+            if (!cancelled) setHasConnection(false);
+          }
+        }
         const actionPage = await connectorsApi.listActions(connectorId);
         setActions(actionPage.items ?? []);
       }
@@ -140,6 +173,33 @@ export function ConnectorDetailView() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("oauth") === "connected") {
+      setOauthBanner(
+        "OAuth connection saved. Runtime can refresh access tokens for this connector.",
+      );
+      params.delete("oauth");
+      const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}${window.location.hash}`;
+      window.history.replaceState({}, "", next);
+      void load();
+    }
+  }, [load]);
+
+  const handleConnectOAuth = async () => {
+    if (!connectorId) return;
+    setOauthConnecting(true);
+    setError(null);
+    try {
+      const { authorize_url } = await connectorsApi.startOAuth(connectorId, "studio");
+      window.open(authorize_url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start OAuth");
+    } finally {
+      setOauthConnecting(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!connectorId || !name.trim()) return;
@@ -190,6 +250,17 @@ export function ConnectorDetailView() {
           ...(scope.trim() ? { scope: scope.trim() } : {}),
           ...(clientSecret.trim() ? { client_secret: clientSecret.trim() } : {}),
         };
+      } else if (authType === "oauth_authorization_code") {
+        authentication_type = "oauth_authorization_code";
+        auth_config = {
+          type: "oauth_authorization_code",
+          authorization_url: authorizationUrl.trim(),
+          token_url: tokenUrl.trim(),
+          client_id: clientId.trim(),
+          connection_scope: connectionScope,
+          ...(scope.trim() ? { scope: scope.trim() } : {}),
+          ...(clientSecret.trim() ? { client_secret: clientSecret.trim() } : {}),
+        };
       }
 
       const updated = await connectorsApi.update(connectorId, {
@@ -200,6 +271,7 @@ export function ConnectorDetailView() {
       });
       setConnector(updated);
       setHasSecret(Boolean(updated.has_secret));
+      setHasConnection(Boolean(updated.has_connection));
       setHeaderValue("");
       setConnectionString("");
       setClientSecret("");
@@ -256,8 +328,15 @@ export function ConnectorDetailView() {
         <div className={styles.headerText}>
           <h1 className={styles.title}>{connector.name}</h1>
           <p className={styles.subtitle}>
-            {isSql ? "SQL" : isStorage ? "Storage" : "REST"} connector · bind Gallery Items to{" "}
-            <code>{connector.name}</code>
+            {isSql
+              ? "SQL"
+              : isStorage
+                ? "Storage"
+                : "REST"}{" "}
+            connector · bind Gallery Items to <code>{connector.name}</code>
+            {isStorage
+              ? " · upload via Form/Patch (key + content); delete via Remove(Connector, ThisItem)"
+              : null}
           </p>
         </div>
         <Button
@@ -272,6 +351,11 @@ export function ConnectorDetailView() {
       </div>
 
       {error ? <div className={styles.error}>{error}</div> : null}
+      {oauthBanner ? (
+        <div className={styles.empty} data-testid="oauth-connected-banner">
+          {oauthBanner}
+        </div>
+      ) : null}
 
       <div className={styles.formGrid}>
         <div>
@@ -434,6 +518,7 @@ export function ConnectorDetailView() {
                 <option value="none">None</option>
                 <option value="header">Static header</option>
                 <option value="oauth_client_credentials">OAuth client credentials</option>
+                <option value="oauth_authorization_code">OAuth authorization code</option>
               </select>
             </div>
             {authType === "header" ? (
@@ -468,8 +553,24 @@ export function ConnectorDetailView() {
                 </div>
               </>
             ) : null}
-            {authType === "oauth_client_credentials" ? (
+            {authType === "oauth_client_credentials" ||
+            authType === "oauth_authorization_code" ? (
               <>
+                {authType === "oauth_authorization_code" ? (
+                  <div>
+                    <label className={styles.fieldLabel} htmlFor="authorization-url">
+                      Authorization URL
+                    </label>
+                    <input
+                      id="authorization-url"
+                      className={styles.fieldInput}
+                      value={authorizationUrl}
+                      onChange={(e) => setAuthorizationUrl(e.target.value)}
+                      placeholder="https://idp.example.com/oauth/authorize"
+                      data-testid="connector-detail-authorization-url"
+                    />
+                  </div>
+                ) : null}
                 <div>
                   <label className={styles.fieldLabel} htmlFor="token-url">
                     Token URL
@@ -519,6 +620,55 @@ export function ConnectorDetailView() {
                     onChange={(e) => setScope(e.target.value)}
                   />
                 </div>
+                {authType === "oauth_authorization_code" ? (
+                  <>
+                    <div>
+                      <label className={styles.fieldLabel} htmlFor="connection-scope">
+                        Connection scope
+                      </label>
+                      <select
+                        id="connection-scope"
+                        className={styles.fieldSelect}
+                        value={connectionScope}
+                        onChange={(e) =>
+                          setConnectionScope(e.target.value === "user" ? "user" : "app")
+                        }
+                        data-testid="connector-detail-connection-scope"
+                      >
+                        <option value="app">App (shared)</option>
+                        <option value="user">Per-user</option>
+                      </select>
+                    </div>
+                    <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => void handleConnectOAuth()}
+                        disabled={oauthConnecting}
+                        data-testid="connector-oauth-connect-btn"
+                      >
+                        {oauthConnecting
+                          ? "Starting…"
+                          : connectionScope === "user"
+                            ? hasConnection
+                              ? "Reconnect as me"
+                              : "Connect as me"
+                            : hasConnection
+                              ? "Reconnect"
+                              : "Connect"}
+                      </Button>
+                      <span style={{ fontSize: 12, color: "var(--color-text-muted, #666)" }}>
+                        {connectionScope === "user"
+                          ? hasConnection
+                            ? "Connected as you (per-user — runtime users connect separately)"
+                            : "Per-user — each runtime user Connects; Connect as me for testing"
+                          : hasConnection
+                            ? "Connected (app-level refresh token stored)"
+                            : "Not connected — authorize once for this app"}
+                      </span>
+                    </div>
+                  </>
+                ) : null}
               </>
             ) : null}
           </>

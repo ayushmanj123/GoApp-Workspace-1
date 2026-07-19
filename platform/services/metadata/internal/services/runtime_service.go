@@ -2,8 +2,12 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/goapps-platform/metadata-service/internal/api/contracts"
@@ -21,7 +25,15 @@ type RuntimePackageOptions struct {
 var ErrEnvironmentNotPromoted = fmt.Errorf("environment has no promoted version")
 
 // RuntimeService provides read-only runtime packages built from metadata.
-type RuntimeService struct{ store repositories.Store }
+type RuntimeService struct {
+	store     repositories.Store
+	artifacts PublishArtifactDownloader // nil => resolved from env via defaultArtifactStore at call time
+}
+
+// errNoPackageArtifact signals "no MinIO artifact recorded for this version",
+// which is an expected, silent fallback path (e.g. MinIO was never
+// configured, or this version predates Phase 8.1) rather than a failure.
+var errNoPackageArtifact = errors.New("runtime: no package artifact recorded for version")
 
 type byFieldRepo[T any] interface {
 	ListByField(ctx context.Context, field string, value any, limit int, offset int) ([]T, error)
@@ -145,14 +157,82 @@ func (s *RuntimeService) buildDraftPackage(ctx context.Context, tenantID, appID 
 	if err != nil {
 		return nil, err
 	}
-	pkg, err := assembleRuntimeApplication(app, screens, controls, props, formulas, componentDefs, entities, entityFields)
+	sess := s.store.WithTenant(ctx, tenantID)
+	connectors, err := listConnectorsByApp(ctx, sess, tenantID, appID)
+	if err != nil {
+		return nil, fmt.Errorf("load connectors: %w", err)
+	}
+	connectorActions, err := s.loadConnectorActions(ctx, sess, tenantID, collectConnectorIDs(connectors))
+	if err != nil {
+		return nil, err
+	}
+	pkg, err := assembleRuntimeApplication(app, screens, controls, props, formulas, componentDefs, entities, entityFields, connectors, connectorActions)
 	if err != nil {
 		return nil, err
 	}
 	return pkg, nil
 }
 
+// loadPublishedPackage loads the frozen runtime package for a version,
+// preferring the MinIO artifact (packages table) when one is present and
+// fetchable, and falling back to the database snapshot_json otherwise.
+// The DB snapshot remains the source of truth kept for at least one release
+// so a MinIO outage or missing artifact never breaks runtime.
 func (s *RuntimeService) loadPublishedPackage(ctx context.Context, sess repositories.TenantSession, versionID uuid.UUID) (*contracts.RuntimeApplication, error) {
+	pkg, err := s.loadPackageArtifact(ctx, sess, versionID)
+	if err == nil {
+		return pkg, nil
+	}
+	if !errors.Is(err, errNoPackageArtifact) {
+		log.Printf("runtime: package artifact load failed for version %s, falling back to snapshot_json: %v", versionID, err)
+	}
+	return s.loadPublishedSnapshot(ctx, sess, versionID)
+}
+
+// resolveArtifactDownloader returns the configured downloader (test override
+// wins) or the process-wide MinIO-backed default, which may be unavailable.
+func (s *RuntimeService) resolveArtifactDownloader() PublishArtifactDownloader {
+	if s.artifacts != nil {
+		return s.artifacts
+	}
+	if store, ok := defaultArtifactStore(); ok {
+		return store
+	}
+	return nil
+}
+
+func (s *RuntimeService) loadPackageArtifact(ctx context.Context, sess repositories.TenantSession, versionID uuid.UUID) (*contracts.RuntimeApplication, error) {
+	packages, err := listPackagesByVersion(ctx, sess, versionID)
+	if err != nil {
+		return nil, err
+	}
+	if len(packages) == 0 || strings.TrimSpace(packages[0].PackageURL) == "" {
+		return nil, errNoPackageArtifact
+	}
+	row := packages[0]
+
+	downloader := s.resolveArtifactDownloader()
+	if downloader == nil {
+		return nil, fmt.Errorf("runtime: minio artifact store not configured")
+	}
+	data, err := downloader.Download(ctx, row.PackageURL)
+	if err != nil {
+		return nil, fmt.Errorf("download package artifact: %w", err)
+	}
+	if strings.TrimSpace(row.PackageHash) != "" {
+		sum := sha256.Sum256(data)
+		if hex.EncodeToString(sum[:]) != row.PackageHash {
+			return nil, fmt.Errorf("package artifact hash mismatch for version %s", versionID)
+		}
+	}
+	var pkg contracts.RuntimeApplication
+	if err := json.Unmarshal(data, &pkg); err != nil {
+		return nil, fmt.Errorf("decode package artifact: %w", err)
+	}
+	return &pkg, nil
+}
+
+func (s *RuntimeService) loadPublishedSnapshot(ctx context.Context, sess repositories.TenantSession, versionID uuid.UUID) (*contracts.RuntimeApplication, error) {
 	snapshots, err := listSnapshotsByVersion(ctx, sess, versionID)
 	if err != nil {
 		return nil, err
@@ -287,6 +367,42 @@ func collectControlIDs(items []models.Control) []uuid.UUID {
 		ids = append(ids, it.ID)
 	}
 	return ids
+}
+
+func collectConnectorIDs(items []models.Connector) []uuid.UUID {
+	ids := make([]uuid.UUID, 0, len(items))
+	for _, it := range items {
+		ids = append(ids, it.ID)
+	}
+	return ids
+}
+
+func (s *RuntimeService) loadConnectorActions(ctx context.Context, sess repositories.TenantSession, tenantID uuid.UUID, connectorIDs []uuid.UUID) ([]models.ConnectorAction, error) {
+	if len(connectorIDs) == 0 {
+		return nil, nil
+	}
+	if repo, ok := any(sess.ConnectorActions()).(byFieldInRepo[models.ConnectorAction]); ok {
+		items, err := repo.ListByFieldIn(ctx, "connector_id", connectorIDs, 0, 0)
+		if err != nil {
+			return nil, fmt.Errorf("load connector actions: %w", err)
+		}
+		return items, nil
+	}
+	items, err := sess.ConnectorActions().ListByTenant(ctx, tenantID, 0, 0)
+	if err != nil {
+		return nil, fmt.Errorf("load connector actions: %w", err)
+	}
+	connectorSet := map[uuid.UUID]struct{}{}
+	for _, id := range connectorIDs {
+		connectorSet[id] = struct{}{}
+	}
+	var filtered []models.ConnectorAction
+	for _, it := range items {
+		if _, ok := connectorSet[it.ConnectorID]; ok {
+			filtered = append(filtered, it)
+		}
+	}
+	return filtered, nil
 }
 
 func (s *RuntimeService) loadComponentDefinitions(ctx context.Context, sess repositories.TenantSession, tenantID, appID uuid.UUID) ([]models.ComponentDefinition, error) {

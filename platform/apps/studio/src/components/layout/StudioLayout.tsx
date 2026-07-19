@@ -21,12 +21,19 @@ export function StudioLayout() {
   const { applicationId: routeApplicationId } = useParams<{ applicationId?: string }>();
   const isLibraryView = location.pathname.startsWith("/studio/components");
   const propertiesCollapsed = useStudioStore((s) => s.propertiesCollapsed);
+  const explorerCollapsed = useStudioStore((s) => s.explorerCollapsed);
   const sidePanelOpen = useStudioStore((s) => s.sidePanelOpen);
   const activeNavItem = useStudioStore((s) => s.activeNavItem);
   const dirty = useStudioStore((s) => s.dirty);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const applicationId = isLibraryView ? null : (routeApplicationId ?? null);
+
+  // Nav rail (48) + side panel (300) or collapsed strip (32)
+  const leftPaneCollapsedSize = 80;
+  const leftPaneExpandedPreferred = 348;
+  const leftPaneExpandedMin = 280;
+  const leftPaneExpandedMax = 500;
 
   useEffect(() => {
     if (!isLibraryView && !routeApplicationId) {
@@ -64,16 +71,23 @@ export function StudioLayout() {
         ) : (
           <Allotment proportionalLayout={false} className={styles.allotment}>
             <Allotment.Pane
-              preferredSize={348}
-              minSize={280}
-              maxSize={500}
+              key={explorerCollapsed ? "explorer-collapsed" : "explorer-expanded"}
+              preferredSize={
+                explorerCollapsed ? leftPaneCollapsedSize : leftPaneExpandedPreferred
+              }
+              minSize={explorerCollapsed ? leftPaneCollapsedSize : leftPaneExpandedMin}
+              maxSize={explorerCollapsed ? leftPaneCollapsedSize : leftPaneExpandedMax}
+              snap
             >
               <div className={styles.leftPane}>
                 <NavRail />
                 <div
-                  className={
-                    sidePanelOpen ? styles.sidePanel : styles.sidePanelHidden
-                  }
+                  className={[
+                    sidePanelOpen ? styles.sidePanel : styles.sidePanelHidden,
+                    explorerCollapsed ? styles.sidePanelCollapsed : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                 >
                   {activeNavItem === "data" ? <DataPanel /> : <ExplorerPanel />}
                 </div>

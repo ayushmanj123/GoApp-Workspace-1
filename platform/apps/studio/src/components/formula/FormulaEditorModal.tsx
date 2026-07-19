@@ -94,7 +94,7 @@ export function FormulaEditorModal({
 
   const helperText =
     validationMode === "action"
-      ? "Action formulas run in Runtime Preview. Use Set(), Navigate(), UpdateContext(), Collect(), ClearCollect(), or SubmitForm()."
+      ? "Action formulas run in Runtime. Use Set, Navigate, UpdateContext, Collect, ClearCollect, Clear, Patch, Remove, Defaults, SubmitForm, ResetForm, NewForm, EditForm, ViewForm, Back, LookUp, Filter — chain with ;."
       : "Expression formulas resolve at design time when the formula engine is available. Custom variables must be created with Set() in Preview.";
 
   return createPortal(

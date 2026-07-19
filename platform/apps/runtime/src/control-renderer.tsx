@@ -24,8 +24,20 @@ function resolveRegistryType(rawType: string): string {
     container: "Container",
     component: "Component",
     gallery: "Gallery",
+    datatable: "DataTable",
     form: "Form",
     timer: "Timer",
+    checkbox: "Checkbox",
+    toggle: "Toggle",
+    image: "Image",
+    icon: "Icon",
+    datepicker: "DatePicker",
+    shaperectangle: "ShapeRectangle",
+    shapeellipse: "ShapeEllipse",
+    shapeline: "ShapeLine",
+    shapearrow: "ShapeArrow",
+    shapeimage: "ShapeImage",
+    shapestar: "ShapeStar",
   };
   return aliases[key] ?? rawType;
 }
@@ -82,6 +94,8 @@ export const ControlRenderer: React.FC<Props> = ({ control, nested = false }) =>
 
   if (typeKey === "Gallery") {
     props.templateControls = childControls;
+    props.name = (control as any).name;
+  } else if (typeKey === "DataTable") {
     props.name = (control as any).name;
   } else if (typeKey === "Form") {
     props.templateControls = childControls;

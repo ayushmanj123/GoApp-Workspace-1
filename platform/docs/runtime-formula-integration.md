@@ -11,7 +11,7 @@ Every formula executes through a single `RuntimeFormulaContext`:
 | `State` | `FormulaStateManager` — variables, collections, screen context |
 | `DataSources` | `DataSourceRegistry` — entity (and future connector) data access |
 | `Resolver` | Resolves datasource names to entity bindings |
-| `Navigation` | `NavigationService` interface (UI navigation not implemented yet) |
+| `Navigation` | `NavigationService` interface — real screen navigation on the kernel session path (Phase 7.15), see [Navigation](#navigation) |
 | `User` | `TenantID`, `UserID`, `Email` from auth |
 | `App` | Running `AppID` |
 | `Session` | `SessionID` and active `Screen` name |
@@ -111,7 +111,12 @@ Create a session first via `POST /api/runtime/state/sessions`.
 
 | Function | Status |
 |----------|--------|
-| `Navigate(ScreenName)` | Interface only — returns `NAVIGATION_NOT_IMPLEMENTED` |
+| `Navigate(ScreenName)` | Implemented on session-scoped endpoints (Phase 7.15) |
+
+`Navigate()` behavior depends on which endpoint evaluated the formula:
+
+- **Session endpoints** — `POST /api/runtime/session/:sessionId/evaluate`, `POST /api/runtime/session/:sessionId/event` (control events), and session `StartSession` (`App.OnStart`/`Screen.OnVisible`). These go through `kernel.RuntimeKernel`, which wires `sessionNavigation` (`services/runtime/internal/kernel/kernel.go`): it records `varPreviousScreen`, updates `RuntimeSession.CurrentScreen`, reloads the target screen's galleries and forms, and publishes a `NavigationRequested` reactive event. The HTTP response's `currentScreen` field reflects the new screen. This is the path used by the deployed app runtime (control click handlers, `Back()`, etc.) and is fully functional — Navigate no longer stubs out here.
+- **Standalone endpoint** — `POST /api/runtime/formula/evaluate`. This endpoint has no session/screen model of its own (`state.MemoryStore` only tracks variables/context/collections, not a current screen). When a reactive engine is configured (the default in `server.go`), `Navigate()` publishes a `NavigationRequested` event via `reactive.NavigationService` and does not error, but no screen state is persisted and the response's `currentScreen` stays empty. Callers that need real navigation semantics should use the session-scoped endpoints above. If no reactive engine or navigation implementation is injected at all (only possible in custom/test wiring), `Navigate()` falls back to `NoopNavigationService` and returns `NAVIGATION_NOT_IMPLEMENTED`.
 
 ## Value expressions
 
@@ -123,7 +128,7 @@ Create a session first via `POST /api/runtime/state/sessions`.
 |-----------|------------|
 | `FormulaStateManager` | Formula engine calls `SetVariable`, `Collect`, `UpdateContext` |
 | `DataSourceRegistry` | REST/SQL/SharePoint datasources for `Patch`/`Defaults` |
-| `NavigationService` | Screen navigation from `Navigate()` |
+| `NavigationService` | Screen navigation from `Navigate()` — session-aware implementation in `kernel.sessionNavigation`, event-only implementation in `reactive.NavigationService` |
 | `BindingResolver` | Datasource metadata resolution |
 
 ## Related docs

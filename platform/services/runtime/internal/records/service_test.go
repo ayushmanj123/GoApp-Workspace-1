@@ -55,17 +55,21 @@ func (f *fakeRecordRepo) List(_ context.Context, tenantID, entityID uuid.UUID, o
 	items := make([]EntityRecord, 0)
 	for _, record := range f.records {
 		if record.TenantID == tenantID && record.EntityID == entityID && record.DeletedOn == nil {
+			if !MatchFilterExpr(record.Data, opts.FilterExpr) {
+				continue
+			}
 			items = append(items, record)
 		}
 	}
+	total := int64(len(items))
 	if opts.Offset >= len(items) {
-		return []EntityRecord{}, int64(len(items)), nil
+		return []EntityRecord{}, total, nil
 	}
 	end := opts.Offset + opts.Limit
-	if end > len(items) {
+	if opts.Limit <= 0 || end > len(items) {
 		end = len(items)
 	}
-	return items[opts.Offset:end], int64(len(items)), nil
+	return items[opts.Offset:end], total, nil
 }
 
 func (f *fakeRecordRepo) Update(_ context.Context, record *EntityRecord, expectedVersion int) error {
@@ -106,6 +110,7 @@ func testSchema(entityID, tenantID uuid.UUID) *EntitySchema {
 			{Name: "name", FieldType: "text", IsRequired: true},
 			{Name: "age", FieldType: "number", IsRequired: false},
 			{Name: "active", FieldType: "boolean", IsRequired: false},
+			{Name: "Status", FieldType: "text", IsRequired: false},
 		},
 	}
 }
@@ -252,4 +257,48 @@ func asValidation(err error, target **ValidationError) bool {
 	}
 	*target = validationErr
 	return true
+}
+
+func TestServiceListFilterPaging(t *testing.T) {
+	tenantID := uuid.New()
+	userID := uuid.New()
+	entityID := uuid.New()
+	schemaRepo := &fakeSchemaRepo{schemas: map[uuid.UUID]*EntitySchema{
+		entityID: testSchema(entityID, tenantID),
+	}}
+	recordRepo := newFakeRecordRepo()
+	svc := NewService(recordRepo, schemaRepo)
+	ctx := context.Background()
+
+	for i, status := range []string{"Inactive", "Active", "Active", "Inactive", "Active"} {
+		_, err := svc.Create(ctx, tenantID, userID, entityID, map[string]interface{}{
+			"name":   "row",
+			"Status": status,
+			"age":    i,
+		})
+		if err != nil {
+			t.Fatalf("create %d: %v", i, err)
+		}
+	}
+
+	items, total, err := svc.List(ctx, tenantID, entityID, ListOptions{
+		Limit:  1,
+		Offset: 1,
+		FilterExpr: FilterExpr{
+			Combinator: "And",
+			Leaves:     []FilterLeaf{{Field: "Status", Op: "=", Value: "Active"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if total != 3 {
+		t.Fatalf("expected filtered total 3, got %d", total)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected one page item, got %d", len(items))
+	}
+	if items[0].Data["Status"] != "Active" {
+		t.Fatalf("unexpected item: %#v", items[0].Data)
+	}
 }

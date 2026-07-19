@@ -3,6 +3,7 @@ package fakes
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/goapps-platform/metadata-service/internal/models"
 	"github.com/goapps-platform/metadata-service/internal/repositories"
@@ -391,6 +392,66 @@ func (r *fakeAuditLogRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID,
 	return r.List(ctx, limit, offset)
 }
 
+// fake package repo (publish artifact metadata: packages table)
+type fakePackageRepo struct{ data map[uuid.UUID]models.Package }
+
+func newFakePackageRepo() *fakePackageRepo {
+	return &fakePackageRepo{data: map[uuid.UUID]models.Package{}}
+}
+func (r *fakePackageRepo) Create(ctx context.Context, entity *models.Package) error {
+	if entity.ID == uuid.Nil {
+		entity.ID = uuid.New()
+	}
+	for _, existing := range r.data {
+		if existing.ApplicationVersionID == entity.ApplicationVersionID {
+			return fmt.Errorf("fake: package already exists for application_version_id %s", entity.ApplicationVersionID)
+		}
+		if entity.PackageHash != "" && existing.PackageHash == entity.PackageHash {
+			return fmt.Errorf("fake: package_hash %s already exists", entity.PackageHash)
+		}
+	}
+	r.data[entity.ID] = *entity
+	return nil
+}
+func (r *fakePackageRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Package, error) {
+	e, ok := r.data[id]
+	if !ok {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &e, nil
+}
+func (r *fakePackageRepo) List(ctx context.Context, limit int, offset int) ([]models.Package, error) {
+	out := []models.Package{}
+	for _, v := range r.data {
+		out = append(out, v)
+	}
+	return out, nil
+}
+func (r *fakePackageRepo) Update(ctx context.Context, entity *models.Package) error {
+	r.data[entity.ID] = *entity
+	return nil
+}
+func (r *fakePackageRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	delete(r.data, id)
+	return nil
+}
+func (r *fakePackageRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, limit int, offset int) ([]models.Package, error) {
+	return r.List(ctx, limit, offset)
+}
+func (r *fakePackageRepo) ListByField(ctx context.Context, field string, value any, limit int, offset int) ([]models.Package, error) {
+	if field != "application_version_id" {
+		return nil, nil
+	}
+	versionID := value.(uuid.UUID)
+	out := []models.Package{}
+	for _, v := range r.data {
+		if v.ApplicationVersionID == versionID {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+
 type fakeGenericRepo[T any] struct{ data map[uuid.UUID]T }
 
 func newFakeGenericRepo[T any]() *fakeGenericRepo[T] {
@@ -425,6 +486,9 @@ type fakeTenantSession struct {
 	entityFields         *fakeGenericRepo[models.EntityField]
 	solutionPackages     *fakeGenericRepo[models.SolutionPackage]
 	solutionPackageComponents *fakeGenericRepo[models.SolutionPackageComponent]
+	connectors           *fakeGenericRepo[models.Connector]
+	connectorActions     *fakeGenericRepo[models.ConnectorAction]
+	packages             *fakePackageRepo
 }
 
 func (s *fakeTenantSession) Users() repositories.UserRepository               { return nil }
@@ -442,12 +506,22 @@ func (s *fakeTenantSession) Formulas() repositories.FormulaRepository           
 func (s *fakeTenantSession) Events() repositories.EventRepository                     { return nil }
 func (s *fakeTenantSession) Variables() repositories.VariableRepository               { return nil }
 func (s *fakeTenantSession) Collections() repositories.CollectionRepository           { return nil }
-func (s *fakeTenantSession) Connectors() repositories.ConnectorRepository             { return nil }
-func (s *fakeTenantSession) ConnectorActions() repositories.ConnectorActionRepository { return nil }
-func (s *fakeTenantSession) Secrets() repositories.SecretRepository                   { return nil }
-func (s *fakeTenantSession) Permissions() repositories.PermissionRepository           { return nil }
+func (s *fakeTenantSession) Connectors() repositories.ConnectorRepository             { return s.connectors }
+func (s *fakeTenantSession) ConnectorActions() repositories.ConnectorActionRepository { return s.connectorActions }
+func (s *fakeTenantSession) Secrets() repositories.SecretRepository { return nil }
+func (s *fakeTenantSession) EnvironmentSecretOverrides() repositories.EnvironmentSecretOverrideRepository {
+	return nil
+}
+func (s *fakeTenantSession) ConnectorUserConnections() repositories.ConnectorUserConnectionRepository {
+	return nil
+}
+func (s *fakeTenantSession) Workflows() repositories.WorkflowRepository { return nil }
+func (s *fakeTenantSession) WorkflowRuns() repositories.WorkflowRunRepository {
+	return nil
+}
+func (s *fakeTenantSession) Permissions() repositories.PermissionRepository { return nil }
 func (s *fakeTenantSession) AuditLogs() repositories.AuditLogRepository               { return s.auditLogs }
-func (s *fakeTenantSession) Packages() repositories.PackageRepository                 { return nil }
+func (s *fakeTenantSession) Packages() repositories.PackageRepository                 { return s.packages }
 func (s *fakeTenantSession) ApplicationSnapshots() repositories.ApplicationSnapshotRepository {
 	return s.snapshots
 }
@@ -482,6 +556,9 @@ type FakeStore struct {
 	entityFields         *fakeGenericRepo[models.EntityField]
 	solutionPackages     *fakeGenericRepo[models.SolutionPackage]
 	solutionPackageComponents *fakeGenericRepo[models.SolutionPackageComponent]
+	connectors           *fakeGenericRepo[models.Connector]
+	connectorActions     *fakeGenericRepo[models.ConnectorAction]
+	packages             *fakePackageRepo
 }
 
 func NewFakeStore() *FakeStore {
@@ -500,6 +577,9 @@ func NewFakeStore() *FakeStore {
 		entityFields:         newFakeGenericRepo[models.EntityField](),
 		solutionPackages:     newFakeGenericRepo[models.SolutionPackage](),
 		solutionPackageComponents: newFakeGenericRepo[models.SolutionPackageComponent](),
+		connectors:           newFakeGenericRepo[models.Connector](),
+		connectorActions:     newFakeGenericRepo[models.ConnectorAction](),
+		packages:             newFakePackageRepo(),
 	}
 }
 
@@ -513,7 +593,14 @@ func (s *FakeStore) VersionsRepo() *fakeApplicationVersionRepo  { return s.versi
 func (s *FakeStore) SnapshotsRepo() *fakeApplicationSnapshotRepo { return s.snapshots }
 func (s *FakeStore) EnvironmentsRepo() *fakeEnvironmentRepo     { return s.environments }
 func (s *FakeStore) AuditLogsRepo() *fakeAuditLogRepo           { return s.auditLogs }
-func (s *FakeStore) Tenants() repositories.TenantRepository     { return nil }
+func (s *FakeStore) PackagesRepo() *fakePackageRepo             { return s.packages }
+func (s *FakeStore) Tenants() repositories.TenantRepository { return nil }
+func (s *FakeStore) FindWorkflowByIDUnscoped(ctx context.Context, id uuid.UUID) (*models.Workflow, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (s *FakeStore) ClaimDueScheduledWorkflows(ctx context.Context, now time.Time, limit int) ([]models.Workflow, error) {
+	return nil, fmt.Errorf("not implemented")
+}
 func (s *FakeStore) WithTenant(ctx context.Context, tenantID uuid.UUID) repositories.TenantSession {
 	return &fakeTenantSession{
 		apps:                 s.apps,
@@ -530,5 +617,8 @@ func (s *FakeStore) WithTenant(ctx context.Context, tenantID uuid.UUID) reposito
 		entityFields:         s.entityFields,
 		solutionPackages:     s.solutionPackages,
 		solutionPackageComponents: s.solutionPackageComponents,
+		connectors:           s.connectors,
+		connectorActions:     s.connectorActions,
+		packages:             s.packages,
 	}
 }

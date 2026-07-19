@@ -85,6 +85,46 @@ POST /api/runtime/session/{sessionId}/gallery/{controlId}/select
 
 Response includes targeted `refresh[]` instructions for controls that depend on `{Gallery}.Selected`.
 
+## Filter property (Phase 7.15 / 7.18 / 7.19)
+
+Gallery controls may set a `filter` formula/property. Runtime parses predicates into `QueryOverrides.Filter`:
+
+| Expression | Meaning |
+|------------|---------|
+| `Status='Active'` | Single equals |
+| `Amount>10` | Comparison (`<>`, `>`, `<`, `>=`, `<=`; quoted string or number) |
+| `Status='Active' And Region='West'` | AND of leaves |
+| `And(Status='Active', Region='West')` | Same, function form |
+| `Status='A' Or Status='B'` | OR of leaves |
+| `Or(Status='A', Status='B')` | Same, function form |
+| `Contains(Name,'acme')` | Case-insensitive substring match (Phase 7.28) |
+| `StartsWith(Name,'A')` | Case-insensitive prefix match (Phase 7.28) |
+
+Collection galleries apply the same predicate in-memory (Phase 7.19). Entity datasources push `FilterExpr` into Postgres JSONB `WHERE` (Phase 7.20) so filtered paging and totals stay correct for large lists. REST forwards equals-`And` as query params; richer predicates filter in-memory after fetch. Table-bound SQL connectors push And/Or + comparisons into `WHERE` (7.18/7.19). Named SQL `list` queries do not rewrite free-form SELECT text. Mixed infix `And`/`Or` in one expression is rejected (use `And()` / `Or()` of leaves only).
+
+## Paging (Phase 7.29)
+
+Gallery and DataTable controls support optional `pageSize` and `offset` properties. Runtime passes them through as `QueryOverrides.Limit` and `QueryOverrides.Offset` on entity/REST/SQL queries. The client shows a **Load more** button when cached rows exceed `pageSize`, revealing additional rows without reloading the screen.
+
+## LookUp (Phase 7.18)
+
+```text
+LookUp(Customers, Status='Active')
+LookUp(OrdersDb, And(Status='Open', Region='West'))
+LookUp(OrdersDb, Status='Open' Or Status='Pending')
+```
+
+Returns the first matching record, or blank when none match. Uses the same predicate parser as gallery filters.
+
+## Filter formula (Phase 7.19)
+
+```text
+Filter(Customers, Status='Active')
+Filter(OrdersDb, Amount>10 Or Status='Open')
+```
+
+Returns all matching records as a table (empty table when none match). Same predicate parser as LookUp / gallery `filter`.
+
 ## Formula support
 
 The formula runtime resolves gallery references through `GalleryReader`:

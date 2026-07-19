@@ -55,6 +55,7 @@ export function TablePropertyView() {
   const table = entityId ? getTable(entityId) : undefined;
   const fields = entityId ? (fieldsByEntityId[entityId] ?? []) : [];
   const fieldsAreLoading = entityId ? fieldsLoading[entityId] : false;
+  const relationshipFields = fields.filter((field) => field.field_type === "lookup");
 
   const [fieldsExpanded, setFieldsExpanded] = useState(
     sectionParam !== "relationships",
@@ -63,6 +64,7 @@ export function TablePropertyView() {
     sectionParam === "relationships",
   );
   const [addFieldOpen, setAddFieldOpen] = useState(false);
+  const [addRelationshipOpen, setAddRelationshipOpen] = useState(false);
   const [editField, setEditField] = useState<EntityFieldRecord | null>(null);
 
   useEffect(() => {
@@ -164,13 +166,22 @@ export function TablePropertyView() {
                     </tr>
                   </thead>
                   <tbody>
-                    {fields.map((field) => (
+                    {fields.map((field) => {
+                      const relatedTable =
+                        field.field_type === "lookup" && field.related_entity_id
+                          ? getTable(field.related_entity_id)
+                          : undefined;
+                      return (
                       <tr key={field.id}>
                         <td>{field.display_name || field.name}</td>
                         <td>{field.field_type}</td>
                         <td>{formatAuditDate(getCreatedOn(field))}</td>
                         <td>{formatCreatedBy(getCreatedBy(field))}</td>
-                        <td>—</td>
+                        <td>
+                          {relatedTable
+                            ? `→ ${relatedTable.display_name || relatedTable.name}`
+                            : "—"}
+                        </td>
                         <td>
                           <button
                             type="button"
@@ -183,7 +194,8 @@ export function TablePropertyView() {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -206,10 +218,77 @@ export function TablePropertyView() {
           tabIndex={0}
         >
           <span className={styles.sectionTitle}>Relationships</span>
-          <span className={styles.chevronBtn}>{relationshipsExpanded ? "▴" : "▾"}</span>
+          <div className={styles.sectionActions}>
+            <button
+              type="button"
+              className={styles.newBtn}
+              onClick={(e) => {
+                e.stopPropagation();
+                setAddRelationshipOpen(true);
+              }}
+            >
+              + New relationship
+            </button>
+            <span className={styles.chevronBtn}>{relationshipsExpanded ? "▴" : "▾"}</span>
+          </div>
         </div>
+
         {relationshipsExpanded ? (
-          <div className={styles.stubBody}>Relationships coming soon</div>
+          <div className={styles.sectionBody}>
+            {fieldsAreLoading ? (
+              <div className={styles.gridEmpty}>Loading relationships…</div>
+            ) : relationshipFields.length === 0 ? (
+              <div className={styles.gridEmpty}>
+                No relationships yet. A relationship is a lookup field that points at another table.
+              </div>
+            ) : (
+              <div className={styles.gridWrap}>
+                <table className={styles.grid}>
+                  <thead>
+                    <tr>
+                      <th>Field</th>
+                      <th>Related Table</th>
+                      <th>CreatedOn</th>
+                      <th>CreatedBy</th>
+                      <th aria-label="Actions" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {relationshipFields.map((field) => {
+                      const related = field.related_entity_id
+                        ? getTable(field.related_entity_id)
+                        : undefined;
+                      return (
+                        <tr key={field.id}>
+                          <td>{field.display_name || field.name}</td>
+                          <td>
+                            {related
+                              ? related.display_name || related.name
+                              : field.related_entity_id
+                                ? "Unknown table"
+                                : "—"}
+                          </td>
+                          <td>{formatAuditDate(getCreatedOn(field))}</td>
+                          <td>{formatCreatedBy(getCreatedBy(field))}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className={styles.iconBtn}
+                              title="Edit relationship"
+                              aria-label={`Edit ${field.name}`}
+                              onClick={() => setEditField(field)}
+                            >
+                              <EditIcon />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         ) : null}
       </section>
 
@@ -218,6 +297,18 @@ export function TablePropertyView() {
         entityId={entityId ?? null}
         entityName={title}
         onClose={() => setAddFieldOpen(false)}
+        onCreated={() => {
+          if (entityId) void refreshFields(entityId);
+        }}
+      />
+
+      <AddTableFieldModal
+        open={addRelationshipOpen}
+        entityId={entityId ?? null}
+        entityName={title}
+        initialFieldType="lookup"
+        title="New Relationship"
+        onClose={() => setAddRelationshipOpen(false)}
         onCreated={() => {
           if (entityId) void refreshFields(entityId);
         }}

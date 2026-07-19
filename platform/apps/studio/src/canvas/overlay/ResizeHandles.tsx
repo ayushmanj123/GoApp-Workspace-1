@@ -3,6 +3,7 @@ import { useApplicationStore } from "../../store/applicationStore";
 import { toScreenBounds, type ArtboardOffset } from "../CoordinateSystem";
 import { findDesignerNode } from "../designer/DesignerNodeRegistry";
 import type { DesignerNode } from "../designer/DesignerNode";
+import { clampRectToArtboard } from "../interaction/artboardClamp";
 import {
   useInteractionStore,
   type ResizeHandle,
@@ -111,6 +112,12 @@ export function ResizeHandles({ nodes, offset, zoom }: ResizeHandlesProps) {
           height = Math.max(10, startBounds.height - dy);
           y = startBounds.y + (startBounds.height - height);
         }
+
+        const clamped = clampRectToArtboard(x, y, width, height);
+        x = clamped.x;
+        y = clamped.y;
+        width = clamped.width;
+        height = clamped.height;
 
         const parentOffset = node.parentId
           ? findDesignerNode(nodes, node.parentId)?.absoluteBounds

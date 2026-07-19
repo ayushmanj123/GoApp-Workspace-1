@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/goapps-platform/runtime-service/internal/databinding"
 	"github.com/goapps-platform/runtime-service/internal/gallery"
 	"github.com/goapps-platform/runtime-service/internal/records"
 	"github.com/google/uuid"
@@ -312,3 +313,237 @@ func TestFormulaModeAndValid(t *testing.T) {
 		t.Fatalf("expected valid=true, got %#v ok=%v", valid, ok)
 	}
 }
+
+type fakeSQLFormDataSource struct {
+	created bool
+	updated bool
+}
+
+func (f *fakeSQLFormDataSource) Kind() databinding.DataSourceKind { return databinding.DataSourceKindSql }
+func (f *fakeSQLFormDataSource) Query(context.Context, databinding.QueryInput) (*databinding.QueryResult, error) {
+	return nil, errors.New("not implemented")
+}
+func (f *fakeSQLFormDataSource) Get(context.Context, uuid.UUID, uuid.UUID, databinding.DataSourceKey, uuid.UUID) (*databinding.DataItem, error) {
+	return nil, errors.New("not implemented")
+}
+func (f *fakeSQLFormDataSource) Create(_ context.Context, _, _ uuid.UUID, _ databinding.DataSourceKey, data map[string]interface{}) (*databinding.DataItem, error) {
+	f.created = true
+	item := databinding.DataItem{"id": uuid.New().String(), "name": data["name"]}
+	return &item, nil
+}
+func (f *fakeSQLFormDataSource) Update(_ context.Context, _, _ uuid.UUID, _ databinding.DataSourceKey, recordID uuid.UUID, data map[string]interface{}, _ int) (*databinding.DataItem, error) {
+	f.updated = true
+	item := databinding.DataItem{"id": recordID.String(), "name": data["name"]}
+	return &item, nil
+}
+func (f *fakeSQLFormDataSource) Delete(context.Context, uuid.UUID, uuid.UUID, databinding.DataSourceKey, uuid.UUID) error {
+	return errors.New("not implemented")
+}
+
+func TestSubmitSQLUsesDataSource(t *testing.T) {
+	store := NewSessionStore()
+	sqlDS := &fakeSQLFormDataSource{}
+	registry := databinding.NewDataSourceRegistry(nil).SetSql(sqlDS)
+	svc := NewService(store, &fakeRecordService{}, &fakeRecordService{}, nil, registry, gallery.NewSessionStore())
+	sessionID := uuid.New()
+	connectorID := uuid.New()
+	control := testFormControl()
+
+	store.Set(sessionID, control.Name, &State{
+		Mode:           ModeNew,
+		CurrentRecord:  map[string]interface{}{"name": "Ada"},
+		DirtyFields:    map[string]interface{}{"name": "Ada"},
+		EntityID:       connectorID,
+		DataSource:     "OrdersDb",
+		DataSourceKind: string(databinding.DataSourceKindSql),
+	})
+	state, source, err := svc.Submit(context.Background(), sessionID, uuid.New(), uuid.New(), uuid.New(), control)
+	if err != nil {
+		t.Fatalf("Submit new: %v", err)
+	}
+	if !sqlDS.created {
+		t.Fatal("expected SQL Create")
+	}
+	if source != "OrdersDb" || state.Mode != ModeView {
+		t.Fatalf("unexpected submit result source=%s mode=%s", source, state.Mode)
+	}
+
+	recordID := uuid.New()
+	store.Set(sessionID, control.Name, &State{
+		Mode: ModeEdit,
+		CurrentRecord: map[string]interface{}{
+			"id":   recordID.String(),
+			"name": "Ada",
+		},
+		DirtyFields:    map[string]interface{}{"name": "Grace"},
+		EntityID:       connectorID,
+		DataSource:     "OrdersDb",
+		DataSourceKind: string(databinding.DataSourceKindSql),
+	})
+	if _, err := svc.Update(context.Background(), sessionID, uuid.New(), uuid.New(), control, map[string]interface{}{"name": "Grace"}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	_, _, err = svc.Submit(context.Background(), sessionID, uuid.New(), uuid.New(), uuid.New(), control)
+	if err != nil {
+		t.Fatalf("Submit edit: %v", err)
+	}
+	if !sqlDS.updated {
+		t.Fatal("expected SQL Update")
+	}
+}
+
+type fakeStorageFormDataSource struct {
+	created bool
+	last    map[string]interface{}
+}
+
+func (f *fakeStorageFormDataSource) Kind() databinding.DataSourceKind {
+	return databinding.DataSourceKindStorage
+}
+func (f *fakeStorageFormDataSource) Query(context.Context, databinding.QueryInput) (*databinding.QueryResult, error) {
+	return nil, errors.New("not implemented")
+}
+func (f *fakeStorageFormDataSource) Get(context.Context, uuid.UUID, uuid.UUID, databinding.DataSourceKey, uuid.UUID) (*databinding.DataItem, error) {
+	return nil, errors.New("not implemented")
+}
+func (f *fakeStorageFormDataSource) Create(_ context.Context, _, _ uuid.UUID, _ databinding.DataSourceKey, data map[string]interface{}) (*databinding.DataItem, error) {
+	f.created = true
+	f.last = data
+	item := databinding.DataItem{"id": "invoices/a.txt", "key": "invoices/a.txt", "size": 5}
+	return &item, nil
+}
+func (f *fakeStorageFormDataSource) Update(context.Context, uuid.UUID, uuid.UUID, databinding.DataSourceKey, uuid.UUID, map[string]interface{}, int) (*databinding.DataItem, error) {
+	return nil, errors.New("not implemented")
+}
+func (f *fakeStorageFormDataSource) Delete(context.Context, uuid.UUID, uuid.UUID, databinding.DataSourceKey, uuid.UUID) error {
+	return errors.New("not implemented")
+}
+
+func TestSubmitStorageUsesDataSource(t *testing.T) {
+	store := NewSessionStore()
+	storageDS := &fakeStorageFormDataSource{}
+	registry := databinding.NewDataSourceRegistry(nil).SetStorage(storageDS)
+	svc := NewService(store, &fakeRecordService{}, &fakeRecordService{}, nil, registry, gallery.NewSessionStore())
+	sessionID := uuid.New()
+	connectorID := uuid.New()
+	control := testFormControl()
+
+	store.Set(sessionID, control.Name, &State{
+		Mode: ModeNew,
+		CurrentRecord: map[string]interface{}{
+			"key":     "a.txt",
+			"content": "hello",
+		},
+		DirtyFields: map[string]interface{}{
+			"key":     "a.txt",
+			"content": "hello",
+		},
+		EntityID:       connectorID,
+		DataSource:     "DocsBucket",
+		DataSourceKind: string(databinding.DataSourceKindStorage),
+	})
+	state, source, err := svc.Submit(context.Background(), sessionID, uuid.New(), uuid.New(), uuid.New(), control)
+	if err != nil {
+		t.Fatalf("Submit new: %v", err)
+	}
+	if !storageDS.created {
+		t.Fatal("expected storage Create")
+	}
+	if source != "DocsBucket" || state.Mode != ModeView {
+		t.Fatalf("unexpected submit result source=%s mode=%s", source, state.Mode)
+	}
+
+	store.Set(sessionID, control.Name, &State{
+		Mode:           ModeEdit,
+		CurrentRecord:  map[string]interface{}{"key": "a.txt"},
+		DirtyFields:    map[string]interface{}{"content": "x"},
+		EntityID:       connectorID,
+		DataSource:     "DocsBucket",
+		DataSourceKind: string(databinding.DataSourceKindStorage),
+	})
+	_, _, err = svc.Submit(context.Background(), sessionID, uuid.New(), uuid.New(), uuid.New(), control)
+	if !errors.Is(err, ErrStorageEditMode) {
+		t.Fatalf("expected ErrStorageEditMode, got %v", err)
+	}
+}
+
+type fakeRESTFormDataSource struct {
+	created bool
+	updated bool
+}
+
+func (f *fakeRESTFormDataSource) Kind() databinding.DataSourceKind {
+	return databinding.DataSourceKindRest
+}
+func (f *fakeRESTFormDataSource) Query(context.Context, databinding.QueryInput) (*databinding.QueryResult, error) {
+	return nil, errors.New("not implemented")
+}
+func (f *fakeRESTFormDataSource) Get(context.Context, uuid.UUID, uuid.UUID, databinding.DataSourceKey, uuid.UUID) (*databinding.DataItem, error) {
+	return nil, errors.New("not implemented")
+}
+func (f *fakeRESTFormDataSource) Create(_ context.Context, _, _ uuid.UUID, _ databinding.DataSourceKey, data map[string]interface{}) (*databinding.DataItem, error) {
+	f.created = true
+	item := databinding.DataItem{"id": uuid.New().String(), "name": data["name"]}
+	return &item, nil
+}
+func (f *fakeRESTFormDataSource) Update(_ context.Context, _, _ uuid.UUID, _ databinding.DataSourceKey, recordID uuid.UUID, data map[string]interface{}, _ int) (*databinding.DataItem, error) {
+	f.updated = true
+	item := databinding.DataItem{"id": recordID.String(), "name": data["name"]}
+	return &item, nil
+}
+func (f *fakeRESTFormDataSource) Delete(context.Context, uuid.UUID, uuid.UUID, databinding.DataSourceKey, uuid.UUID) error {
+	return errors.New("not implemented")
+}
+
+func TestSubmitRESTUsesDataSource(t *testing.T) {
+	store := NewSessionStore()
+	restDS := &fakeRESTFormDataSource{}
+	registry := databinding.NewDataSourceRegistry(nil).SetRest(restDS)
+	svc := NewService(store, &fakeRecordService{}, &fakeRecordService{}, nil, registry, gallery.NewSessionStore())
+	sessionID := uuid.New()
+	connectorID := uuid.New()
+	control := testFormControl()
+
+	store.Set(sessionID, control.Name, &State{
+		Mode:           ModeNew,
+		CurrentRecord:  map[string]interface{}{"name": "Ada"},
+		DirtyFields:    map[string]interface{}{"name": "Ada"},
+		EntityID:       connectorID,
+		DataSource:     "WeatherApi",
+		DataSourceKind: string(databinding.DataSourceKindRest),
+	})
+	state, source, err := svc.Submit(context.Background(), sessionID, uuid.New(), uuid.New(), uuid.New(), control)
+	if err != nil {
+		t.Fatalf("Submit new: %v", err)
+	}
+	if !restDS.created {
+		t.Fatal("expected REST Create")
+	}
+	if source != "WeatherApi" || state.Mode != ModeView {
+		t.Fatalf("unexpected submit result source=%s mode=%s", source, state.Mode)
+	}
+
+	recordID := uuid.New()
+	store.Set(sessionID, control.Name, &State{
+		Mode: ModeEdit,
+		CurrentRecord: map[string]interface{}{
+			"id":   recordID.String(),
+			"name": "Ada",
+		},
+		DirtyFields:    map[string]interface{}{"name": "Grace"},
+		EntityID:       connectorID,
+		DataSource:     "WeatherApi",
+		DataSourceKind: string(databinding.DataSourceKindRest),
+	})
+	if _, err := svc.Update(context.Background(), sessionID, uuid.New(), uuid.New(), control, map[string]interface{}{"name": "Grace"}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	_, _, err = svc.Submit(context.Background(), sessionID, uuid.New(), uuid.New(), uuid.New(), control)
+	if err != nil {
+		t.Fatalf("Submit edit: %v", err)
+	}
+	if !restDS.updated {
+		t.Fatal("expected REST Update")
+	}
+}
+

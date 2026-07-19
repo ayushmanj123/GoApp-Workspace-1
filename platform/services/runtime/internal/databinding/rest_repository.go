@@ -18,19 +18,27 @@ import (
 // for the requested convention name (list/get/create/update/delete).
 var ErrRestActionNotFound = errors.New("databinding: rest connector action not found")
 
+// ErrConnectorUserOAuthRequired is returned when a per-user OAuth connector has
+// no refresh token for the calling user. The stable code string is part of the
+// public client contract (Phase 7.22).
+var ErrConnectorUserOAuthRequired = errors.New("connector_user_oauth_required")
+
 var legacyHeaderValueOnce sync.Once
 
 // RestAuthConfig is the parsed connectors.auth_config JSON payload.
-// Supports none, header (static), and oauth_client_credentials.
+// Supports none, header, oauth_client_credentials, and oauth_authorization_code.
 type RestAuthConfig struct {
-	Type         string `json:"type"`
-	HeaderName   string `json:"header_name,omitempty"`
-	HeaderValue  string `json:"header_value,omitempty"`
-	SecretID     string `json:"secret_id,omitempty"`
-	TokenURL     string `json:"token_url,omitempty"`
-	ClientID     string `json:"client_id,omitempty"`
-	ClientSecret string `json:"client_secret,omitempty"`
-	Scope        string `json:"scope,omitempty"`
+	Type            string `json:"type"`
+	HeaderName      string `json:"header_name,omitempty"`
+	HeaderValue     string `json:"header_value,omitempty"`
+	SecretID        string `json:"secret_id,omitempty"`
+	RefreshSecretID string `json:"refresh_secret_id,omitempty"`
+	TokenURL        string `json:"token_url,omitempty"`
+	ClientID        string `json:"client_id,omitempty"`
+	ClientSecret    string `json:"client_secret,omitempty"`
+	RefreshToken    string `json:"-"`
+	Scope           string `json:"scope,omitempty"`
+	ConnectionScope string `json:"connection_scope,omitempty"`
 }
 
 // RestConnectorConfig is the resolved configuration for a REST connector.
@@ -50,7 +58,7 @@ type RestConnectorAction struct {
 
 // RestConnectorRepository loads REST connector configuration and actions.
 type RestConnectorRepository interface {
-	GetConnectorConfig(ctx context.Context, tenantID, connectorID uuid.UUID) (*RestConnectorConfig, error)
+	GetConnectorConfig(ctx context.Context, tenantID, connectorID uuid.UUID, environmentID *uuid.UUID, userID uuid.UUID) (*RestConnectorConfig, error)
 	GetAction(ctx context.Context, tenantID, connectorID uuid.UUID, actionName string) (*RestConnectorAction, error)
 }
 
@@ -80,6 +88,12 @@ type secretRow struct {
 
 func (secretRow) TableName() string { return "secrets" }
 
+type connectorUserConnectionRow struct {
+	RefreshSecretID uuid.UUID `gorm:"column:refresh_secret_id"`
+}
+
+func (connectorUserConnectionRow) TableName() string { return "connector_user_connections" }
+
 // PostgresRestConnectorRepository resolves REST connector metadata from the
 // shared PostgreSQL tables owned by the metadata service (connectors,
 // connector_actions). Kept inside the runtime service per architecture
@@ -97,7 +111,7 @@ func NewPostgresRestConnectorRepository(db *gorm.DB) *PostgresRestConnectorRepos
 	return &PostgresRestConnectorRepository{db: db, masterKey: key}
 }
 
-func (r *PostgresRestConnectorRepository) GetConnectorConfig(ctx context.Context, tenantID, connectorID uuid.UUID) (*RestConnectorConfig, error) {
+func (r *PostgresRestConnectorRepository) GetConnectorConfig(ctx context.Context, tenantID, connectorID uuid.UUID, environmentID *uuid.UUID, userID uuid.UUID) (*RestConnectorConfig, error) {
 	var row restConnectorRow
 	err := r.db.WithContext(ctx).
 		Where("id = ? AND tenant_id = ? AND connector_type = 'rest' AND deleted_at IS NULL", connectorID, tenantID).
@@ -123,7 +137,7 @@ func (r *PostgresRestConnectorRepository) GetConnectorConfig(ctx context.Context
 		}
 	}
 
-	if err := r.resolveAuthSecret(ctx, tenantID, &auth); err != nil {
+	if err := r.resolveAuthSecret(ctx, tenantID, connectorID, environmentID, userID, &auth); err != nil {
 		return nil, err
 	}
 
@@ -135,13 +149,14 @@ func (r *PostgresRestConnectorRepository) GetConnectorConfig(ctx context.Context
 	}, nil
 }
 
-func (r *PostgresRestConnectorRepository) resolveAuthSecret(ctx context.Context, tenantID uuid.UUID, auth *RestAuthConfig) error {
+func (r *PostgresRestConnectorRepository) resolveAuthSecret(ctx context.Context, tenantID, connectorID uuid.UUID, environmentID *uuid.UUID, userID uuid.UUID, auth *RestAuthConfig) error {
 	if auth == nil {
 		return nil
 	}
 	isHeader := strings.EqualFold(auth.Type, "header")
-	isOAuth := strings.EqualFold(auth.Type, "oauth_client_credentials")
-	if !isHeader && !isOAuth {
+	isOAuthCC := strings.EqualFold(auth.Type, "oauth_client_credentials")
+	isOAuthCode := strings.EqualFold(auth.Type, "oauth_authorization_code")
+	if !isHeader && !isOAuthCC && !isOAuthCode {
 		return nil
 	}
 	if auth.SecretID != "" {
@@ -149,34 +164,59 @@ func (r *PostgresRestConnectorRepository) resolveAuthSecret(ctx context.Context,
 		if err != nil {
 			return fmt.Errorf("databinding: invalid secret_id: %w", err)
 		}
-		if len(r.masterKey) == 0 {
-			return fmt.Errorf("databinding: secrets master key is not configured")
-		}
-		var sec secretRow
-		err = r.db.WithContext(ctx).
-			Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", secretUUID, tenantID).
-			First(&sec).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("databinding: connector secret not found")
-		}
+		plain, err := decryptSecretPlaintext(ctx, r.db, r.masterKey, tenantID, secretUUID, environmentID)
 		if err != nil {
-			return fmt.Errorf("databinding: load connector secret: %w", err)
+			return err
 		}
-		plain, err := secrets.Decrypt(r.masterKey, sec.Ciphertext, sec.Nonce)
-		if err != nil {
-			return fmt.Errorf("databinding: decrypt connector secret: %w", err)
-		}
-		if isOAuth {
-			auth.ClientSecret = string(plain)
+		if isOAuthCC || isOAuthCode {
+			auth.ClientSecret = plain
 		} else {
-			auth.HeaderValue = string(plain)
+			auth.HeaderValue = plain
 		}
-		return nil
-	}
-	if isHeader && auth.HeaderValue != "" {
+	} else if isHeader && auth.HeaderValue != "" {
 		legacyHeaderValueOnce.Do(func() {
 			log.Printf("databinding: connector using legacy auth_config.header_value; migrate to secret_id")
 		})
+	}
+	if isOAuthCode {
+		connectionScope := strings.ToLower(strings.TrimSpace(auth.ConnectionScope))
+		if connectionScope == "" {
+			connectionScope = "app"
+		}
+		if connectionScope == "user" {
+			if userID == uuid.Nil {
+				return fmt.Errorf("%w: missing user id", ErrConnectorUserOAuthRequired)
+			}
+			var row connectorUserConnectionRow
+			err := r.db.WithContext(ctx).
+				Where("tenant_id = ? AND connector_id = ? AND user_id = ? AND deleted_at IS NULL", tenantID, connectorID, userID).
+				First(&row).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("%w: connector %s", ErrConnectorUserOAuthRequired, connectorID)
+			}
+			if err != nil {
+				return fmt.Errorf("databinding: load user oauth connection: %w", err)
+			}
+			plain, err := decryptSecretPlaintext(ctx, r.db, r.masterKey, tenantID, row.RefreshSecretID, nil)
+			if err != nil {
+				return fmt.Errorf("databinding: load user refresh_token: %w", err)
+			}
+			auth.RefreshToken = plain
+			return nil
+		}
+		if strings.TrimSpace(auth.RefreshSecretID) == "" {
+			return fmt.Errorf("databinding: oauth_authorization_code connector is not connected (missing refresh_secret_id)")
+		}
+		refreshUUID, err := uuid.Parse(auth.RefreshSecretID)
+		if err != nil {
+			return fmt.Errorf("databinding: invalid refresh_secret_id: %w", err)
+		}
+		// App-scoped refresh tokens stay app-default (no env override).
+		plain, err := decryptSecretPlaintext(ctx, r.db, r.masterKey, tenantID, refreshUUID, nil)
+		if err != nil {
+			return fmt.Errorf("databinding: load refresh_token: %w", err)
+		}
+		auth.RefreshToken = plain
 	}
 	return nil
 }

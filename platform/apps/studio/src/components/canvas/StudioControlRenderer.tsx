@@ -10,7 +10,7 @@ import {
   expandDefinitionForInstance,
   readComponentDefinitionId,
 } from "../../utils/component-definition";
-import registry from "../../../../../packages/ui/src/registry.component-registry";
+import registry from "@goapps/ui/registry.component-registry";
 import styles from "./StudioControlRenderer.module.css";
 
 ensureStudioRegistry();

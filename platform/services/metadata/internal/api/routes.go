@@ -4,12 +4,19 @@ import (
 	"github.com/goapps-platform/metadata-service/internal/api/handlers"
 	"github.com/goapps-platform/metadata-service/internal/api/tenant"
 	"github.com/goapps-platform/metadata-service/internal/repositories"
+	"github.com/goapps-platform/metadata-service/internal/services"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
 
 // RegisterRoutes registers API routes. middlewares run on /api/v1 (auth, etc.).
-func RegisterRoutes(app *fiber.App, store repositories.Store, middlewares ...fiber.Handler) {
+// Public webhook routes are registered without auth middlewares.
+func RegisterRoutes(app *fiber.App, store repositories.Store, middlewares ...fiber.Handler) *services.WorkflowService {
+	workflowHandler := handlers.NewWorkflowHandler(store)
+
+	public := app.Group("/api/v1/public")
+	public.Post("/workflows/:id/hook", func(c *fiber.Ctx) error { return workflowHandler.PublicHook(c) })
+
 	v1 := app.Group("/api/v1", middlewares...)
 
 	// Applications
@@ -82,13 +89,27 @@ func RegisterRoutes(app *fiber.App, store repositories.Store, middlewares ...fib
 	connectorHandler := handlers.NewConnectorHandler(store)
 	v1.Post("/applications/:appId/connectors", func(c *fiber.Ctx) error { return connectorHandler.Create(c) })
 	v1.Get("/applications/:appId/connectors", func(c *fiber.Ctx) error { return connectorHandler.List(c) })
+	v1.Get("/connectors/oauth/callback", func(c *fiber.Ctx) error { return connectorHandler.OAuthCallback(c) })
 	v1.Get("/connectors/:id", func(c *fiber.Ctx) error { return connectorHandler.Get(c) })
 	v1.Put("/connectors/:id", func(c *fiber.Ctx) error { return connectorHandler.Update(c) })
 	v1.Delete("/connectors/:id", func(c *fiber.Ctx) error { return connectorHandler.Delete(c) })
+	v1.Post("/connectors/:id/oauth/start", func(c *fiber.Ctx) error { return connectorHandler.StartOAuth(c) })
+	v1.Get("/connectors/:id/oauth/connection", func(c *fiber.Ctx) error { return connectorHandler.GetOAuthConnection(c) })
+	v1.Delete("/connectors/:id/oauth/connection", func(c *fiber.Ctx) error { return connectorHandler.DeleteOAuthConnection(c) })
 	v1.Post("/connectors/:connectorId/actions", func(c *fiber.Ctx) error { return connectorHandler.CreateAction(c) })
 	v1.Get("/connectors/:connectorId/actions", func(c *fiber.Ctx) error { return connectorHandler.ListActions(c) })
 	v1.Put("/connector-actions/:id", func(c *fiber.Ctx) error { return connectorHandler.UpdateAction(c) })
 	v1.Delete("/connector-actions/:id", func(c *fiber.Ctx) error { return connectorHandler.DeleteAction(c) })
+
+	// Workflows (Phase 7.23 / 7.24)
+	v1.Post("/applications/:appId/workflows", func(c *fiber.Ctx) error { return workflowHandler.Create(c) })
+	v1.Get("/applications/:appId/workflows", func(c *fiber.Ctx) error { return workflowHandler.List(c) })
+	v1.Get("/workflows/:id", func(c *fiber.Ctx) error { return workflowHandler.Get(c) })
+	v1.Put("/workflows/:id", func(c *fiber.Ctx) error { return workflowHandler.Update(c) })
+	v1.Delete("/workflows/:id", func(c *fiber.Ctx) error { return workflowHandler.Delete(c) })
+	v1.Post("/workflows/:id/run", func(c *fiber.Ctx) error { return workflowHandler.Run(c) })
+	v1.Get("/workflows/:id/runs", func(c *fiber.Ctx) error { return workflowHandler.ListRuns(c) })
+	v1.Post("/workflows/:id/webhook-secret", func(c *fiber.Ctx) error { return workflowHandler.RotateWebhookSecret(c) })
 
 	// Publishing (+ Enterprise ALM: unpublish / rollback / deprecate)
 	publishHandler := handlers.NewPublishHandler(store)
@@ -107,6 +128,15 @@ func RegisterRoutes(app *fiber.App, store repositories.Store, middlewares ...fib
 	v1.Put("/applications/:appId/environments/:envId", func(c *fiber.Ctx) error { return envHandler.Update(c) })
 	v1.Delete("/applications/:appId/environments/:envId", func(c *fiber.Ctx) error { return envHandler.Delete(c) })
 	v1.Post("/applications/:appId/environments/:envId/promote", func(c *fiber.Ctx) error { return envHandler.Promote(c) })
+	v1.Get("/applications/:appId/environments/:envId/secret-overrides", func(c *fiber.Ctx) error {
+		return envHandler.ListSecretOverrides(c)
+	})
+	v1.Put("/applications/:appId/environments/:envId/secret-overrides", func(c *fiber.Ctx) error {
+		return envHandler.UpsertSecretOverride(c)
+	})
+	v1.Delete("/applications/:appId/environments/:envId/secret-overrides/:connectorId", func(c *fiber.Ctx) error {
+		return envHandler.DeleteSecretOverride(c)
+	})
 
 	// Audit events (append-only ALM trail)
 	auditHandler := handlers.NewAuditHandler(store)
@@ -125,6 +155,8 @@ func RegisterRoutes(app *fiber.App, store repositories.Store, middlewares ...fib
 	v1.Delete("/packages/:id/components/:componentType/:componentId", func(c *fiber.Ctx) error {
 		return pkgHandler.RemoveComponent(c)
 	})
+
+	return workflowHandler.Service()
 }
 
 // Helper to extract tenant id from Fiber context. It prefers Locals("tenant_id") then header.

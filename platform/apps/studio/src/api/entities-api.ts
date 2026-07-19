@@ -1,6 +1,6 @@
 import { apiClient, PagedData } from "./metadata-client";
 
-export type EntityFieldType = "text" | "number" | "boolean" | "date";
+export type EntityFieldType = "text" | "number" | "boolean" | "date" | "lookup";
 
 export interface EntityRecord {
   id: string;
@@ -24,6 +24,7 @@ export interface EntityFieldRecord {
   display_name: string;
   field_type: EntityFieldType;
   is_required?: boolean;
+  related_entity_id?: string | null;
   CreatedOn?: string;
   ModifiedOn?: string;
   created_on?: string;
@@ -46,12 +47,15 @@ export interface CreateEntityFieldPayload {
   name: string;
   display_name: string;
   field_type: EntityFieldType;
+  related_entity_id?: string;
 }
 
 export interface UpdateEntityFieldPayload {
   name?: string;
   display_name?: string;
   field_type?: EntityFieldType;
+  // Pass an empty string to clear an existing relationship.
+  related_entity_id?: string;
 }
 
 export const entitiesApi = {

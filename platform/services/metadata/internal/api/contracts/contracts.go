@@ -90,29 +90,33 @@ type UpdateEntityRequest struct {
 }
 
 type CreateEntityFieldRequest struct {
-	Name        string `json:"name" validate:"required,min=1,max=200"`
-	DisplayName string `json:"display_name" validate:"required,min=1,max=200"`
-	FieldType   string `json:"field_type" validate:"required,oneof=text number boolean date"`
+	Name            string  `json:"name" validate:"required,min=1,max=200"`
+	DisplayName     string  `json:"display_name" validate:"required,min=1,max=200"`
+	FieldType       string  `json:"field_type" validate:"required,oneof=text number boolean date lookup"`
+	RelatedEntityID *string `json:"related_entity_id" validate:"omitempty,uuid4"`
 }
 
 type UpdateEntityFieldRequest struct {
 	Name        *string `json:"name" validate:"omitempty,min=1,max=200"`
 	DisplayName *string `json:"display_name" validate:"omitempty,min=1,max=200"`
-	FieldType   *string `json:"field_type" validate:"omitempty,oneof=text number boolean date"`
+	FieldType   *string `json:"field_type" validate:"omitempty,oneof=text number boolean date lookup"`
+	// RelatedEntityID: a valid UUID sets/changes the relationship target; an
+	// explicit empty string clears it. Omit the field to leave it unchanged.
+	RelatedEntityID *string `json:"related_entity_id" validate:"omitempty"`
 }
 
 // Connector DTOs
 type CreateConnectorRequest struct {
 	Name               string          `json:"name" validate:"required,min=1,max=200"`
 	ConnectorType      string          `json:"connector_type" validate:"required,oneof=rest sql storage"`
-	AuthenticationType string          `json:"authentication_type" validate:"required,oneof=none header connection_string oauth_client_credentials s3"`
+	AuthenticationType string          `json:"authentication_type" validate:"required,oneof=none header connection_string oauth_client_credentials oauth_authorization_code s3"`
 	BaseURL            string          `json:"base_url" validate:"omitempty,max=2000"`
 	AuthConfig         json.RawMessage `json:"auth_config" validate:"omitempty"`
 }
 
 type UpdateConnectorRequest struct {
 	Name               *string         `json:"name" validate:"omitempty,min=1,max=200"`
-	AuthenticationType *string         `json:"authentication_type" validate:"omitempty,oneof=none header connection_string oauth_client_credentials s3"`
+	AuthenticationType *string         `json:"authentication_type" validate:"omitempty,oneof=none header connection_string oauth_client_credentials oauth_authorization_code s3"`
 	BaseURL            *string         `json:"base_url" validate:"omitempty,max=2000"`
 	AuthConfig         json.RawMessage `json:"auth_config" validate:"omitempty"`
 }
@@ -127,6 +131,17 @@ type UpdateConnectorActionRequest struct {
 	ActionName *string `json:"action_name" validate:"omitempty,min=1,max=200"`
 	HTTPMethod *string `json:"http_method" validate:"omitempty,oneof=GET POST PUT PATCH DELETE HEAD OPTIONS"`
 	Endpoint   *string `json:"endpoint" validate:"omitempty,max=2000"`
+}
+
+// Workflow DTOs (Phase 7.23)
+type CreateWorkflowRequest struct {
+	Name       string          `json:"name" validate:"required,min=1,max=200"`
+	Definition json.RawMessage `json:"definition" validate:"required"`
+}
+
+type UpdateWorkflowRequest struct {
+	Name       *string         `json:"name" validate:"omitempty,min=1,max=200"`
+	Definition json.RawMessage `json:"definition" validate:"omitempty"`
 }
 
 // Pagination
@@ -158,14 +173,15 @@ func NowUTC() time.Time { return time.Now().UTC() }
 // Runtime DTOs for the runtime package
 
 type RuntimeApplication struct {
-	ID        uuid.UUID        `json:"id"`
-	TenantID  uuid.UUID        `json:"tenant_id"`
-	Name      string           `json:"name"`
-	Status    string           `json:"status"`
-	OnStart   *string          `json:"on_start,omitempty"`
-	Screens   []RuntimeScreen  `json:"screens"`
-	Entities  []RuntimeEntity  `json:"entities,omitempty"`
-	CreatedOn time.Time        `json:"created_on"`
+	ID         uuid.UUID          `json:"id"`
+	TenantID   uuid.UUID          `json:"tenant_id"`
+	Name       string             `json:"name"`
+	Status     string             `json:"status"`
+	OnStart    *string            `json:"on_start,omitempty"`
+	Screens    []RuntimeScreen    `json:"screens"`
+	Entities   []RuntimeEntity    `json:"entities,omitempty"`
+	Connectors []RuntimeConnector `json:"connectors,omitempty"`
+	CreatedOn  time.Time          `json:"created_on"`
 }
 
 type RuntimeEntity struct {
@@ -176,6 +192,26 @@ type RuntimeEntity struct {
 type RuntimeEntityField struct {
 	Name      string `json:"name"`
 	FieldType string `json:"field_type"`
+}
+
+// RuntimeConnector is the frozen (publish-time) view of a connector.
+// AuthConfig is sanitized: it carries secret_id references only, never
+// plaintext secrets (header_value, client_secret, connection_string,
+// secret_access_key are always stripped before this is assembled).
+type RuntimeConnector struct {
+	ID                 uuid.UUID                `json:"id"`
+	Name               string                   `json:"name"`
+	ConnectorType      string                   `json:"connector_type"`
+	AuthenticationType string                   `json:"authentication_type"`
+	BaseURL            string                   `json:"base_url,omitempty"`
+	AuthConfig         json.RawMessage          `json:"auth_config,omitempty"`
+	Actions            []RuntimeConnectorAction `json:"actions,omitempty"`
+}
+
+type RuntimeConnectorAction struct {
+	ActionName string `json:"action_name"`
+	HTTPMethod string `json:"http_method"`
+	Endpoint   string `json:"endpoint"`
 }
 
 type RuntimeScreen struct {
@@ -279,6 +315,11 @@ type UpdateEnvironmentRequest struct {
 
 type PromoteEnvironmentRequest struct {
 	VersionID string `json:"version_id" validate:"required,uuid4"`
+}
+
+type UpsertEnvironmentSecretOverrideRequest struct {
+	ConnectorID string `json:"connector_id" validate:"required,uuid4"`
+	Value       string `json:"value" validate:"required,min=1"`
 }
 
 type EnvironmentDTO struct {

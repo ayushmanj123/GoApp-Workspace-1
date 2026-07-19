@@ -48,7 +48,7 @@ type SqlConnectorAction struct {
 
 // SqlConnectorRepository loads SQL connector configuration and optional actions.
 type SqlConnectorRepository interface {
-	GetConnectorConfig(ctx context.Context, tenantID, connectorID uuid.UUID) (*SqlConnectorConfig, error)
+	GetConnectorConfig(ctx context.Context, tenantID, connectorID uuid.UUID, environmentID *uuid.UUID) (*SqlConnectorConfig, error)
 	GetAction(ctx context.Context, tenantID, connectorID uuid.UUID, actionName string) (*SqlConnectorAction, error)
 }
 
@@ -66,7 +66,7 @@ func NewPostgresSqlConnectorRepository(db *gorm.DB) *PostgresSqlConnectorReposit
 	return &PostgresSqlConnectorRepository{db: db, masterKey: key}
 }
 
-func (r *PostgresSqlConnectorRepository) GetConnectorConfig(ctx context.Context, tenantID, connectorID uuid.UUID) (*SqlConnectorConfig, error) {
+func (r *PostgresSqlConnectorRepository) GetConnectorConfig(ctx context.Context, tenantID, connectorID uuid.UUID, environmentID *uuid.UUID) (*SqlConnectorConfig, error) {
 	var row sqlConnectorRow
 	err := r.db.WithContext(ctx).
 		Where("id = ? AND tenant_id = ? AND connector_type = 'sql' AND deleted_at IS NULL", connectorID, tenantID).
@@ -93,28 +93,15 @@ func (r *PostgresSqlConnectorRepository) GetConnectorConfig(ctx context.Context,
 
 	dsn := strings.TrimSpace(auth.ConnectionString)
 	if auth.SecretID != "" {
-		if len(r.masterKey) == 0 {
-			return nil, fmt.Errorf("databinding: secrets master key is not configured")
-		}
 		secretUUID, err := uuid.Parse(auth.SecretID)
 		if err != nil {
 			return nil, fmt.Errorf("databinding: invalid secret_id: %w", err)
 		}
-		var sec secretRow
-		err = r.db.WithContext(ctx).
-			Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", secretUUID, tenantID).
-			First(&sec).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("databinding: sql connector secret not found")
-		}
+		plain, err := decryptSecretPlaintext(ctx, r.db, r.masterKey, tenantID, secretUUID, environmentID)
 		if err != nil {
-			return nil, fmt.Errorf("databinding: load sql secret: %w", err)
+			return nil, err
 		}
-		plain, err := secrets.Decrypt(r.masterKey, sec.Ciphertext, sec.Nonce)
-		if err != nil {
-			return nil, fmt.Errorf("databinding: decrypt sql secret: %w", err)
-		}
-		dsn = string(plain)
+		dsn = plain
 	}
 	if dsn == "" {
 		return nil, fmt.Errorf("databinding: sql connector has no connection string")

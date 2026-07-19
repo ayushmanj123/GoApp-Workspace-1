@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // ValidateCreateData validates record data for insert using entity schema metadata.
@@ -105,6 +107,17 @@ func validateFieldValue(field FieldSchema, value interface{}) error {
 				Message: "invalid date format, expected YYYY-MM-DD",
 			}
 		}
+	case "lookup":
+		str, ok := value.(string)
+		if !ok {
+			return typeError(field.Name, "lookup")
+		}
+		if _, err := uuid.Parse(str); err != nil {
+			return &ValidationError{
+				Field:   field.Name,
+				Message: "invalid lookup value, expected a related record id",
+			}
+		}
 	default:
 		return &ValidationError{
 			Field:   field.Name,
@@ -177,5 +190,13 @@ func NormalizeListOptions(opts ListOptions, schema *EntitySchema) (ListOptions, 
 
 	opts.OrderBy = orderBy
 	opts.OrderDirection = direction
+
+	if err := validateFilterExpr(opts.FilterExpr, schema); err != nil {
+		return ListOptions{}, err
+	}
+	if opts.FilterExpr.Combinator == "" && !opts.FilterExpr.Empty() {
+		opts.FilterExpr.Combinator = "And"
+	}
+
 	return opts, nil
 }

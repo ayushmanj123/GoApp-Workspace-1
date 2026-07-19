@@ -47,11 +47,17 @@ export async function startRuntimeSession(
   appId: string,
   screen: string,
   channel: "draft" | "published",
+  environmentId?: string,
 ): Promise<string | undefined> {
   const res = await fetch(`${runtimeBaseUrl()}/api/runtime/session`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ appId, screen, channel }),
+    body: JSON.stringify({
+      appId,
+      screen,
+      channel,
+      ...(environmentId ? { environmentId } : {}),
+    }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body?.success) {

@@ -48,6 +48,9 @@ func New(cfg config.Config) (*fiber.App, error) {
 	authMiddleware := auth.Middleware(cfg.Auth, validator)
 	proxyHandler := proxy.NewHandler(cfg.MetadataServiceURL, cfg.PublishServiceURL, cfg.RuntimeServiceURL)
 
+	// Public workflow webhooks (no Keycloak) — must be registered before the authed /api group.
+	app.All("/api/v1/public/*", proxyHandler.ForwardPublic)
+
 	api := app.Group("/api", authMiddleware, auth.RequireAuthenticated())
 	api.All("/*", proxyHandler.Forward)
 

@@ -39,9 +39,9 @@ export function FormulaBar() {
     const timeoutId = window.setTimeout(() => {
       void validateFormula(trimmed, {
         mode: context.validationMode,
-        evaluationContext: {},
+        context: {},
       }).then((result) => {
-        setStatus(result.valid ? "valid" : "invalid");
+        setStatus(result.ok ? "valid" : "invalid");
       });
     }, 400);
     return () => window.clearTimeout(timeoutId);

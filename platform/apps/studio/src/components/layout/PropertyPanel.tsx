@@ -4,7 +4,10 @@ import type { Control } from "../../api/controls-api";
 import { FormulaEditorModal } from "../formula/FormulaEditorModal";
 import {
   getPropertyDefinitions,
+  isActionFormulaProperty,
+  isDataFormulaProperty,
   isFormulaOnly,
+  normalizeControlType,
   supportsFormulaMode,
   type PropertyFieldDefinition,
   type PropertyMode,
@@ -20,6 +23,7 @@ import {
 import { useStudioStore } from "../../store/studioStore";
 import { useApplicationStore } from "../../store/applicationStore";
 import { buildStudioFormulaContext } from "../../utils/build-studio-formula-context";
+import { resolveFormEntity } from "../../utils/generate-form-fields";
 import { PropertyCard, TabBar } from "../ui";
 import styles from "./PropertyPanel.module.css";
 
@@ -125,6 +129,9 @@ function MetadataPropRow({
   const formulaCapable = supportsFormulaMode(definition);
   const mode = getPropertyMode(value);
   const [editorOpen, setEditorOpen] = useState(false);
+  const setFormulaBarContext = useStudioStore((s) => s.setFormulaBarContext);
+  const isDataFormula = isDataFormulaProperty(definition);
+  const formulaValidationMode = isDataFormula ? "expression" : "action";
 
   const handleModeChange = (nextMode: PropertyMode) => {
     if (nextMode === "formula") {
@@ -137,11 +144,27 @@ function MetadataPropRow({
   if (isFormulaOnly(definition)) {
     const formula = readPropertyFormula(value);
     const summary = truncateFormula(formula);
+
+    const openEditor = () => {
+      setFormulaBarContext({
+        propertyLabel: label,
+        propertyKey: definition.name,
+        formula,
+        validationMode: formulaValidationMode,
+        onSave: (nextFormula) => {
+          onChange(writePropertyFormula(nextFormula));
+        },
+      });
+      setEditorOpen(true);
+    };
+
     return (
       <div className={styles.propBlock}>
         <div className={styles.propRow}>
           <span className={styles.propLabel}>{label}</span>
-          <span className={styles.formulaModeBadge}>Action</span>
+          <span className={styles.formulaModeBadge}>
+            {isDataFormula ? "Data" : "Action"}
+          </span>
         </div>
         <div className={styles.formulaSummaryRow}>
           <span
@@ -157,7 +180,7 @@ function MetadataPropRow({
             type="button"
             className={styles.formulaEditorBtn}
             data-testid={`${definition.name}-open-formula-editor`}
-            onClick={() => setEditorOpen(true)}
+            onClick={openEditor}
           >
             Edit formula
           </button>
@@ -166,10 +189,19 @@ function MetadataPropRow({
           open={editorOpen}
           propertyLabel={label}
           initialFormula={formula}
-          validationMode="action"
+          validationMode={formulaValidationMode}
           evaluationContext={evaluationContext}
           onSave={(nextFormula) => {
             onChange(writePropertyFormula(nextFormula));
+            setFormulaBarContext({
+              propertyLabel: label,
+              propertyKey: definition.name,
+              formula: nextFormula,
+              validationMode: formulaValidationMode,
+              onSave: (formulaText) => {
+                onChange(writePropertyFormula(formulaText));
+              },
+            });
             setEditorOpen(false);
           }}
           onCancel={() => setEditorOpen(false)}
@@ -299,11 +331,13 @@ export function PropertyPanel() {
   const selectedScreenId = useApplicationStore((s) => s.selectedScreenId);
   const screens = useApplicationStore((s) => s.screens);
   const entities = useApplicationStore((s) => s.entities);
+  const entityFieldsByEntityId = useApplicationStore((s) => s.entityFieldsByEntityId);
   const connectors = useApplicationStore((s) => s.connectors);
   const selectedApplicationId = useApplicationStore((s) => s.selectedApplicationId);
   const loadConnectors = useApplicationStore((s) => s.loadConnectors);
   const loadEntities = useApplicationStore((s) => s.loadEntities);
   const updateControl = useApplicationStore((s) => s.updateControl);
+  const generateFormFields = useApplicationStore((s) => s.generateFormFields);
   const updateScreenOnVisible = useApplicationStore((s) => s.updateScreenOnVisible);
   const deleteControl = useApplicationStore((s) => s.deleteControl);
   const [onVisibleEditorOpen, setOnVisibleEditorOpen] = useState(false);
@@ -325,6 +359,12 @@ export function PropertyPanel() {
     ? getPropertyDefinitions(selectedControl.control_type)
     : [];
   const evaluationContext = buildStudioFormulaContext(appName, controls);
+  const resolvedFormEntity = selectedControl
+    ? resolveFormEntity(selectedControl, entities)
+    : null;
+  const resolvedFormFieldCount = resolvedFormEntity
+    ? (entityFieldsByEntityId[resolvedFormEntity.id] ?? []).length
+    : 0;
 
   const updateNumericField = (
     field: "x" | "y" | "width" | "height",
@@ -460,18 +500,42 @@ export function PropertyPanel() {
                 <PropertyCard title="Data Binding">
                   {(() => {
                     const dataProps = propertyDefinitions.filter((d) =>
-                      ["items", "item", "default", "value", "mode"].includes(d.name),
+                      [
+                        "items",
+                        "item",
+                        "default",
+                        "value",
+                        "mode",
+                        "filter",
+                        "sort",
+                        "limit",
+                        "dataSource",
+                      ].includes(d.name),
                     );
                     if (dataProps.length === 0) {
                       return (
                         <p className={styles.stubHint}>
                           This control has no data-binding properties. Use an entity
                           name or formula on Gallery Items / Form Item (for example{" "}
-                          <code>Customer</code> or <code>Gallery1.Selected</code>).
+                          <code>Customers</code> or <code>Gallery.Selected</code>).
                         </p>
                       );
                     }
                     const hasItems = dataProps.some((d) => d.name === "items");
+                    const hasItem = dataProps.some((d) => d.name === "item");
+                    const itemsFormula = readPropertyFormula(
+                      selectedControl.properties?.items,
+                    );
+                    const itemFormula = readPropertyFormula(
+                      selectedControl.properties?.item,
+                    );
+                    const galleryNames = controls
+                      .filter(
+                        (c) =>
+                          c.screen_id === selectedScreenId &&
+                          c.control_type.toLowerCase() === "gallery",
+                      )
+                      .map((c) => c.name);
                     const datasourceNames = [
                       ...entities.map((e) => e.name),
                       ...connectors.map((c) => c.name),
@@ -487,7 +551,11 @@ export function PropertyPanel() {
                               id="items-datasource-picker"
                               className={styles.datasourceSelect}
                               data-testid="items-datasource-picker"
-                              value=""
+                              value={
+                                datasourceNames.includes(itemsFormula)
+                                  ? itemsFormula
+                                  : ""
+                              }
                               onChange={(event) => {
                                 const name = event.currentTarget.value;
                                 if (!name || !selectedControl) return;
@@ -495,10 +563,13 @@ export function PropertyPanel() {
                                   { name: "items", label: "Items", type: "formula" },
                                   writePropertyFormula(name),
                                 );
-                                event.currentTarget.value = "";
                               }}
                             >
-                              <option value="">Choose entity or connector…</option>
+                              <option value="">
+                                {itemsFormula && !datasourceNames.includes(itemsFormula)
+                                  ? `Custom: ${itemsFormula}`
+                                  : "Choose entity or connector…"}
+                              </option>
                               {entities.length > 0 ? (
                                 <optgroup label="Entities">
                                   {entities.map((entity) => (
@@ -529,6 +600,75 @@ export function PropertyPanel() {
                             </p>
                           </div>
                         ) : null}
+                        {hasItem ? (
+                          <div className={styles.propBlock}>
+                            <label className={styles.propLabel} htmlFor="item-datasource-picker">
+                              Item source
+                            </label>
+                            <select
+                              id="item-datasource-picker"
+                              className={styles.datasourceSelect}
+                              data-testid="item-datasource-picker"
+                              value={
+                                galleryNames
+                                  .map((n) => `${n}.Selected`)
+                                  .includes(itemFormula) ||
+                                datasourceNames.includes(itemFormula)
+                                  ? itemFormula
+                                  : ""
+                              }
+                              onChange={(event) => {
+                                const name = event.currentTarget.value;
+                                if (!name || !selectedControl) return;
+                                updateMetadataProperty(
+                                  { name: "item", label: "Item", type: "formula" },
+                                  writePropertyFormula(name),
+                                );
+                              }}
+                            >
+                              <option value="">
+                                {itemFormula &&
+                                !galleryNames
+                                  .map((n) => `${n}.Selected`)
+                                  .includes(itemFormula) &&
+                                !datasourceNames.includes(itemFormula)
+                                  ? `Custom: ${itemFormula}`
+                                  : "Choose gallery selection or datasource…"}
+                              </option>
+                              {galleryNames.length > 0 ? (
+                                <optgroup label="Gallery selection">
+                                  {galleryNames.map((name) => (
+                                    <option key={name} value={`${name}.Selected`}>
+                                      {name}.Selected
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ) : null}
+                              {entities.length > 0 ? (
+                                <optgroup label="Entities">
+                                  {entities.map((entity) => (
+                                    <option key={entity.id} value={entity.name}>
+                                      {entity.display_name || entity.name}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ) : null}
+                              {connectors.length > 0 ? (
+                                <optgroup label="Connectors">
+                                  {connectors.map((connector) => (
+                                    <option key={connector.id} value={connector.name}>
+                                      {connector.name}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ) : null}
+                            </select>
+                            <p className={styles.stubHint}>
+                              Typically <code>Gallery.Selected</code> so the form edits
+                              the selected gallery row.
+                            </p>
+                          </div>
+                        ) : null}
                         {dataProps.map((definition) => (
                           <MetadataPropRow
                             key={definition.name}
@@ -540,6 +680,25 @@ export function PropertyPanel() {
                             }
                           />
                         ))}
+                        {normalizeControlType(selectedControl.control_type) === "form" &&
+                        resolvedFormEntity ? (
+                          <div className={styles.propBlock}>
+                            <button
+                              type="button"
+                              className={styles.formulaEditorBtn}
+                              data-testid="generate-form-fields-btn"
+                              disabled={resolvedFormFieldCount === 0}
+                              onClick={() => generateFormFields(selectedControl.id)}
+                            >
+                              Generate fields
+                            </button>
+                            <p className={styles.stubHint}>
+                              Creates Label + TextInput children bound to{" "}
+                              <code>{resolvedFormEntity.name}</code> fields via{" "}
+                              <code>ThisItem.FieldName</code>.
+                            </p>
+                          </div>
+                        ) : null}
                       </>
                     );
                   })()}
@@ -549,7 +708,7 @@ export function PropertyPanel() {
               {propertyTab === "actions" && (
                 <PropertyCard title="Events">
                   {propertyDefinitions
-                    .filter((d) => isFormulaOnly(d))
+                    .filter((d) => isActionFormulaProperty(d))
                     .map((definition) => (
                       <MetadataPropRow
                         key={definition.name}

@@ -20,6 +20,7 @@ var allowedAuthenticationTypes = map[string]struct{}{
 	"header":                   {},
 	"connection_string":        {},
 	"oauth_client_credentials": {},
+	"oauth_authorization_code": {},
 	"s3":                       {},
 }
 

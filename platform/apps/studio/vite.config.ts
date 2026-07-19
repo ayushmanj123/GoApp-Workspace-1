@@ -12,7 +12,9 @@ export default defineConfig({
       "@goapps/shared": path.resolve(__dirname, "../../packages/shared/src"),
       "@goapps/sdk": path.resolve(__dirname, "../../packages/sdk/src"),
       "@goapps/formula": path.resolve(__dirname, "../../packages/formula/src"),
+      "@goapps/ui": path.resolve(__dirname, "../../packages/ui/src"),
     },
+    dedupe: ["react", "react-dom"],
   },
   server: {
     port: 5173,

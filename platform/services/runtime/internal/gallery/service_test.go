@@ -12,7 +12,8 @@ import (
 )
 
 type fakeQuerier struct {
-	results map[string]*databinding.QueryResult
+	results       map[string]*databinding.QueryResult
+	lastOverrides databinding.QueryOverrides
 }
 
 func (f *fakeQuerier) QueryDataSource(ctx context.Context, tenantID, userID, appID uuid.UUID, dataSourceName string, overrides databinding.QueryOverrides) (*databinding.QueryResult, error) {
@@ -20,7 +21,7 @@ func (f *fakeQuerier) QueryDataSource(ctx context.Context, tenantID, userID, app
 	_ = tenantID
 	_ = userID
 	_ = appID
-	_ = overrides
+	f.lastOverrides = overrides
 	if result, ok := f.results[dataSourceName]; ok {
 		return result, nil
 	}
@@ -79,6 +80,80 @@ func TestLoadEmptyDatasource(t *testing.T) {
 	}
 }
 
+func TestLoadPassesFilterPropertyToQueryOverrides(t *testing.T) {
+	store := NewSessionStore()
+	querier := &fakeQuerier{results: map[string]*databinding.QueryResult{
+		"Customers": {
+			Items: []databinding.DataItem{{"Name": "Alice", "Status": "Active"}},
+			Count: 1,
+		},
+	}}
+	svc := NewService(store, querier, nil)
+	sessionID := uuid.New()
+	control := ControlMetadata{
+		Name:        "galleryCustomers",
+		ControlType: "gallery",
+		Formulas:    []FormulaBinding{{PropertyName: "items", FormulaText: "Customers"}},
+		Properties:  map[string]interface{}{"filter": "Status='Active'"},
+		EntityNames: []string{"Customers"},
+	}
+
+	if _, err := svc.Load(context.Background(), sessionID, uuid.New(), uuid.New(), uuid.New(), control); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if querier.lastOverrides.Filter != "Status='Active'" {
+		t.Fatalf("expected filter override to be passed through, got %q", querier.lastOverrides.Filter)
+	}
+}
+
+func TestLoadWithoutFilterPropertyLeavesOverrideEmpty(t *testing.T) {
+	store := NewSessionStore()
+	querier := &fakeQuerier{results: map[string]*databinding.QueryResult{
+		"Customers": {Items: []databinding.DataItem{{"Name": "Alice"}}, Count: 1},
+	}}
+	svc := NewService(store, querier, nil)
+	control := ControlMetadata{
+		Name:        "galleryCustomers",
+		ControlType: "gallery",
+		Formulas:    []FormulaBinding{{PropertyName: "items", FormulaText: "Customers"}},
+		EntityNames: []string{"Customers"},
+	}
+
+	if _, err := svc.Load(context.Background(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), control); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if querier.lastOverrides.Filter != "" {
+		t.Fatalf("expected empty filter override, got %q", querier.lastOverrides.Filter)
+	}
+}
+
+func TestReloadForSourcePassesFilterPropertyToQueryOverrides(t *testing.T) {
+	store := NewSessionStore()
+	querier := &fakeQuerier{results: map[string]*databinding.QueryResult{
+		"Customers": {Items: []databinding.DataItem{{"Name": "Alice"}}, Count: 1},
+	}}
+	svc := NewService(store, querier, nil)
+	sessionID := uuid.New()
+	control := ControlMetadata{
+		Name:        "galleryCustomers",
+		ControlType: "gallery",
+		Formulas:    []FormulaBinding{{PropertyName: "items", FormulaText: "Customers"}},
+		Properties:  map[string]interface{}{"filter": "Status='Active'"},
+		EntityNames: []string{"Customers"},
+	}
+	if _, err := svc.Load(context.Background(), sessionID, uuid.New(), uuid.New(), uuid.New(), control); err != nil {
+		t.Fatalf("initial load: %v", err)
+	}
+
+	querier.lastOverrides = databinding.QueryOverrides{}
+	if _, err := svc.ReloadForSource(context.Background(), sessionID, uuid.New(), uuid.New(), uuid.New(), "Customers", []ControlMetadata{control}, nil); err != nil {
+		t.Fatalf("ReloadForSource: %v", err)
+	}
+	if querier.lastOverrides.Filter != "Status='Active'" {
+		t.Fatalf("expected filter override on reload, got %q", querier.lastOverrides.Filter)
+	}
+}
+
 func TestSelectItem(t *testing.T) {
 	store := NewSessionStore()
 	svc := NewService(store, nil, nil)
@@ -133,6 +208,47 @@ func TestReloadForCollectionSource(t *testing.T) {
 	}
 	if len(loaded.Items) != 3 {
 		t.Fatalf("expected 3 items after collect reload, got %d", len(loaded.Items))
+	}
+}
+
+func TestCollectionGalleryAppliesFilter(t *testing.T) {
+	store := NewSessionStore()
+	svc := NewService(store, nil, nil)
+	stateStore := state.NewMemoryStore()
+	appID := uuid.New()
+	sessionID := stateStore.CreateSession(appID)
+	manager, err := stateStore.GetManager(appID, sessionID)
+	if err != nil {
+		t.Fatalf("GetManager: %v", err)
+	}
+	manager.ClearCollect("Orders", []any{
+		map[string]interface{}{"Name": "A", "Status": "Open"},
+		map[string]interface{}{"Name": "B", "Status": "Closed"},
+		map[string]interface{}{"Name": "C", "Status": "Open"},
+	})
+
+	control := ControlMetadata{
+		Name:        "galleryOrders",
+		ControlType: "gallery",
+		Formulas: []FormulaBinding{
+			{PropertyName: "items", FormulaText: "Orders"},
+			{PropertyName: "filter", FormulaText: "Status='Open'"},
+		},
+	}
+	if _, err := svc.ReloadForSource(context.Background(), sessionID, uuid.New(), uuid.New(), appID, "Orders", []ControlMetadata{control}, manager); err != nil {
+		t.Fatalf("ReloadForSource: %v", err)
+	}
+	loaded, err := svc.Get(sessionID, "galleryOrders")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(loaded.Items) != 2 {
+		t.Fatalf("expected 2 Open items, got %d %#v", len(loaded.Items), loaded.Items)
+	}
+	for _, item := range loaded.Items {
+		if item["Status"] != "Open" {
+			t.Fatalf("unexpected item: %#v", item)
+		}
 	}
 }
 

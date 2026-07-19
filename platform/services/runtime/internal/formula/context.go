@@ -28,7 +28,14 @@ type SessionContext struct {
 }
 
 // NavigationService navigates between runtime screens.
-// UI navigation is not implemented in this phase; the interface is exposed for future wiring.
+// The kernel session path (POST /api/runtime/session/:sessionId/evaluate and
+// control events) wires a session-aware implementation that updates the
+// session's current screen and reloads screen galleries/forms (see
+// kernel.sessionNavigation). The standalone formula endpoint
+// (POST /api/runtime/formula/evaluate) only publishes a NavigationRequested
+// event via reactive.NavigationService when a reactive engine is configured
+// (Phase 7.15); it has no session/screen model of its own, so callers that
+// need real navigation should use the session-scoped endpoints.
 type NavigationService interface {
 	Navigate(screenName string) error
 }
@@ -130,7 +137,11 @@ func newFormulaError(code, message string, position *int) *FormulaError {
 	return &FormulaError{Code: code, Message: message, Position: position}
 }
 
-// NoopNavigationService is a placeholder navigation implementation.
+// NoopNavigationService is the fallback navigation implementation used only
+// when neither a reactive engine nor an explicit NavigationService is
+// injected into Dependencies (e.g. in isolated unit tests). Production
+// wiring in server.go always sets Reactive, so runtime.Service.Evaluate
+// upgrades to reactive.NavigationService before this stub is ever reached.
 type NoopNavigationService struct{}
 
 func (NoopNavigationService) Navigate(screenName string) error {

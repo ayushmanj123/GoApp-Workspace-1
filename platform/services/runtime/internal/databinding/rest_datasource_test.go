@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -38,7 +39,7 @@ func (f *fakeRestConnectorRepository) withAction(connectorID uuid.UUID, action R
 	return f
 }
 
-func (f *fakeRestConnectorRepository) GetConnectorConfig(_ context.Context, _, connectorID uuid.UUID) (*RestConnectorConfig, error) {
+func (f *fakeRestConnectorRepository) GetConnectorConfig(_ context.Context, _, connectorID uuid.UUID, _ *uuid.UUID, _ uuid.UUID) (*RestConnectorConfig, error) {
 	cfg, ok := f.configs[connectorID]
 	if !ok {
 		return nil, ErrDataSourceNotFound
@@ -109,10 +110,10 @@ func TestRestDataSourceQueryForwardsFiltersAndPaging(t *testing.T) {
 
 	ds := NewRestDataSource(repo, server.Client())
 	_, err := ds.Query(context.Background(), QueryInput{
-		EntityID: connectorID,
-		Limit:    5,
-		Offset:   10,
-		Filters:  []EqualsFilter{{Field: "Status", Value: "Active"}},
+		EntityID:   connectorID,
+		Limit:      5,
+		Offset:     10,
+		FilterExpr: FilterExpr{Combinator: CombinatorAnd, Leaves: []ComparisonFilter{{Field: "Status", Op: OpEQ, Value: "Active"}}},
 	})
 	if err != nil {
 		t.Fatalf("Query: %v", err)
@@ -181,6 +182,54 @@ func TestRestDataSourceAppliesStaticHeaderAuth(t *testing.T) {
 	}
 	if gotHeader != "Bearer secret-token" {
 		t.Fatalf("expected auth header forwarded, got %q", gotHeader)
+	}
+}
+
+func TestRestDataSourceOAuthAuthorizationCodeUsesRefreshGrant(t *testing.T) {
+	var tokenGrant string
+	var apiAuth string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		tokenGrant = r.Form.Get("grant_type")
+		if r.Form.Get("refresh_token") != "refresh-abc" {
+			t.Fatalf("expected refresh_token, got %q", r.Form.Get("refresh_token"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"access-xyz","expires_in":3600}`))
+	})
+	mux.HandleFunc("/items", func(w http.ResponseWriter, r *http.Request) {
+		apiAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	connectorID := uuid.New()
+	repo := newFakeRestConnectorRepository().
+		withConnector(RestConnectorConfig{
+			ConnectorID: connectorID,
+			BaseURL:     server.URL,
+			Auth: RestAuthConfig{
+				Type:         "oauth_authorization_code",
+				TokenURL:     server.URL + "/token",
+				ClientID:     "client",
+				ClientSecret: "secret",
+				RefreshToken: "refresh-abc",
+			},
+		}).
+		withAction(connectorID, RestConnectorAction{ActionName: "list", HTTPMethod: "GET", Endpoint: "/items"})
+
+	ds := NewRestDataSource(repo, server.Client())
+	if _, err := ds.Query(context.Background(), QueryInput{EntityID: connectorID}); err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if tokenGrant != "refresh_token" {
+		t.Fatalf("expected refresh_token grant, got %q", tokenGrant)
+	}
+	if apiAuth != "Bearer access-xyz" {
+		t.Fatalf("expected bearer access token, got %q", apiAuth)
 	}
 }
 
@@ -281,5 +330,28 @@ func TestRestDataSourceUnknownConnectorReturnsError(t *testing.T) {
 	ds := NewRestDataSource(repo, http.DefaultClient)
 	if _, err := ds.Query(context.Background(), QueryInput{EntityID: uuid.New()}); err != ErrDataSourceNotFound {
 		t.Fatalf("expected ErrDataSourceNotFound, got %v", err)
+	}
+}
+
+func TestRestDataSourceUserOAuthRequiredWhenRefreshMissing(t *testing.T) {
+	connectorID := uuid.New()
+	repo := newFakeRestConnectorRepository().
+		withConnector(RestConnectorConfig{
+			ConnectorID: connectorID,
+			BaseURL:     "http://example.invalid",
+			Auth: RestAuthConfig{
+				Type:            "oauth_authorization_code",
+				ConnectionScope: "user",
+				TokenURL:        "http://example.invalid/token",
+				ClientID:        "client",
+				ClientSecret:    "secret",
+			},
+		}).
+		withAction(connectorID, RestConnectorAction{ActionName: "list", HTTPMethod: "GET", Endpoint: "/items"})
+
+	ds := NewRestDataSource(repo, http.DefaultClient)
+	_, err := ds.Query(context.Background(), QueryInput{EntityID: connectorID, UserID: uuid.New()})
+	if err == nil || !strings.Contains(err.Error(), "connector_user_oauth_required") {
+		t.Fatalf("expected connector_user_oauth_required, got %v", err)
 	}
 }

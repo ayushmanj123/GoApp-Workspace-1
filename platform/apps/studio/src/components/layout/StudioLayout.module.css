@@ -34,6 +34,11 @@
   flex-shrink: 0;
   overflow: hidden;
   border-right: 1px solid var(--color-border);
+  transition: width var(--transition);
+}
+
+.sidePanelCollapsed {
+  width: 32px;
 }
 
 .sidePanelHidden {

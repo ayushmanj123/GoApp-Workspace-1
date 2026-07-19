@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -23,8 +24,9 @@ type PublishOptions struct {
 
 // PublishService creates immutable application version snapshots.
 type PublishService struct {
-	store   repositories.Store
-	runtime *RuntimeService
+	store     repositories.Store
+	runtime   *RuntimeService
+	artifacts PublishArtifactUploader // nil => resolved from env via defaultArtifactStore at call time
 }
 
 func NewPublishService(store repositories.Store) *PublishService {
@@ -88,6 +90,13 @@ func (s *PublishService) Publish(ctx context.Context, tenantID, appID uuid.UUID,
 			return fmt.Errorf("publish: create snapshot: %w", err)
 		}
 
+		// Best-effort: mirror the snapshot into MinIO as a durable artifact and
+		// record its URL/hash on the packages table. snapshot_json above
+		// remains the source of truth — any failure here (MinIO unavailable,
+		// packages write conflict, etc.) is logged and swallowed so publish
+		// still succeeds using the database snapshot alone.
+		s.publishArtifact(ctx, session, tenantID, appID, version.ID, snapshotJSON)
+
 		app.CurrentVersionID = &version.ID
 		app.Status = "published"
 		if err := session.Applications().Update(ctx, app); err != nil {
@@ -111,8 +120,9 @@ func (s *PublishService) Publish(ctx context.Context, tenantID, appID uuid.UUID,
 }
 
 // Unpublish clears the application's current version pointer and reverts its
-// status to draft. Existing versions and snapshots are left untouched so the
-// application can be republished or rolled back later.
+// status to draft. Existing versions, snapshots, and MinIO publish artifacts
+// are left untouched — unpublish is pointer-only and never garbage-collects
+// blobs (environments may still reference a version).
 func (s *PublishService) Unpublish(ctx context.Context, tenantID, appID uuid.UUID) (*contracts.UnpublishResult, error) {
 	var result *contracts.UnpublishResult
 	err := s.store.WithTenant(ctx, tenantID).Transaction(ctx, func(session repositories.TenantSession) error {
@@ -195,6 +205,9 @@ func (s *PublishService) Rollback(ctx context.Context, tenantID, appID, versionI
 // Deprecate marks a version as no longer supported. If the version is the
 // application's current version, the application's pointer is cleared and
 // its status reverts to draft so the deprecated version stops serving traffic.
+// After a successful deprecate, best-effort MinIO GC runs when the version is
+// unreferenced by applications.current_version_id and every
+// environments.current_version_id (see gcUnreferencedPublishArtifact).
 func (s *PublishService) Deprecate(ctx context.Context, tenantID, appID, versionID uuid.UUID) (*contracts.DeprecateResult, error) {
 	var result *contracts.DeprecateResult
 	err := s.store.WithTenant(ctx, tenantID).Transaction(ctx, func(session repositories.TenantSession) error {
@@ -239,6 +252,9 @@ func (s *PublishService) Deprecate(ctx context.Context, tenantID, appID, version
 	if err != nil {
 		return nil, err
 	}
+	// Best-effort artifact GC after the deprecate transaction commits so we
+	// observe the cleared application pointer. Failures never fail Deprecate.
+	s.gcUnreferencedPublishArtifact(ctx, tenantID, appID, versionID)
 	return result, nil
 }
 
@@ -299,6 +315,148 @@ func (s *PublishService) GetVersion(ctx context.Context, tenantID, appID, versio
 		Manifest:      manifest,
 		SnapshotSize:  snapshotSize,
 	}, nil
+}
+
+// resolveArtifactUploader returns the configured uploader (test override
+// wins) or the process-wide MinIO-backed default, which may be unavailable.
+func (s *PublishService) resolveArtifactUploader() PublishArtifactUploader {
+	if s.artifacts != nil {
+		return s.artifacts
+	}
+	if store, ok := defaultArtifactStore(); ok {
+		return store
+	}
+	return nil
+}
+
+// resolveArtifactDeleter returns a deleter when the injected artifacts store
+// implements PublishArtifactDeleter, otherwise the process-wide MinIO default.
+func (s *PublishService) resolveArtifactDeleter() PublishArtifactDeleter {
+	if d, ok := s.artifacts.(PublishArtifactDeleter); ok {
+		return d
+	}
+	if store, ok := defaultArtifactStore(); ok {
+		return store
+	}
+	return nil
+}
+
+// versionHasLiveReferences reports whether the version is still pointed at by
+// the application's current_version_id or any environment's current_version_id.
+func versionHasLiveReferences(ctx context.Context, session repositories.TenantSession, appID, versionID uuid.UUID) (bool, error) {
+	app, err := session.Applications().GetByID(ctx, appID)
+	if err != nil {
+		return false, fmt.Errorf("load application: %w", err)
+	}
+	if app.CurrentVersionID != nil && *app.CurrentVersionID == versionID {
+		return true, nil
+	}
+	envs, err := listEnvironmentsByApplication(ctx, session, appID)
+	if err != nil {
+		return false, err
+	}
+	for _, env := range envs {
+		if env.CurrentVersionID != nil && *env.CurrentVersionID == versionID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// listEnvironmentsByApplication returns environments for an application.
+func listEnvironmentsByApplication(ctx context.Context, session repositories.TenantSession, appID uuid.UUID) ([]models.Environment, error) {
+	if repo, ok := any(session.Environments()).(byFieldRepo[models.Environment]); ok {
+		items, err := repo.ListByField(ctx, "application_id", appID, 0, 0)
+		if err != nil {
+			return nil, fmt.Errorf("list environments: %w", err)
+		}
+		return items, nil
+	}
+	items, err := session.Environments().List(ctx, 0, 0)
+	if err != nil {
+		return nil, fmt.Errorf("list environments: %w", err)
+	}
+	var filtered []models.Environment
+	for _, item := range items {
+		if item.ApplicationID == appID {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered, nil
+}
+
+// gcUnreferencedPublishArtifact deletes the MinIO object and packages row for
+// a version when nothing still references it. snapshot_json is never deleted.
+// All failures are logged and swallowed (matching publishArtifact soft-fail).
+func (s *PublishService) gcUnreferencedPublishArtifact(ctx context.Context, tenantID, appID, versionID uuid.UUID) {
+	session := s.store.WithTenant(ctx, tenantID)
+	referenced, err := versionHasLiveReferences(ctx, session, appID, versionID)
+	if err != nil {
+		log.Printf("deprecate: artifact gc skipped for version %s: ref check failed: %v", versionID, err)
+		return
+	}
+	if referenced {
+		log.Printf("deprecate: artifact gc skipped for version %s: still referenced by app or environment", versionID)
+		return
+	}
+
+	packages, err := listPackagesByVersion(ctx, session, versionID)
+	if err != nil {
+		log.Printf("deprecate: artifact gc skipped for version %s: list packages failed: %v", versionID, err)
+		return
+	}
+	if len(packages) == 0 {
+		return
+	}
+
+	deleter := s.resolveArtifactDeleter()
+	for _, pkg := range packages {
+		if pkg.PackageURL == "" {
+			continue
+		}
+		if deleter == nil {
+			log.Printf("deprecate: minio artifact store not configured; leaving package row for version %s", versionID)
+			return
+		}
+		if err := deleter.Delete(ctx, pkg.PackageURL); err != nil {
+			log.Printf("deprecate: minio delete failed for version %s url %s: %v", versionID, pkg.PackageURL, err)
+			continue
+		}
+		// Remove the packages row after a successful blob delete. Clearing
+		// package_url/package_hash in place is unsafe: package_hash is UNIQUE
+		// NOT NULL. snapshot_json remains the runtime fallback.
+		if err := session.Packages().Delete(ctx, pkg.ID); err != nil {
+			log.Printf("deprecate: deleted minio object but failed to remove packages row %s for version %s: %v", pkg.ID, versionID, err)
+		}
+	}
+}
+
+// publishArtifact uploads the snapshot blob to MinIO and records its
+// URL/hash on the packages table. It never returns an error: any failure
+// (MinIO not configured, upload error, packages write conflict) is logged
+// and swallowed so that Publish still succeeds with snapshot_json as the
+// fallback source of truth for this version.
+func (s *PublishService) publishArtifact(ctx context.Context, session repositories.TenantSession, tenantID, appID, versionID uuid.UUID, snapshotJSON []byte) {
+	uploader := s.resolveArtifactUploader()
+	if uploader == nil {
+		log.Printf("publish: minio artifact store not configured for version %s; snapshot_json remains the source of truth", versionID)
+		return
+	}
+	objectKey := fmt.Sprintf("applications/%s/versions/%s/snapshot.json", appID, versionID)
+	objectURL, sha256Hex, err := uploader.Upload(ctx, objectKey, snapshotJSON, "application/json")
+	if err != nil {
+		log.Printf("publish: minio upload failed for version %s, falling back to snapshot_json: %v", versionID, err)
+		return
+	}
+	pkg := &models.Package{
+		TenantID:             tenantID,
+		ApplicationVersionID: versionID,
+		PackageURL:           objectURL,
+		PackageHash:          sha256Hex,
+	}
+	if err := session.Packages().Create(ctx, pkg); err != nil {
+		log.Printf("publish: uploaded artifact to minio but failed to persist package metadata for version %s: %v", versionID, err)
+	}
 }
 
 func (s *PublishService) resolveVersionLabel(ctx context.Context, session repositories.TenantSession, appID uuid.UUID, requested *string) (string, error) {
@@ -382,16 +540,40 @@ func listSnapshotsByVersion(ctx context.Context, session repositories.TenantSess
 	return filtered, nil
 }
 
+// listPackagesByVersion returns publish artifact metadata rows (packages
+// table) linked to a version. At most one row is expected per version.
+func listPackagesByVersion(ctx context.Context, session repositories.TenantSession, versionID uuid.UUID) ([]models.Package, error) {
+	if repo, ok := any(session.Packages()).(byFieldRepo[models.Package]); ok {
+		items, err := repo.ListByField(ctx, "application_version_id", versionID, 0, 0)
+		if err != nil {
+			return nil, fmt.Errorf("list packages: %w", err)
+		}
+		return items, nil
+	}
+	items, err := session.Packages().List(ctx, 0, 0)
+	if err != nil {
+		return nil, fmt.Errorf("list packages: %w", err)
+	}
+	var filtered []models.Package
+	for _, item := range items {
+		if item.ApplicationVersionID == versionID {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered, nil
+}
+
 func buildPublishManifest(pkg *contracts.RuntimeApplication, notes *string) ([]byte, error) {
 	controlCount := 0
 	for _, screen := range pkg.Screens {
 		controlCount += countControls(screen.Controls)
 	}
 	manifest := map[string]any{
-		"screen_count":  len(pkg.Screens),
-		"control_count": controlCount,
-		"entity_count":  len(pkg.Entities),
-		"published_at":  time.Now().UTC().Format(time.RFC3339),
+		"screen_count":    len(pkg.Screens),
+		"control_count":   controlCount,
+		"entity_count":    len(pkg.Entities),
+		"connector_count": len(pkg.Connectors),
+		"published_at":    time.Now().UTC().Format(time.RFC3339),
 	}
 	if notes != nil && strings.TrimSpace(*notes) != "" {
 		manifest["notes"] = strings.TrimSpace(*notes)

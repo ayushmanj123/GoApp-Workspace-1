@@ -26,28 +26,32 @@ type ConnectorResponse struct {
 	BaseURL            string          `json:"base_url"`
 	AuthConfig         json.RawMessage `json:"auth_config"`
 	HasSecret          bool            `json:"has_secret"`
+	HasConnection      bool            `json:"has_connection"`
 	CreatedOn          time.Time       `json:"created_on"`
 	ModifiedOn         time.Time       `json:"modified_on"`
 }
 
 type connectorAuthConfig struct {
-	Type             string `json:"type"`
-	HeaderName       string `json:"header_name,omitempty"`
-	HeaderValue      string `json:"header_value,omitempty"`
-	ConnectionString string `json:"connection_string,omitempty"`
-	ClientSecret     string `json:"client_secret,omitempty"`
-	SecretAccessKey  string `json:"secret_access_key,omitempty"`
-	SecretID         string `json:"secret_id,omitempty"`
-	Table            string `json:"table,omitempty"`
-	PrimaryKey       string `json:"primary_key,omitempty"`
-	TokenURL         string `json:"token_url,omitempty"`
-	ClientID         string `json:"client_id,omitempty"`
-	Scope            string `json:"scope,omitempty"`
-	Endpoint         string `json:"endpoint,omitempty"`
-	Bucket           string `json:"bucket,omitempty"`
-	AccessKeyID      string `json:"access_key_id,omitempty"`
-	UseSSL           *bool  `json:"use_ssl,omitempty"`
-	Prefix           string `json:"prefix,omitempty"`
+	Type              string `json:"type"`
+	HeaderName        string `json:"header_name,omitempty"`
+	HeaderValue       string `json:"header_value,omitempty"`
+	ConnectionString  string `json:"connection_string,omitempty"`
+	ClientSecret      string `json:"client_secret,omitempty"`
+	SecretAccessKey   string `json:"secret_access_key,omitempty"`
+	SecretID          string `json:"secret_id,omitempty"`
+	RefreshSecretID   string `json:"refresh_secret_id,omitempty"`
+	Table             string `json:"table,omitempty"`
+	PrimaryKey        string `json:"primary_key,omitempty"`
+	TokenURL          string `json:"token_url,omitempty"`
+	AuthorizationURL  string `json:"authorization_url,omitempty"`
+	ClientID          string `json:"client_id,omitempty"`
+	Scope             string `json:"scope,omitempty"`
+	ConnectionScope   string `json:"connection_scope,omitempty"`
+	Endpoint          string `json:"endpoint,omitempty"`
+	Bucket            string `json:"bucket,omitempty"`
+	AccessKeyID       string `json:"access_key_id,omitempty"`
+	UseSSL            *bool  `json:"use_ssl,omitempty"`
+	Prefix            string `json:"prefix,omitempty"`
 }
 
 var sqlIdentifierPart = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
@@ -84,6 +88,10 @@ func ValidateSQLPrimaryKey(pk string) error {
 
 func toConnectorResponse(c *models.Connector) ConnectorResponse {
 	authJSON, hasSecret := redactAuthConfig(c.AuthConfig)
+	hasConnection := false
+	if cfg, err := parseAuthConfig(c.AuthConfig); err == nil {
+		hasConnection = strings.TrimSpace(cfg.RefreshSecretID) != ""
+	}
 	return ConnectorResponse{
 		ID:                 c.ID,
 		TenantID:           c.TenantID,
@@ -94,6 +102,7 @@ func toConnectorResponse(c *models.Connector) ConnectorResponse {
 		BaseURL:            c.BaseURL,
 		AuthConfig:         authJSON,
 		HasSecret:          hasSecret,
+		HasConnection:      hasConnection,
 		CreatedOn:          c.CreatedOn,
 		ModifiedOn:         c.ModifiedOn,
 	}
@@ -116,6 +125,7 @@ func redactAuthConfig(raw datatypes.JSON) (json.RawMessage, bool) {
 		return json.RawMessage(raw), false
 	}
 	hasSecret := strings.TrimSpace(cfg.SecretID) != "" ||
+		strings.TrimSpace(cfg.RefreshSecretID) != "" ||
 		strings.TrimSpace(cfg.HeaderValue) != "" ||
 		strings.TrimSpace(cfg.ConnectionString) != "" ||
 		strings.TrimSpace(cfg.ClientSecret) != "" ||
@@ -223,6 +233,8 @@ func (s *ConnectorService) persistAuthConfig(
 		cfg.AccessKeyID = ""
 		cfg.UseSSL = nil
 		cfg.Prefix = ""
+		cfg.AuthorizationURL = ""
+		cfg.RefreshSecretID = ""
 		if cfg.TokenURL == "" {
 			cfg.TokenURL = existingCfg.TokenURL
 		}
@@ -254,6 +266,71 @@ func (s *ConnectorService) persistAuthConfig(
 			cfg.SecretID = secretID
 		} else if cfg.SecretID == "" {
 			return nil, fmt.Errorf("auth_config.client_secret is required when creating an oauth connector")
+		}
+
+	case strings.EqualFold(authenticationType, "oauth_authorization_code") || strings.EqualFold(cfg.Type, "oauth_authorization_code"):
+		cfg.Type = "oauth_authorization_code"
+		cfg.HeaderName = ""
+		cfg.Table = ""
+		cfg.PrimaryKey = ""
+		cfg.Endpoint = ""
+		cfg.Bucket = ""
+		cfg.AccessKeyID = ""
+		cfg.UseSSL = nil
+		cfg.Prefix = ""
+		if cfg.AuthorizationURL == "" {
+			cfg.AuthorizationURL = existingCfg.AuthorizationURL
+		}
+		if cfg.TokenURL == "" {
+			cfg.TokenURL = existingCfg.TokenURL
+		}
+		if cfg.ClientID == "" {
+			cfg.ClientID = existingCfg.ClientID
+		}
+		if cfg.Scope == "" {
+			cfg.Scope = existingCfg.Scope
+		}
+		cfg.ConnectionScope = normalizeConnectionScope(cfg.ConnectionScope)
+		if cfg.ConnectionScope == "" {
+			cfg.ConnectionScope = normalizeConnectionScope(existingCfg.ConnectionScope)
+		}
+		if cfg.ConnectionScope == "" {
+			cfg.ConnectionScope = "app"
+		}
+		if cfg.ConnectionScope != "app" && cfg.ConnectionScope != "user" {
+			return nil, fmt.Errorf("auth_config.connection_scope must be app or user")
+		}
+		// App-scoped: preserve shared refresh. User-scoped: never keep connector-level refresh.
+		if cfg.ConnectionScope == "app" {
+			cfg.RefreshSecretID = existingCfg.RefreshSecretID
+		} else {
+			cfg.RefreshSecretID = ""
+		}
+		if strings.TrimSpace(cfg.AuthorizationURL) == "" {
+			return nil, fmt.Errorf("auth_config.authorization_url is required for oauth_authorization_code")
+		}
+		if strings.TrimSpace(cfg.TokenURL) == "" {
+			return nil, fmt.Errorf("auth_config.token_url is required for oauth_authorization_code")
+		}
+		if strings.TrimSpace(cfg.ClientID) == "" {
+			return nil, fmt.Errorf("auth_config.client_id is required for oauth_authorization_code")
+		}
+		if clientSecret != "" {
+			secretID, err := s.upsertNamedSecret(ctx, sess, tenantID, appID, connectorName, "client_secret", clientSecret, existingCfg.SecretID)
+			if err != nil {
+				return nil, err
+			}
+			cfg.SecretID = secretID
+		} else if existingCfg.SecretID != "" {
+			cfg.SecretID = existingCfg.SecretID
+		} else if existingCfg.ClientSecret != "" {
+			secretID, err := s.upsertNamedSecret(ctx, sess, tenantID, appID, connectorName, "client_secret", existingCfg.ClientSecret, "")
+			if err != nil {
+				return nil, err
+			}
+			cfg.SecretID = secretID
+		} else if cfg.SecretID == "" {
+			return nil, fmt.Errorf("auth_config.client_secret is required when creating an oauth_authorization_code connector")
 		}
 
 	case strings.EqualFold(authenticationType, "s3") || strings.EqualFold(cfg.Type, "s3"):
@@ -358,6 +435,11 @@ func (s *ConnectorService) persistAuthConfig(
 		cfg.Type = "none"
 		cfg.HeaderName = ""
 		cfg.SecretID = ""
+		cfg.RefreshSecretID = ""
+		cfg.AuthorizationURL = ""
+		cfg.TokenURL = ""
+		cfg.ClientID = ""
+		cfg.Scope = ""
 		cfg.Table = ""
 		cfg.PrimaryKey = ""
 	}
@@ -415,4 +497,15 @@ func (s *ConnectorService) upsertNamedSecret(
 		return "", fmt.Errorf("create secret: %w", err)
 	}
 	return sec.ID.String(), nil
+}
+
+func normalizeConnectionScope(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "user":
+		return "user"
+	case "app":
+		return "app"
+	default:
+		return strings.TrimSpace(v)
+	}
 }

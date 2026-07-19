@@ -22,6 +22,8 @@ func TestAssembleRuntimeApplicationRejectsInvalidPropertyJSON(t *testing.T) {
 		nil,
 		nil,
 		nil,
+		nil,
+		nil,
 	)
 	if err == nil {
 		t.Fatalf("expected error for invalid property JSON")
@@ -39,6 +41,8 @@ func TestAssembleRuntimeApplicationRejectsInvalidFormula(t *testing.T) {
 		[]models.Control{{ID: controlID, ScreenID: screenID, ControlType: "button", Name: "C"}},
 		nil,
 		[]models.Formula{{ID: uuid.New(), ControlID: controlID, PropertyName: "text", FormulaText: "", FormulaType: "static"}},
+		nil,
+		nil,
 		nil,
 		nil,
 		nil,

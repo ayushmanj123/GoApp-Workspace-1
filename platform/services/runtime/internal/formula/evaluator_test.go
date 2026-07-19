@@ -2,9 +2,11 @@ package formula
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/goapps-platform/runtime-service/internal/databinding"
+	"github.com/goapps-platform/runtime-service/internal/reactive"
 	"github.com/goapps-platform/runtime-service/internal/state"
 	"github.com/google/uuid"
 )
@@ -198,6 +200,135 @@ func TestPatchAndDefaults(t *testing.T) {
 	}
 }
 
+type fakeStorageRemoveDataSource struct {
+	deletedKey string
+}
+
+func (f *fakeStorageRemoveDataSource) Kind() databinding.DataSourceKind {
+	return databinding.DataSourceKindStorage
+}
+func (f *fakeStorageRemoveDataSource) Query(context.Context, databinding.QueryInput) (*databinding.QueryResult, error) {
+	return &databinding.QueryResult{}, nil
+}
+func (f *fakeStorageRemoveDataSource) Get(context.Context, uuid.UUID, uuid.UUID, databinding.DataSourceKey, uuid.UUID) (*databinding.DataItem, error) {
+	return nil, nil
+}
+func (f *fakeStorageRemoveDataSource) Create(context.Context, uuid.UUID, uuid.UUID, databinding.DataSourceKey, map[string]interface{}) (*databinding.DataItem, error) {
+	return &databinding.DataItem{"key": "created"}, nil
+}
+func (f *fakeStorageRemoveDataSource) Update(context.Context, uuid.UUID, uuid.UUID, databinding.DataSourceKey, uuid.UUID, map[string]interface{}, int) (*databinding.DataItem, error) {
+	return nil, errors.New("unsupported")
+}
+func (f *fakeStorageRemoveDataSource) Delete(context.Context, uuid.UUID, uuid.UUID, databinding.DataSourceKey, uuid.UUID) error {
+	return nil
+}
+func (f *fakeStorageRemoveDataSource) DeleteByObjectKey(_ context.Context, _, _ uuid.UUID, _ databinding.DataSourceKey, objectKey string) error {
+	f.deletedKey = objectKey
+	return nil
+}
+
+func TestRemoveStorageObject(t *testing.T) {
+	evaluator := NewEvaluator()
+	rtCtx := testRuntimeContext(t)
+	connectorID := uuid.New()
+	storageDS := &fakeStorageRemoveDataSource{}
+	rtCtx.Resolver = &fakeResolver{bindings: map[string]*databinding.ResolvedBinding{
+		"DocsBucket": {EntityID: connectorID, Kind: databinding.DataSourceKindStorage},
+	}}
+	rtCtx.DataSources = databinding.NewDataSourceRegistry(nil).SetStorage(storageDS)
+
+	result, err := evaluator.Evaluate(rtCtx, `Remove(DocsBucket, { key: "invoices/a.txt" })`)
+	if err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if result != true {
+		t.Fatalf("expected true, got %#v", result)
+	}
+	if storageDS.deletedKey != "invoices/a.txt" {
+		t.Fatalf("unexpected deleted key: %q", storageDS.deletedKey)
+	}
+}
+
+func TestLookUpReturnsFirstMatch(t *testing.T) {
+	evaluator := NewEvaluator()
+	rtCtx := testRuntimeContext(t)
+	entityID := uuid.New()
+	rtCtx.Resolver = &fakeResolver{bindings: map[string]*databinding.ResolvedBinding{
+		"Customers": {EntityID: entityID, Kind: databinding.DataSourceKindEntity},
+	}}
+	rtCtx.DataSources = databinding.NewDataSourceRegistry(&fakeDataSource{
+		queryFn: func() (*databinding.QueryResult, error) {
+			return &databinding.QueryResult{
+				Items: []databinding.DataItem{{"Name": "Alice", "Status": "Active"}},
+			}, nil
+		},
+	})
+
+	result, err := evaluator.Evaluate(rtCtx, `LookUp(Customers, Status='Active')`)
+	if err != nil {
+		t.Fatalf("LookUp: %v", err)
+	}
+	item, ok := result.(databinding.DataItem)
+	if !ok || item["Name"] != "Alice" {
+		t.Fatalf("unexpected LookUp result: %#v", result)
+	}
+
+	rtCtx.DataSources = databinding.NewDataSourceRegistry(&fakeDataSource{
+		queryFn: func() (*databinding.QueryResult, error) {
+			return &databinding.QueryResult{Items: nil}, nil
+		},
+	})
+	blank, err := evaluator.Evaluate(rtCtx, `LookUp(Customers, Status='Missing')`)
+	if err != nil {
+		t.Fatalf("LookUp blank: %v", err)
+	}
+	if blank != nil {
+		t.Fatalf("expected blank, got %#v", blank)
+	}
+}
+
+func TestFilterReturnsMatchingRows(t *testing.T) {
+	evaluator := NewEvaluator()
+	rtCtx := testRuntimeContext(t)
+	entityID := uuid.New()
+	rtCtx.Resolver = &fakeResolver{bindings: map[string]*databinding.ResolvedBinding{
+		"Customers": {EntityID: entityID, Kind: databinding.DataSourceKindEntity},
+	}}
+	rtCtx.DataSources = databinding.NewDataSourceRegistry(&fakeDataSource{
+		queryFn: func() (*databinding.QueryResult, error) {
+			return &databinding.QueryResult{
+				Items: []databinding.DataItem{
+					{"Name": "Alice", "Status": "Active"},
+					{"Name": "Bob", "Status": "Active"},
+				},
+			}, nil
+		},
+	})
+
+	result, err := evaluator.Evaluate(rtCtx, `Filter(Customers, Status='Active')`)
+	if err != nil {
+		t.Fatalf("Filter: %v", err)
+	}
+	rows, ok := result.([]any)
+	if !ok || len(rows) != 2 {
+		t.Fatalf("expected 2 rows, got %#v", result)
+	}
+
+	rtCtx.DataSources = databinding.NewDataSourceRegistry(&fakeDataSource{
+		queryFn: func() (*databinding.QueryResult, error) {
+			return &databinding.QueryResult{Items: nil}, nil
+		},
+	})
+	empty, err := evaluator.Evaluate(rtCtx, `Filter(Customers, Status='Missing')`)
+	if err != nil {
+		t.Fatalf("Filter empty: %v", err)
+	}
+	emptyRows, ok := empty.([]any)
+	if !ok || len(emptyRows) != 0 {
+		t.Fatalf("expected empty table, got %#v", empty)
+	}
+}
+
 func TestEntityTableReference(t *testing.T) {
 	evaluator := NewEvaluator()
 	rtCtx := testRuntimeContext(t)
@@ -339,6 +470,44 @@ func TestIfFormulaEnumBranches(t *testing.T) {
 	result, err := evaluator.Evaluate(rtCtx, `If(valid, Edit, Disabled)`)
 	if err != nil || result != "Edit" {
 		t.Fatalf("enum branch: %#v %v", result, err)
+	}
+}
+
+// TestNavigateWithoutNavigationServiceIsNotImplemented documents the
+// standalone-endpoint stub: when no session/reactive-aware navigation is
+// available, Navigate() reports NAVIGATION_NOT_IMPLEMENTED rather than
+// silently succeeding (Phase 7.15).
+func TestNavigateWithoutNavigationServiceIsNotImplemented(t *testing.T) {
+	evaluator := NewEvaluator()
+	rtCtx := testRuntimeContext(t)
+	rtCtx.Navigation = NoopNavigationService{}
+
+	_, err := evaluator.Evaluate(rtCtx, `Navigate(Details)`)
+	var formulaErr *FormulaError
+	if !asFormulaError(err, &formulaErr) || formulaErr.Code != "NAVIGATION_NOT_IMPLEMENTED" {
+		t.Fatalf("expected NAVIGATION_NOT_IMPLEMENTED, got %v", err)
+	}
+}
+
+// TestNavigateWithReactiveNavigationServiceSucceeds mirrors the
+// runtime.Service.Evaluate wiring for POST /api/runtime/formula/evaluate:
+// once a reactive engine is present, Navigate() must not stub out with
+// NAVIGATION_NOT_IMPLEMENTED (Phase 7.15).
+func TestNavigateWithReactiveNavigationServiceSucceeds(t *testing.T) {
+	evaluator := NewEvaluator()
+	rtCtx := testRuntimeContext(t)
+	engine := reactive.NewEngine()
+	nav := &reactive.NavigationService{
+		Publisher: engine.Notifier,
+		SessionID: rtCtx.Session.SessionID,
+		AppID:     rtCtx.App.AppID,
+	}
+	nav.OnNavigate = rtCtx.RecordRefresh
+	rtCtx.Navigation = nav
+
+	_, err := evaluator.Evaluate(rtCtx, `Navigate(Details)`)
+	if err != nil {
+		t.Fatalf("expected Navigate to succeed once a reactive navigation service is wired, got %v", err)
 	}
 }
 

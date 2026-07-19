@@ -10,6 +10,9 @@ import { DesignerNodeRenderer } from "./designer/DesignerNodeRenderer";
 import { buildDesignerNodeRegistry } from "./designer/DesignerNodeRegistry";
 import { useInteractionStore } from "./interaction/interactionStore";
 import { useCanvasEventRouter } from "./interaction/useCanvasEventRouter";
+import { hitTestContainerAtPoint } from "./interaction/HitTestService";
+import { DesignerShapeLayer } from "./designer/DesignerShapeLayer";
+import { isShapeControlType } from "../utils/shape-control-types";
 import { OverlaySystem } from "./overlay/OverlaySystem";
 import { IconFit, IconZoomIn, IconZoomOut } from "../components/ui/icons";
 import styles from "../components/canvas/CanvasPanel.module.css";
@@ -64,14 +67,6 @@ export function CanvasSurface() {
 
   const createControl = useApplicationStore((s) => s.createControl);
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    const type = e.dataTransfer.getData("application/goapps-control");
-    if (type) {
-      createControl(type as import("../../control-defaults").ToolboxControlType);
-    }
-  };
-
   const offset = useMemo(
     () => computeArtboardOffset(size.width, size.height, zoom),
     [size.width, size.height, zoom],
@@ -81,6 +76,79 @@ export function CanvasSurface() {
     () => buildDesignerNodeRegistry(controls),
     [controls],
   );
+
+  const artboardPointFromClient = (clientX: number, clientY: number) => {
+    const el = containerRef.current;
+    if (!el) {
+      return null;
+    }
+    const rect = el.getBoundingClientRect();
+    const scale = zoom / 100;
+    return {
+      x: (clientX - rect.left - offset.stageX) / scale,
+      y: (clientY - rect.top - offset.stageY) / scale,
+    };
+  };
+
+  const isToolboxDrag = (e: React.DragEvent) =>
+    Array.from(e.dataTransfer.types).includes("application/goapps-control");
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!isToolboxDrag(e)) {
+      return;
+    }
+    const point = artboardPointFromClient(e.clientX, e.clientY);
+    if (!point) {
+      return;
+    }
+    const containerEditId = useInteractionStore.getState().containerEditId;
+    const container = hitTestContainerAtPoint(designerNodes, point.x, point.y, {
+      containerEditId,
+    });
+    useInteractionStore.getState().setDropTarget(container?.controlId ?? null);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    const related = e.relatedTarget as Node | null;
+    if (related && e.currentTarget.contains(related)) {
+      return;
+    }
+    useInteractionStore.getState().setDropTarget(null);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    useInteractionStore.getState().setDropTarget(null);
+    const type = e.dataTransfer.getData("application/goapps-control");
+    if (!type) {
+      return;
+    }
+
+    const point = artboardPointFromClient(e.clientX, e.clientY);
+    if (!point) {
+      createControl(type as import("../control-defaults").ToolboxControlType);
+      return;
+    }
+
+    const containerEditId = useInteractionStore.getState().containerEditId;
+    const container = hitTestContainerAtPoint(designerNodes, point.x, point.y, {
+      containerEditId,
+    });
+
+    if (container) {
+      const localX = Math.round(point.x - container.absoluteBounds.x);
+      const localY = Math.round(point.y - container.absoluteBounds.y);
+      createControl(type as import("../control-defaults").ToolboxControlType, {
+        parent_control_id: container.controlId,
+        x: Math.max(0, localX),
+        y: Math.max(0, localY),
+      });
+      return;
+    }
+
+    createControl(type as import("../control-defaults").ToolboxControlType);
+  };
 
   const scale = zoom / 100;
   const scaledW = ARTBOARD_W * scale;
@@ -107,7 +175,8 @@ export function CanvasSurface() {
         ref={containerRef}
         className={styles.stageContainer}
         data-testid="studio-canvas-stage"
-        onDragOver={(e) => e.preventDefault()}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
         <div className={styles.backgroundStage}>
@@ -147,12 +216,15 @@ export function CanvasSurface() {
                 listening={false}
               />
             </Layer>
+            <DesignerShapeLayer nodes={designerNodes} offset={offset} zoom={zoom} />
           </Stage>
         </div>
 
         <DesignerProvider>
           <div className={styles.controlOverlay}>
-            {designerNodes.map((node) => {
+            {designerNodes
+              .filter((node) => !isShapeControlType(node.type))
+              .map((node) => {
               const screen = toScreenBounds(node.absoluteBounds, offset, zoom);
               return (
                 <div

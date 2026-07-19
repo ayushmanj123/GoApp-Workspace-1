@@ -14,6 +14,7 @@ var allowedFieldTypes = map[string]struct{}{
 	"number":  {},
 	"boolean": {},
 	"date":    {},
+	"lookup":  {},
 }
 
 type EntityService struct {
@@ -78,22 +79,46 @@ func (s *EntityService) ListByApplication(ctx context.Context, tenantID, appID u
 	return filtered, int64(len(filtered)), nil
 }
 
-func (s *EntityService) CreateField(ctx context.Context, tenantID, entityID uuid.UUID, name, displayName, fieldType string) (*models.EntityField, error) {
+// CreateField creates a new entity field. relatedEntityID must be non-nil when
+// fieldType is "lookup" (many-to-one relationship) and is otherwise ignored.
+func (s *EntityService) CreateField(ctx context.Context, tenantID, entityID uuid.UUID, name, displayName, fieldType string, relatedEntityID *uuid.UUID) (*models.EntityField, error) {
 	if _, ok := allowedFieldTypes[fieldType]; !ok {
 		return nil, fmt.Errorf("invalid field_type: %s", fieldType)
 	}
-	field := &models.EntityField{
-		TenantID:    tenantID,
-		EntityID:    entityID,
-		Name:        name,
-		DisplayName: displayName,
-		FieldType:   fieldType,
-	}
 	sess := s.store.WithTenant(ctx, tenantID)
+	if fieldType == "lookup" {
+		resolved, err := s.resolveRelatedEntity(ctx, sess, relatedEntityID)
+		if err != nil {
+			return nil, err
+		}
+		relatedEntityID = resolved
+	} else {
+		relatedEntityID = nil
+	}
+	field := &models.EntityField{
+		TenantID:        tenantID,
+		EntityID:        entityID,
+		Name:            name,
+		DisplayName:     displayName,
+		FieldType:       fieldType,
+		RelatedEntityID: relatedEntityID,
+	}
 	if err := sess.EntityFields().Create(ctx, field); err != nil {
 		return nil, fmt.Errorf("create entity field: %w", err)
 	}
 	return field, nil
+}
+
+// resolveRelatedEntity validates that a related entity id was supplied and that it
+// refers to an entity that exists within the current tenant.
+func (s *EntityService) resolveRelatedEntity(ctx context.Context, sess repositories.TenantSession, relatedEntityID *uuid.UUID) (*uuid.UUID, error) {
+	if relatedEntityID == nil || *relatedEntityID == uuid.Nil {
+		return nil, fmt.Errorf("related_entity_id is required for lookup fields")
+	}
+	if _, err := sess.Entities().GetByID(ctx, *relatedEntityID); err != nil {
+		return nil, fmt.Errorf("related entity not found: %w", err)
+	}
+	return relatedEntityID, nil
 }
 
 func (s *EntityService) UpdateField(ctx context.Context, tenantID, id uuid.UUID, updates map[string]interface{}) (*models.EntityField, error) {
@@ -113,6 +138,19 @@ func (s *EntityService) UpdateField(ctx context.Context, tenantID, id uuid.UUID,
 			return nil, fmt.Errorf("invalid field_type: %s", v)
 		}
 		field.FieldType = v
+	}
+	if v, ok := updates["related_entity_id"]; ok {
+		relatedEntityID, _ := v.(*uuid.UUID)
+		field.RelatedEntityID = relatedEntityID
+	}
+	if field.FieldType == "lookup" {
+		resolved, err := s.resolveRelatedEntity(ctx, sess, field.RelatedEntityID)
+		if err != nil {
+			return nil, err
+		}
+		field.RelatedEntityID = resolved
+	} else {
+		field.RelatedEntityID = nil
 	}
 	if err := sess.EntityFields().Update(ctx, field); err != nil {
 		return nil, fmt.Errorf("update entity field: %w", err)

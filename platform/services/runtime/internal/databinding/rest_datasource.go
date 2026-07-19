@@ -54,15 +54,18 @@ func (d *RestDataSource) Kind() DataSourceKind {
 
 func (d *RestDataSource) Query(ctx context.Context, input QueryInput) (*QueryResult, error) {
 	connectorID := input.EntityID
-	cfg, action, err := d.resolveAction(ctx, input.TenantID, connectorID, restActionList)
+	cfg, action, err := d.resolveAction(ctx, input.TenantID, input.UserID, connectorID, restActionList, input.EnvironmentID)
 	if err != nil {
 		return nil, err
 	}
 
 	endpoint := action.Endpoint
 	query := url.Values{}
-	for _, filter := range input.Filters {
-		query.Set(filter.Field, filter.Value)
+	pushParams := input.FilterExpr.IsEqualsAndOnly()
+	if pushParams {
+		for _, leaf := range input.FilterExpr.Leaves {
+			query.Set(leaf.Field, leaf.Value)
+		}
 	}
 	if input.Limit > 0 {
 		query.Set("limit", strconv.Itoa(input.Limit))
@@ -74,7 +77,7 @@ func (d *RestDataSource) Query(ctx context.Context, input QueryInput) (*QueryRes
 		query.Set("sort", orderExpression(input.OrderBy, input.OrderDirection))
 	}
 
-	body, _, err := d.do(ctx, cfg, action.HTTPMethod, endpoint, query, nil)
+	body, _, err := d.do(ctx, cfg, input.UserID, action.HTTPMethod, endpoint, query, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -83,17 +86,25 @@ func (d *RestDataSource) Query(ctx context.Context, input QueryInput) (*QueryRes
 	if err != nil {
 		return nil, err
 	}
+	if !pushParams && !input.FilterExpr.Empty() {
+		filtered := make([]DataItem, 0, len(items))
+		for _, item := range items {
+			if MatchFilterExpr(map[string]interface{}(item), input.FilterExpr) {
+				filtered = append(filtered, item)
+			}
+		}
+		items = filtered
+	}
 	return &QueryResult{Items: items, Count: int64(len(items))}, nil
 }
 
 func (d *RestDataSource) Get(ctx context.Context, tenantID, userID uuid.UUID, key DataSourceKey, recordID uuid.UUID) (*DataItem, error) {
-	_ = userID
-	cfg, action, err := d.resolveAction(ctx, tenantID, key.EntityID, restActionGet)
+	cfg, action, err := d.resolveAction(ctx, tenantID, userID, key.EntityID, restActionGet, nil)
 	if err != nil {
 		return nil, err
 	}
 	endpoint := substituteRecordID(action.Endpoint, recordID)
-	body, _, err := d.do(ctx, cfg, action.HTTPMethod, endpoint, nil, nil)
+	body, _, err := d.do(ctx, cfg, userID, action.HTTPMethod, endpoint, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -105,8 +116,7 @@ func (d *RestDataSource) Get(ctx context.Context, tenantID, userID uuid.UUID, ke
 }
 
 func (d *RestDataSource) Create(ctx context.Context, tenantID, userID uuid.UUID, key DataSourceKey, data map[string]interface{}) (*DataItem, error) {
-	_ = userID
-	cfg, action, err := d.resolveAction(ctx, tenantID, key.EntityID, restActionCreate)
+	cfg, action, err := d.resolveAction(ctx, tenantID, userID, key.EntityID, restActionCreate, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +124,7 @@ func (d *RestDataSource) Create(ctx context.Context, tenantID, userID uuid.UUID,
 	if err != nil {
 		return nil, fmt.Errorf("databinding: encode rest create payload: %w", err)
 	}
-	body, _, err := d.do(ctx, cfg, action.HTTPMethod, action.Endpoint, nil, payload)
+	body, _, err := d.do(ctx, cfg, userID, action.HTTPMethod, action.Endpoint, nil, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -122,9 +132,8 @@ func (d *RestDataSource) Create(ctx context.Context, tenantID, userID uuid.UUID,
 }
 
 func (d *RestDataSource) Update(ctx context.Context, tenantID, userID uuid.UUID, key DataSourceKey, recordID uuid.UUID, data map[string]interface{}, version int) (*DataItem, error) {
-	_ = userID
 	_ = version
-	cfg, action, err := d.resolveAction(ctx, tenantID, key.EntityID, restActionUpdate)
+	cfg, action, err := d.resolveAction(ctx, tenantID, userID, key.EntityID, restActionUpdate, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +142,7 @@ func (d *RestDataSource) Update(ctx context.Context, tenantID, userID uuid.UUID,
 	if err != nil {
 		return nil, fmt.Errorf("databinding: encode rest update payload: %w", err)
 	}
-	body, _, err := d.do(ctx, cfg, action.HTTPMethod, endpoint, nil, payload)
+	body, _, err := d.do(ctx, cfg, userID, action.HTTPMethod, endpoint, nil, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -141,21 +150,21 @@ func (d *RestDataSource) Update(ctx context.Context, tenantID, userID uuid.UUID,
 }
 
 func (d *RestDataSource) Delete(ctx context.Context, tenantID, userID uuid.UUID, key DataSourceKey, recordID uuid.UUID) error {
-	_ = userID
-	cfg, action, err := d.resolveAction(ctx, tenantID, key.EntityID, restActionDelete)
+	cfg, action, err := d.resolveAction(ctx, tenantID, userID, key.EntityID, restActionDelete, nil)
 	if err != nil {
 		return err
 	}
 	endpoint := substituteRecordID(action.Endpoint, recordID)
-	_, _, err = d.do(ctx, cfg, action.HTTPMethod, endpoint, nil, nil)
+	_, _, err = d.do(ctx, cfg, userID, action.HTTPMethod, endpoint, nil, nil)
 	return err
 }
 
-func (d *RestDataSource) resolveAction(ctx context.Context, tenantID, connectorID uuid.UUID, actionName string) (*RestConnectorConfig, *RestConnectorAction, error) {
+func (d *RestDataSource) resolveAction(ctx context.Context, tenantID, userID, connectorID uuid.UUID, actionName string, environmentID *uuid.UUID) (*RestConnectorConfig, *RestConnectorAction, error) {
 	if d == nil || d.repo == nil {
 		return nil, nil, fmt.Errorf("databinding: rest datasource is not configured")
 	}
-	cfg, err := d.repo.GetConnectorConfig(ctx, tenantID, connectorID)
+	envID := coalesceEnvironmentID(environmentID, ctx)
+	cfg, err := d.repo.GetConnectorConfig(ctx, tenantID, connectorID, envID, userID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -166,7 +175,7 @@ func (d *RestDataSource) resolveAction(ctx context.Context, tenantID, connectorI
 	return cfg, action, nil
 }
 
-func (d *RestDataSource) do(ctx context.Context, cfg *RestConnectorConfig, method, endpoint string, query url.Values, payload []byte) ([]byte, int, error) {
+func (d *RestDataSource) do(ctx context.Context, cfg *RestConnectorConfig, userID uuid.UUID, method, endpoint string, query url.Values, payload []byte) ([]byte, int, error) {
 	target, err := buildURL(cfg.BaseURL, endpoint, query)
 	if err != nil {
 		return nil, 0, fmt.Errorf("databinding: build rest url: %w", err)
@@ -184,7 +193,7 @@ func (d *RestDataSource) do(ctx context.Context, cfg *RestConnectorConfig, metho
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Accept", "application/json")
-	if err := d.applyAuth(ctx, cfg, req); err != nil {
+	if err := d.applyAuth(ctx, cfg, userID, req); err != nil {
 		return nil, 0, err
 	}
 
@@ -204,14 +213,14 @@ func (d *RestDataSource) do(ctx context.Context, cfg *RestConnectorConfig, metho
 	return body, res.StatusCode, nil
 }
 
-func (d *RestDataSource) applyAuth(ctx context.Context, cfg *RestConnectorConfig, req *http.Request) error {
+func (d *RestDataSource) applyAuth(ctx context.Context, cfg *RestConnectorConfig, userID uuid.UUID, req *http.Request) error {
 	auth := cfg.Auth
 	if strings.EqualFold(auth.Type, "header") && auth.HeaderName != "" {
 		req.Header.Set(auth.HeaderName, auth.HeaderValue)
 		return nil
 	}
-	if strings.EqualFold(auth.Type, "oauth_client_credentials") {
-		token, err := d.oauthAccessToken(ctx, cfg)
+	if strings.EqualFold(auth.Type, "oauth_client_credentials") || strings.EqualFold(auth.Type, "oauth_authorization_code") {
+		token, err := d.oauthAccessToken(ctx, cfg, userID)
 		if err != nil {
 			return err
 		}
@@ -220,8 +229,11 @@ func (d *RestDataSource) applyAuth(ctx context.Context, cfg *RestConnectorConfig
 	return nil
 }
 
-func (d *RestDataSource) oauthAccessToken(ctx context.Context, cfg *RestConnectorConfig) (string, error) {
+func (d *RestDataSource) oauthAccessToken(ctx context.Context, cfg *RestConnectorConfig, userID uuid.UUID) (string, error) {
 	key := cfg.ConnectorID.String()
+	if strings.EqualFold(cfg.Auth.ConnectionScope, "user") && userID != uuid.Nil {
+		key = key + ":" + userID.String()
+	}
 	if cached, ok := d.tokenCache.Load(key); ok {
 		tok := cached.(cachedOAuthToken)
 		if time.Now().Before(tok.ExpiresAt) {
@@ -236,11 +248,24 @@ func (d *RestDataSource) oauthAccessToken(ctx context.Context, cfg *RestConnecto
 	}
 
 	form := url.Values{}
-	form.Set("grant_type", "client_credentials")
-	form.Set("client_id", cfg.Auth.ClientID)
-	form.Set("client_secret", cfg.Auth.ClientSecret)
-	if scope := strings.TrimSpace(cfg.Auth.Scope); scope != "" {
-		form.Set("scope", scope)
+	if strings.EqualFold(cfg.Auth.Type, "oauth_authorization_code") {
+		if strings.TrimSpace(cfg.Auth.RefreshToken) == "" {
+			if strings.EqualFold(cfg.Auth.ConnectionScope, "user") {
+				return "", fmt.Errorf("%w: connector %s", ErrConnectorUserOAuthRequired, cfg.ConnectorID)
+			}
+			return "", fmt.Errorf("databinding: oauth_authorization_code connector is not connected")
+		}
+		form.Set("grant_type", "refresh_token")
+		form.Set("refresh_token", cfg.Auth.RefreshToken)
+		form.Set("client_id", cfg.Auth.ClientID)
+		form.Set("client_secret", cfg.Auth.ClientSecret)
+	} else {
+		form.Set("grant_type", "client_credentials")
+		form.Set("client_id", cfg.Auth.ClientID)
+		form.Set("client_secret", cfg.Auth.ClientSecret)
+		if scope := strings.TrimSpace(cfg.Auth.Scope); scope != "" {
+			form.Set("scope", scope)
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.Auth.TokenURL, strings.NewReader(form.Encode()))

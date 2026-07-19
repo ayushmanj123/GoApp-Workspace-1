@@ -220,6 +220,8 @@ export function ExplorerPanel() {
           className={styles.collapseBtn}
           onClick={toggleExplorer}
           title={collapsed ? "Expand Explorer" : "Collapse Explorer"}
+          aria-label={collapsed ? "Expand Explorer" : "Collapse Explorer"}
+          aria-expanded={!collapsed}
         >
           {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
         </button>

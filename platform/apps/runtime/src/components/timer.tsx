@@ -10,6 +10,7 @@ import {
   useRecordStore,
 } from "../formula/formula-context";
 import { useNavigationStore, useScreenResolver, useRuntime } from "../runtime-hooks";
+import { executeRuntimeAction } from "../formula/execute-runtime-action";
 import { executeAction } from "../formula/execute-action";
 import type { RuntimeNavigationStore } from "../formula/runtime-navigation-store";
 
@@ -40,7 +41,12 @@ const noopNavigationStore: RuntimeNavigationStore = {
   subscribe: () => () => {},
 };
 
-export const Timer: React.FC<any> = ({ duration, onTimerEnd }) => {
+export const Timer: React.FC<any> = ({
+  duration,
+  onTimerEnd,
+  controlName,
+  name,
+}) => {
   const engine = useFormulaEngine();
   const context = useFormulaEvaluationContext();
   const store = useVariableStore();
@@ -51,7 +57,16 @@ export const Timer: React.FC<any> = ({ duration, onTimerEnd }) => {
   const recordStore = useRecordStore();
   const navigationStore = useNavigationStore() ?? noopNavigationStore;
   const resolveScreenId = useScreenResolver() ?? (() => undefined);
-  const { pkg, currentScreen } = useRuntime();
+  const {
+    pkg,
+    currentScreen,
+    appId,
+    sessionId,
+    currentScreenName,
+    navigateFromServer,
+    runtimeUnavailable,
+  } = useRuntime();
+  const resolvedControlName = controlName ?? name;
   const controls = useMemo(() => {
     const screen = pkg?.screens?.find((item) => item.id === currentScreen);
     return screen?.controls ?? [];
@@ -71,22 +86,39 @@ export const Timer: React.FC<any> = ({ duration, onTimerEnd }) => {
         return;
       }
       firedRef.current = true;
-      void executeAction(
-        { formula },
-        {
-          store,
-          screenContextStore,
-          collectionStore,
-          formUpdatesStore,
-          recordStore,
-          controls,
-          gallerySelectionStore,
-          navigationStore,
-          resolveScreenId,
-          engine,
-          context,
-        },
-      ).catch((err) => {
+
+      const actionServices = {
+        store,
+        screenContextStore,
+        collectionStore,
+        formUpdatesStore,
+        recordStore,
+        controls,
+        gallerySelectionStore,
+        navigationStore,
+        resolveScreenId,
+        engine,
+        context,
+        session:
+          sessionId && appId && currentScreenName && !runtimeUnavailable
+            ? { appId, sessionId, screen: currentScreenName }
+            : undefined,
+        entityNames: pkg?.entities?.map((entity) => entity.name) ?? [],
+        navigateFromServer: navigateFromServer ?? undefined,
+      };
+
+      const run = actionServices.session
+        ? executeRuntimeAction(
+            {
+              formula,
+              controlName: resolvedControlName,
+              event: "OnTimerEnd",
+            },
+            actionServices,
+          )
+        : executeAction({ formula }, actionServices);
+
+      void run.catch((err) => {
         console.error("[Timer Error]", err);
       });
     }, durationMs);
@@ -108,6 +140,13 @@ export const Timer: React.FC<any> = ({ duration, onTimerEnd }) => {
     resolveScreenId,
     engine,
     context,
+    sessionId,
+    appId,
+    currentScreenName,
+    runtimeUnavailable,
+    pkg,
+    navigateFromServer,
+    resolvedControlName,
   ]);
 
   return <span>[Timer]</span>;

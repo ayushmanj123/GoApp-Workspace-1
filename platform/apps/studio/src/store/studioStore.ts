@@ -102,7 +102,7 @@ export const useStudioStore = create<StudioState>((set) => ({
   setSidePanelOpen: (open) => set({ sidePanelOpen: open }),
 
   setActiveNavItem: (item) =>
-    set({ activeNavItem: item, sidePanelOpen: true }),
+    set({ activeNavItem: item, sidePanelOpen: true, explorerCollapsed: false }),
 
   setExplorerTab: (tab) => set({ explorerTab: tab }),
 

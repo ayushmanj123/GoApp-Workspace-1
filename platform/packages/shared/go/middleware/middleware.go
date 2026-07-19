@@ -23,6 +23,8 @@ func RequestID() fiber.Handler {
 		requestID := c.Get(requestIDHeader)
 		if requestID == "" {
 			requestID = uuid.New().String()
+			// Stamp inbound request so gateway proxies forward the same ID.
+			c.Request().Header.Set(requestIDHeader, requestID)
 		}
 		c.Set(requestIDHeader, requestID)
 		c.Locals("requestID", requestID)

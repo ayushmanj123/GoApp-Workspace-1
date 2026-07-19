@@ -58,7 +58,7 @@ Controls can declare binding metadata as a single JSON property or as individual
 Resolution rules:
 
 1. `dataSource` name must match an entity `name` on the target application.
-2. `filter` supports a single equals expression: `Field='Value'` (v1 only).
+2. `filter` supports shallow And/Or of comparison leaves (`=`, `<>`, `>`, `<`, `>=`, `<=`; quoted string or number) plus `Contains(Field,'text')` and `StartsWith(Field,'text')` for gallery search (Phase 7.28) — see Phase 7.19.
 3. `sort` maps to record list `orderBy` (entity field name or `created_on`).
 4. `limit` defaults to `50`, capped at `200`.
 
@@ -68,7 +68,7 @@ API query parameters override metadata defaults:
 |-----------|-------------|
 | `limit` | Page size |
 | `offset` | Page offset |
-| `filter` | Equals filter expression |
+| `filter` | Filter predicate expression |
 | `sort` | Order by field |
 | `order` | `asc` or `desc` |
 
@@ -110,7 +110,11 @@ Example response:
 5. Select the `DataSource` implementation from the registry.
 6. Execute `Query` and return `{ items, count }`.
 
-Entity queries call `RecordService.List`, then apply equals filters in memory (v1 constraint while Power Fx and SQL-side filtering are deferred). Paging is applied after filtering.
+Entity queries call `RecordService.List` with `FilterExpr` pushed into Postgres JSONB `WHERE` on `entity_records.data` (Phase 7.20). Filtered `Count` and `Limit`/`Offset` are applied in the database. Collection galleries still match in-memory; REST equals-And uses query params (richer predicates in-memory after fetch).
+
+### Gallery/connector list filtering (Phase 7.15 / 7.19 / 7.20)
+
+`gallery.Service.Load` (and `ReloadForSource`) read the gallery control's own `filter` property — `ReadFilterFormula` checks a `filter`-named formula binding first, then `Properties["filter"]` — and pass it through as `databinding.QueryOverrides.Filter` on the entity/REST/SQL query. Collection sources apply the same `ParseFilterExpr` matcher in-memory. An empty/absent control filter leaves any metadata-driven filter from `control_properties` untouched. Supported predicates: equals, `<>`/`>`/`<`/`>=`/`<=`, And/Or of leaves (see [gallery-runtime.md](./gallery-runtime.md)).
 
 ## Per-request cache
 

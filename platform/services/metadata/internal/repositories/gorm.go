@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime/debug"
+	"time"
 
 	"github.com/goapps-platform/metadata-service/internal/database"
 	"github.com/goapps-platform/metadata-service/internal/models"
@@ -384,8 +385,12 @@ type gormTenantSession struct {
 	collections          CollectionRepository
 	connectors           ConnectorRepository
 	connectorActions     ConnectorActionRepository
-	secrets              SecretRepository
-	permissions          PermissionRepository
+	secrets               SecretRepository
+	envSecretOverrides    EnvironmentSecretOverrideRepository
+	connectorUserConns    ConnectorUserConnectionRepository
+	workflows             WorkflowRepository
+	workflowRuns          WorkflowRunRepository
+	permissions           PermissionRepository
 	auditLogs            AuditLogRepository
 	packages             PackageRepository
 	applicationSnapshots ApplicationSnapshotRepository
@@ -417,6 +422,10 @@ func newGormTenantSession(db *gorm.DB, tenantID uuid.UUID, inTx bool) *gormTenan
 		session.connectors = newTenantTxGormRepository[models.Connector](db, tenantID)
 		session.connectorActions = newTenantTxGormRepository[models.ConnectorAction](db, tenantID)
 		session.secrets = newTenantTxGormRepository[models.Secret](db, tenantID)
+		session.envSecretOverrides = newTenantTxGormRepository[models.EnvironmentSecretOverride](db, tenantID)
+		session.connectorUserConns = newTenantTxGormRepository[models.ConnectorUserConnection](db, tenantID)
+		session.workflows = newTenantTxGormRepository[models.Workflow](db, tenantID)
+		session.workflowRuns = newTenantTxGormRepository[models.WorkflowRun](db, tenantID)
 		session.permissions = newTenantTxGormRepository[models.Permission](db, tenantID)
 		session.auditLogs = newTenantTxGormRepository[models.AuditLog](db, tenantID)
 		session.packages = newTenantTxGormRepository[models.Package](db, tenantID)
@@ -442,6 +451,10 @@ func newGormTenantSession(db *gorm.DB, tenantID uuid.UUID, inTx bool) *gormTenan
 	session.connectors = NewTenantGormRepository[models.Connector](db, tenantID)
 	session.connectorActions = NewTenantGormRepository[models.ConnectorAction](db, tenantID)
 	session.secrets = NewTenantGormRepository[models.Secret](db, tenantID)
+	session.envSecretOverrides = NewTenantGormRepository[models.EnvironmentSecretOverride](db, tenantID)
+	session.connectorUserConns = NewTenantGormRepository[models.ConnectorUserConnection](db, tenantID)
+	session.workflows = NewTenantGormRepository[models.Workflow](db, tenantID)
+	session.workflowRuns = NewTenantGormRepository[models.WorkflowRun](db, tenantID)
 	session.permissions = NewTenantGormRepository[models.Permission](db, tenantID)
 	session.auditLogs = NewTenantGormRepository[models.AuditLog](db, tenantID)
 	session.packages = NewTenantGormRepository[models.Package](db, tenantID)
@@ -469,8 +482,18 @@ func (s *gormTenantSession) Variables() VariableRepository                { retu
 func (s *gormTenantSession) Collections() CollectionRepository            { return s.collections }
 func (s *gormTenantSession) Connectors() ConnectorRepository              { return s.connectors }
 func (s *gormTenantSession) ConnectorActions() ConnectorActionRepository  { return s.connectorActions }
-func (s *gormTenantSession) Secrets() SecretRepository                    { return s.secrets }
-func (s *gormTenantSession) Permissions() PermissionRepository            { return s.permissions }
+func (s *gormTenantSession) Secrets() SecretRepository { return s.secrets }
+func (s *gormTenantSession) EnvironmentSecretOverrides() EnvironmentSecretOverrideRepository {
+	return s.envSecretOverrides
+}
+func (s *gormTenantSession) ConnectorUserConnections() ConnectorUserConnectionRepository {
+	return s.connectorUserConns
+}
+func (s *gormTenantSession) Workflows() WorkflowRepository { return s.workflows }
+func (s *gormTenantSession) WorkflowRuns() WorkflowRunRepository {
+	return s.workflowRuns
+}
+func (s *gormTenantSession) Permissions() PermissionRepository { return s.permissions }
 func (s *gormTenantSession) AuditLogs() AuditLogRepository                { return s.auditLogs }
 func (s *gormTenantSession) Packages() PackageRepository                  { return s.packages }
 func (s *gormTenantSession) ApplicationSnapshots() ApplicationSnapshotRepository {
@@ -495,4 +518,78 @@ func (s *gormTenantSession) Transaction(ctx context.Context, fn func(session Ten
 	return database.WithTenantContext(ctx, s.db, s.tenantID, func(tx *gorm.DB) error {
 		return fn(newGormTenantSession(tx.WithContext(ctx), s.tenantID, true))
 	})
+}
+
+// FindWorkflowByIDUnscoped loads a non-deleted workflow by primary key (no tenant JWT).
+func (s *GormStore) FindWorkflowByIDUnscoped(ctx context.Context, id uuid.UUID) (*models.Workflow, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("repository: nil database")
+	}
+	if id == uuid.Nil {
+		return nil, fmt.Errorf("repository: id is required")
+	}
+	var wf models.Workflow
+	err := s.db.WithContext(ctx).
+		Where("id = ? AND deleted_at IS NULL", id).
+		First(&wf).Error
+	if err != nil {
+		return nil, fmt.Errorf("find workflow: %w", err)
+	}
+	return &wf, nil
+}
+
+// ClaimDueScheduledWorkflows locks due schedule rows, advances next_run_at, returns claimed rows.
+func (s *GormStore) ClaimDueScheduledWorkflows(ctx context.Context, now time.Time, limit int) ([]models.Workflow, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("repository: nil database")
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	nowUTC := now.UTC()
+	var claimed []models.Workflow
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var due []models.Workflow
+		if err := tx.Raw(`
+			SELECT * FROM workflows
+			WHERE schedule_enabled = true
+			  AND schedule_next_run_at IS NOT NULL
+			  AND schedule_next_run_at <= ?
+			  AND deleted_at IS NULL
+			ORDER BY schedule_next_run_at ASC
+			LIMIT ?
+			FOR UPDATE SKIP LOCKED
+		`, nowUTC, limit).Scan(&due).Error; err != nil {
+			return fmt.Errorf("claim due workflows: %w", err)
+		}
+		for i := range due {
+			wf := due[i]
+			cronExpr := ""
+			if wf.ScheduleCron != nil {
+				cronExpr = *wf.ScheduleCron
+			}
+			tz := "UTC"
+			if wf.ScheduleTimezone != nil && *wf.ScheduleTimezone != "" {
+				tz = *wf.ScheduleTimezone
+			}
+			next, nextErr := NextScheduleRunAt(cronExpr, tz, nowUTC)
+			if nextErr != nil || next == nil {
+				far := nowUTC.Add(24 * time.Hour)
+				next = &far
+			}
+			if err := tx.Exec(
+				`UPDATE workflows SET schedule_next_run_at = ?, modified_on = now() WHERE id = ?`,
+				*next, wf.ID,
+			).Error; err != nil {
+				return fmt.Errorf("advance schedule_next_run_at: %w", err)
+			}
+			wf.ScheduleNextRunAt = next
+			claimed = append(claimed, wf)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return claimed, nil
 }

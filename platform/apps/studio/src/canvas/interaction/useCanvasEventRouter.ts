@@ -3,8 +3,13 @@ import { useApplicationStore } from "../../store/applicationStore";
 import { type ArtboardOffset } from "../CoordinateSystem";
 import type { DesignerNode } from "../designer/DesignerNode";
 import { findDesignerNode } from "../designer/DesignerNodeRegistry";
-import { hitTestAtPoint, hitTestInRect } from "./HitTestService";
+import {
+  hitTestAtPoint,
+  hitTestContainerAtPoint,
+  hitTestInRect,
+} from "./HitTestService";
 import { useInteractionStore } from "./interactionStore";
+import { clampPositionToArtboard } from "./artboardClamp";
 import { snapPosition } from "./snapGuides";
 import { syncStudioSelection } from "./syncStudioSelection";
 
@@ -69,14 +74,103 @@ export function useCanvasEventRouter(
       );
       useInteractionStore.getState().setAlignmentGuides(snapped.guides);
 
+      const clamped = clampPositionToArtboard(
+        snapped.x,
+        snapped.y,
+        node.absoluteBounds.width,
+        node.absoluteBounds.height,
+      );
+
       const parent = node.parentId ? findDesignerNode(nodes, node.parentId) : null;
-      const localX = parent ? snapped.x - parent.absoluteBounds.x : snapped.x;
-      const localY = parent ? snapped.y - parent.absoluteBounds.y : snapped.y;
+      const localX = parent ? clamped.x - parent.absoluteBounds.x : clamped.x;
+      const localY = parent ? clamped.y - parent.absoluteBounds.y : clamped.y;
 
       updateControl(node.controlId, {
         x: Math.round(localX),
         y: Math.round(localY),
       });
+
+      return clamped;
+    },
+    [nodes, updateControl],
+  );
+
+  const updateReparentDropTarget = useCallback(
+    (
+      node: DesignerNode,
+      absoluteX: number,
+      absoluteY: number,
+      containerEditId: string | null,
+    ) => {
+      const centerX = absoluteX + node.absoluteBounds.width / 2;
+      const centerY = absoluteY + node.absoluteBounds.height / 2;
+      const target = hitTestContainerAtPoint(nodes, centerX, centerY, {
+        containerEditId,
+        excludeControlId: node.controlId,
+      });
+      useInteractionStore.getState().setDropTarget(target?.controlId ?? null);
+      return target;
+    },
+    [nodes],
+  );
+
+  const commitReparent = useCallback(
+    (
+      node: DesignerNode,
+      absoluteX: number,
+      absoluteY: number,
+      containerEditId: string | null,
+    ) => {
+      const snapped = snapPosition(
+        nodes,
+        node.controlId,
+        absoluteX,
+        absoluteY,
+        node.absoluteBounds.width,
+        node.absoluteBounds.height,
+      );
+      const clamped = clampPositionToArtboard(
+        snapped.x,
+        snapped.y,
+        node.absoluteBounds.width,
+        node.absoluteBounds.height,
+      );
+
+      const target = hitTestContainerAtPoint(
+        nodes,
+        clamped.x + node.absoluteBounds.width / 2,
+        clamped.y + node.absoluteBounds.height / 2,
+        {
+          containerEditId,
+          excludeControlId: node.controlId,
+        },
+      );
+
+      const nextParentId = target?.controlId ?? null;
+      const prevParentId = node.parentId ?? null;
+
+      if (nextParentId === prevParentId) {
+        const parent = prevParentId ? findDesignerNode(nodes, prevParentId) : null;
+        updateControl(node.controlId, {
+          x: Math.round(parent ? clamped.x - parent.absoluteBounds.x : clamped.x),
+          y: Math.round(parent ? clamped.y - parent.absoluteBounds.y : clamped.y),
+        });
+        return;
+      }
+
+      if (target) {
+        updateControl(node.controlId, {
+          parent_control_id: target.controlId,
+          x: Math.round(Math.max(0, clamped.x - target.absoluteBounds.x)),
+          y: Math.round(Math.max(0, clamped.y - target.absoluteBounds.y)),
+        });
+      } else {
+        updateControl(node.controlId, {
+          parent_control_id: null,
+          x: Math.round(clamped.x),
+          y: Math.round(clamped.y),
+        });
+      }
     },
     [nodes, updateControl],
   );
@@ -87,8 +181,11 @@ export function useCanvasEventRouter(
         const state = useInteractionStore.getState();
         if (state.containerEditId) {
           state.exitContainerEdit();
+          state.setHovered(null);
+          syncStudioSelection();
         } else {
           state.clearSelection();
+          state.setHovered(null);
           syncStudioSelection();
         }
       }
@@ -121,6 +218,7 @@ export function useCanvasEventRouter(
           hit.isContainer
         ) {
           useInteractionStore.getState().enterContainerEdit(hit.controlId);
+          syncStudioSelection();
           lastClickRef.current = null;
           event.preventDefault();
           return;
@@ -152,14 +250,28 @@ export function useCanvasEventRouter(
             if (!node) {
               return;
             }
-            applyDragPosition(
-              node,
-              dragState.dragOrigin.x + dx,
-              dragState.dragOrigin.y + dy,
-            );
+            const absX = dragState.dragOrigin.x + dx;
+            const absY = dragState.dragOrigin.y + dy;
+            applyDragPosition(node, absX, absY);
+            updateReparentDropTarget(node, absX, absY, dragState.containerEditId);
           };
 
           const onUp = (ev: PointerEvent) => {
+            const dragState = useInteractionStore.getState();
+            if (dragState.draggingControlId && dragState.dragOrigin && dragState.dragStartPointer) {
+              const current = toArtboardPoint(ev.clientX, ev.clientY);
+              const dx = current.x - dragState.dragStartPointer.x;
+              const dy = current.y - dragState.dragStartPointer.y;
+              const node = findDesignerNode(nodes, dragState.draggingControlId);
+              if (node) {
+                commitReparent(
+                  node,
+                  dragState.dragOrigin.x + dx,
+                  dragState.dragOrigin.y + dy,
+                  dragState.containerEditId,
+                );
+              }
+            }
             useInteractionStore.getState().endDrag();
             (event.currentTarget as HTMLDivElement).releasePointerCapture(ev.pointerId);
             window.removeEventListener("pointermove", onMove);
@@ -224,7 +336,13 @@ export function useCanvasEventRouter(
       window.addEventListener("pointerup", onUp);
       event.preventDefault();
     },
-    [applyDragPosition, nodes, toArtboardPoint],
+    [
+      applyDragPosition,
+      commitReparent,
+      nodes,
+      toArtboardPoint,
+      updateReparentDropTarget,
+    ],
   );
 
   const onPointerMove = useCallback(

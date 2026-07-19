@@ -1,13 +1,13 @@
 import registerRuntime from "../../../runtime/src/registry-bridge";
 import { registerDesignerRenderers } from "../canvas/designer/register-designer-renderers";
 
-let initialized = false;
+let runtimeInitialized = false;
 
 export function ensureStudioRegistry(): void {
-  if (initialized) {
-    return;
+  if (!runtimeInitialized) {
+    registerRuntime();
+    runtimeInitialized = true;
   }
-  registerRuntime();
+  // Always re-apply designer patches (survives HMR / runtime re-register wiping noopDesigner).
   registerDesignerRenderers();
-  initialized = true;
 }

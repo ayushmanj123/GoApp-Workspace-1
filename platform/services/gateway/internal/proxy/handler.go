@@ -59,6 +59,18 @@ func (h *Handler) Forward(c *fiber.Ctx) error {
 	return proxy.Do(c, targetURL)
 }
 
+// ForwardPublic proxies unauthenticated public routes (e.g. workflow webhooks) to metadata.
+func (h *Handler) ForwardPublic(c *fiber.Ctx) error {
+	targetURL, err := buildTargetURL(h.metadataBase, c)
+	if err != nil {
+		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+			"success": false,
+			"error":   err.Error(),
+		})
+	}
+	return proxy.Do(c, targetURL)
+}
+
 func isPublishRoute(path string) bool {
 	return strings.Contains(path, "/publish") || strings.Contains(path, "/versions")
 }

@@ -85,7 +85,7 @@ func extractControlDependency(control RuntimeControl) reactive.ControlDependency
 		ControlID: control.Name,
 		Screen:    control.Screen,
 	}
-	if gallery.IsGalleryControl(control.ControlType) {
+	if gallery.IsItemsControl(control.ControlType) {
 		source := gallery.ReadItemsFormula(toGalleryFormulas(control.Formulas), control.Properties)
 		if source != "" {
 			dep.Collections = appendUnique(dep.Collections, source)

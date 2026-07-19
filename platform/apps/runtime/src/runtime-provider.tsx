@@ -316,6 +316,7 @@ export const RuntimeProvider: React.FC<{
             appId,
             firstScreen?.name ?? firstScreen?.id ?? "",
             sessionChannel,
+            environmentId,
           );
           if (mounted) {
             setSessionId(session);
@@ -419,6 +420,7 @@ export const RuntimeProvider: React.FC<{
           appId,
           screen?.name ?? currentScreen,
           channel,
+          environmentId,
         );
         if (!cancelled && activeSession) {
           setSessionId(activeSession);
@@ -443,7 +445,7 @@ export const RuntimeProvider: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [pkg, currentScreen, sessionId, appId, channel]);
+  }, [pkg, currentScreen, sessionId, appId, channel, environmentId]);
 
   const activePackage = renderedPkg ?? pkg;
 

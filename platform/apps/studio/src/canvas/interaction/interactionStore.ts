@@ -44,6 +44,9 @@ export interface InteractionState {
   /** Container being edited (gallery/form/component) — children selectable on canvas */
   containerEditId: string | null;
 
+  /** Container under pointer during toolbox HTML5 drag or control reparent drag */
+  dropTargetControlId: string | null;
+
   alignmentGuides: { orientation: "h" | "v"; position: number }[];
 
   setActiveScreen: (screenId: string | null) => void;
@@ -51,6 +54,7 @@ export interface InteractionState {
   selectMany: (controlIds: string[]) => void;
   clearSelection: () => void;
   setHovered: (controlId: string | null) => void;
+  setDropTarget: (controlId: string | null) => void;
   beginDrag: (controlId: string, pointer: Point, origin: Point) => void;
   updateDrag: (pointer: Point) => void;
   endDrag: () => void;
@@ -75,6 +79,7 @@ export const useInteractionStore = create<InteractionState>((set, get) => ({
   activeTool: "select",
   marqueeRect: null,
   containerEditId: null,
+  dropTargetControlId: null,
   alignmentGuides: [],
 
   setActiveScreen: (screenId) => set({ activeScreenId: screenId }),
@@ -113,6 +118,8 @@ export const useInteractionStore = create<InteractionState>((set, get) => ({
 
   setHovered: (controlId) => set({ hoveredControlId: controlId }),
 
+  setDropTarget: (controlId) => set({ dropTargetControlId: controlId }),
+
   beginDrag: (controlId, pointer, origin) =>
     set({
       draggingControlId: controlId,
@@ -129,6 +136,7 @@ export const useInteractionStore = create<InteractionState>((set, get) => ({
       draggingControlId: null,
       dragOrigin: null,
       dragStartPointer: null,
+      dropTargetControlId: null,
       alignmentGuides: [],
     }),
 
@@ -145,7 +153,11 @@ export const useInteractionStore = create<InteractionState>((set, get) => ({
   setMarquee: (rect) => set({ marqueeRect: rect }),
 
   enterContainerEdit: (containerId) =>
-    set({ containerEditId: containerId, selectedControlIds: [], primaryControlId: null }),
+    set({
+      containerEditId: containerId,
+      selectedControlIds: [containerId],
+      primaryControlId: containerId,
+    }),
 
   exitContainerEdit: () => set({ containerEditId: null }),
 

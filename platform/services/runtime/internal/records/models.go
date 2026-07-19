@@ -63,10 +63,11 @@ type EntitySchema struct {
 	Fields   []FieldSchema
 }
 
-// ListOptions controls pagination and ordering for record queries.
+// ListOptions controls pagination, ordering, and optional filter pushdown.
 type ListOptions struct {
 	Limit          int
 	Offset         int
 	OrderBy        string
 	OrderDirection string
+	FilterExpr     FilterExpr
 }

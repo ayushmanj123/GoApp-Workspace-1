@@ -5,15 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
-
-var equalsFilterPattern = regexp.MustCompile(`^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*['"]([^'"]*)['"]\s*$`)
 
 // BindingMetadataRepository loads datasource metadata and entity mappings.
 type BindingMetadataRepository interface {
@@ -56,7 +53,7 @@ func (r *Resolver) Resolve(ctx context.Context, tenantID, appID uuid.UUID, dataS
 		meta.Limit = overrides.Limit
 	}
 
-	filters, err := ParseEqualsFilter(meta.Filter)
+	filterExpr, err := ParseFilterExpr(meta.Filter)
 	if err != nil {
 		return nil, QueryInput{}, err
 	}
@@ -89,26 +86,13 @@ func (r *Resolver) Resolve(ctx context.Context, tenantID, appID uuid.UUID, dataS
 		EntityID:       binding.EntityID,
 		Limit:          limit,
 		Offset:         offset,
-		Filters:        filters,
+		FilterExpr:     filterExpr,
 		OrderBy:        orderBy,
 		OrderDirection: direction,
 	}
 
 	binding.Metadata = meta
 	return binding, query, nil
-}
-
-// ParseEqualsFilter parses a single equals expression such as Status='Active'.
-func ParseEqualsFilter(expression string) ([]EqualsFilter, error) {
-	expression = strings.TrimSpace(expression)
-	if expression == "" {
-		return nil, nil
-	}
-	matches := equalsFilterPattern.FindStringSubmatch(expression)
-	if len(matches) != 3 {
-		return nil, fmt.Errorf("%w: %q", ErrInvalidFilter, expression)
-	}
-	return []EqualsFilter{{Field: matches[1], Value: matches[2]}}, nil
 }
 
 type entityCatalogRow struct {
@@ -139,11 +123,22 @@ type controlPropertyRow struct {
 
 // PostgresMetadataRepository resolves datasource metadata from shared PostgreSQL tables.
 type PostgresMetadataRepository struct {
-	db *gorm.DB
+	db       *gorm.DB
+	snapshot *SnapshotConnectorSource
 }
 
 func NewPostgresMetadataRepository(db *gorm.DB) *PostgresMetadataRepository {
 	return &PostgresMetadataRepository{db: db}
+}
+
+// SetSnapshotSource wires the frozen-snapshot connector source used to
+// resolve a datasource name to a connector when the published channel's
+// connector was renamed or removed live after publish (Phase 7.13).
+func (r *PostgresMetadataRepository) SetSnapshotSource(snapshot *SnapshotConnectorSource) {
+	if r == nil {
+		return
+	}
+	r.snapshot = snapshot
 }
 
 func (r *PostgresMetadataRepository) ResolveEntity(ctx context.Context, tenantID, appID uuid.UUID, dataSourceName string) (*ResolvedBinding, error) {
@@ -178,6 +173,12 @@ func (r *PostgresMetadataRepository) ResolveEntity(ctx context.Context, tenantID
 		Where("tenant_id = ? AND application_id = ? AND name = ? AND connector_type IN ('rest','sql','storage') AND deleted_at IS NULL", tenantID, appID, dataSourceName).
 		First(&connector).Error
 	if errors.Is(connErr, gorm.ErrRecordNotFound) {
+		// The live connector row may have been renamed/deleted after the app
+		// was published. A published session should still resolve the name
+		// it knew about at publish time from the frozen snapshot (Phase 7.13).
+		if resolved, ok := r.resolveConnectorFromSnapshot(ctx, tenantID, appID, dataSourceName); ok {
+			return resolved, nil
+		}
 		return nil, ErrDataSourceNotFound
 	}
 	if connErr != nil {
@@ -209,6 +210,41 @@ func (r *PostgresMetadataRepository) ResolveEntity(ctx context.Context, tenantID
 		EntityName: connector.Name,
 		Metadata:   *meta,
 	}, nil
+}
+
+// resolveConnectorFromSnapshot resolves dataSourceName against the frozen
+// publish snapshot's connector list. Only used as a fallback when the
+// published channel's live connector lookup misses (e.g. renamed/deleted
+// after publish); the draft channel never reaches this path.
+func (r *PostgresMetadataRepository) resolveConnectorFromSnapshot(ctx context.Context, tenantID, appID uuid.UUID, dataSourceName string) (*ResolvedBinding, bool) {
+	if r.snapshot == nil || !IsPublishedChannel(ctx) {
+		return nil, false
+	}
+	sc, err := r.snapshot.ByNameInApp(ctx, tenantID, appID, dataSourceName, EnvironmentIDFromContext(ctx))
+	if err != nil {
+		return nil, false
+	}
+	meta, err := r.LoadBindingMetadata(ctx, tenantID, appID, dataSourceName)
+	if err != nil && !errors.Is(err, ErrDataSourceNotFound) {
+		return nil, false
+	}
+	if meta == nil {
+		meta = &ControlBindingMetadata{DataSource: dataSourceName}
+	}
+	kind := DataSourceKindRest
+	switch sc.ConnectorType {
+	case "sql":
+		kind = DataSourceKindSql
+	case "storage":
+		kind = DataSourceKindStorage
+	}
+	return &ResolvedBinding{
+		Name:       dataSourceName,
+		Kind:       kind,
+		EntityID:   sc.ID,
+		EntityName: sc.Name,
+		Metadata:   *meta,
+	}, true
 }
 
 func (r *PostgresMetadataRepository) LoadBindingMetadata(ctx context.Context, tenantID, appID uuid.UUID, dataSourceName string) (*ControlBindingMetadata, error) {

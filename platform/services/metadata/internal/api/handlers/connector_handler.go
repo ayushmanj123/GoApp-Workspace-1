@@ -327,6 +327,68 @@ func (h *connectorHandler) DeleteAction(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
+func (h *connectorHandler) ListGoogleFiles(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: "invalid id"})
+	}
+	tid, err := tenant.GetTenantID(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(api.APIResponse{Success: false, Error: "tenant missing"})
+	}
+	userID := uuid.Nil
+	if uid := tenant.GetUserID(c); uid != nil {
+		userID = *uid
+	}
+	limit, _ := strconv.Atoi(c.Query("limit", "50"))
+	files, err := h.svc.ListGoogleSpreadsheets(context.Background(), tid, id, userID, c.Query("q"), limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(api.APIResponse{Success: false, Error: err.Error()})
+	}
+	return c.JSON(api.APIResponse{Success: true, Data: files})
+}
+
+func (h *connectorHandler) ListGoogleSheets(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: "invalid id"})
+	}
+	tid, err := tenant.GetTenantID(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(api.APIResponse{Success: false, Error: "tenant missing"})
+	}
+	userID := uuid.Nil
+	if uid := tenant.GetUserID(c); uid != nil {
+		userID = *uid
+	}
+	sheets, err := h.svc.ListGoogleSheets(context.Background(), tid, id, userID, c.Query("spreadsheet_id"))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(api.APIResponse{Success: false, Error: err.Error()})
+	}
+	return c.JSON(api.APIResponse{Success: true, Data: sheets})
+}
+
+func (h *connectorHandler) PreviewGoogleSheet(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: "invalid id"})
+	}
+	tid, err := tenant.GetTenantID(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(api.APIResponse{Success: false, Error: "tenant missing"})
+	}
+	userID := uuid.Nil
+	if uid := tenant.GetUserID(c); uid != nil {
+		userID = *uid
+	}
+	limit, _ := strconv.Atoi(c.Query("limit", "5"))
+	preview, err := h.svc.PreviewGoogleSheet(context.Background(), tid, id, userID, c.Query("sheet"), limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(api.APIResponse{Success: false, Error: err.Error()})
+	}
+	return c.JSON(api.APIResponse{Success: true, Data: preview})
+}
+
 func isClientAuthConfigError(err error) bool {
 	if err == nil {
 		return false

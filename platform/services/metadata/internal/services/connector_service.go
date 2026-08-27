@@ -10,9 +10,10 @@ import (
 )
 
 var allowedConnectorTypes = map[string]struct{}{
-	"rest":    {},
-	"sql":     {},
-	"storage": {},
+	"rest":          {},
+	"sql":           {},
+	"storage":       {},
+	"google_sheets": {},
 }
 
 var allowedAuthenticationTypes = map[string]struct{}{
@@ -52,6 +53,16 @@ func (s *ConnectorService) Create(ctx context.Context, tenantID, appID uuid.UUID
 	}
 	if len(authConfig) == 0 {
 		authConfig = []byte("{}")
+	}
+	if connectorType == "google_sheets" {
+		if authenticationType == "" || authenticationType == "none" {
+			authenticationType = "oauth_authorization_code"
+		}
+		merged, err := mergeGoogleSheetsOAuthDefaults(authConfig)
+		if err != nil {
+			return nil, err
+		}
+		authConfig = merged
 	}
 	sess := s.store.WithTenant(ctx, tenantID)
 	persistedAuth, err := s.persistAuthConfig(ctx, sess, tenantID, appID, name, authenticationType, authConfig, nil)
@@ -93,6 +104,13 @@ func (s *ConnectorService) Update(ctx context.Context, tenantID, id uuid.UUID, u
 		connector.BaseURL = v
 	}
 	if v, ok := updates["auth_config"].([]byte); ok && len(v) > 0 {
+		if connector.ConnectorType == "google_sheets" {
+			merged, mergeErr := mergeGoogleSheetsOAuthDefaults(v)
+			if mergeErr != nil {
+				return nil, mergeErr
+			}
+			v = merged
+		}
 		persistedAuth, err := s.persistAuthConfig(ctx, sess, tenantID, connector.ApplicationID, connector.Name, connector.AuthenticationType, v, connector.AuthConfig)
 		if err != nil {
 			return nil, err

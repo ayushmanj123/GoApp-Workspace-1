@@ -173,6 +173,12 @@ func (s *ConnectorService) StartOAuthAuthorizationCode(ctx context.Context, tena
 	}
 
 	authorizeURL := strings.TrimSpace(cfg.AuthorizationURL)
+	// Google requires access_type=offline (+ prompt=consent on re-auth) to return a refresh_token.
+	if strings.EqualFold(connector.ConnectorType, "google_sheets") ||
+		strings.Contains(strings.ToLower(authorizeURL), "accounts.google.com") {
+		q.Set("access_type", "offline")
+		q.Set("prompt", "consent")
+	}
 	sep := "?"
 	if strings.Contains(authorizeURL, "?") {
 		sep = "&"

@@ -20,6 +20,21 @@ type CreateApplicationRequest struct {
 	Description string `json:"description" validate:"required"`
 }
 
+type ExcelAppScaffoldRequest struct {
+	AppName              string                  `json:"app_name" validate:"required,min=1,max=200"`
+	SpreadsheetID        string                  `json:"spreadsheet_id" validate:"required"`
+	Sheets               []ExcelAppScaffoldSheet `json:"sheets" validate:"required,min=1,dive"`
+	Template             string                  `json:"template" validate:"omitempty,oneof=gallery_form datatable_form"`
+	BootstrapConnectorID string                  `json:"bootstrap_connector_id" validate:"required,uuid4"`
+}
+
+type ExcelAppScaffoldSheet struct {
+	SheetName     string `json:"sheet_name" validate:"required"`
+	ConnectorName string `json:"connector_name" validate:"required"`
+	KeyColumn     string `json:"key_column"`
+	HeaderRow     int    `json:"header_row"`
+}
+
 type UpdateApplicationRequest struct {
 	Name             *string `json:"name" validate:"omitempty,min=1,max=200"`
 	Description      *string `json:"description" validate:"omitempty"`
@@ -108,7 +123,7 @@ type UpdateEntityFieldRequest struct {
 // Connector DTOs
 type CreateConnectorRequest struct {
 	Name               string          `json:"name" validate:"required,min=1,max=200"`
-	ConnectorType      string          `json:"connector_type" validate:"required,oneof=rest sql storage"`
+	ConnectorType      string          `json:"connector_type" validate:"required,oneof=rest sql storage google_sheets"`
 	AuthenticationType string          `json:"authentication_type" validate:"required,oneof=none header connection_string oauth_client_credentials oauth_authorization_code s3"`
 	BaseURL            string          `json:"base_url" validate:"omitempty,max=2000"`
 	AuthConfig         json.RawMessage `json:"auth_config" validate:"omitempty"`

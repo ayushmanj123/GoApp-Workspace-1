@@ -129,7 +129,9 @@ func New(cfg config.Config) (*RuntimeApp, error) {
 	sqlDS := databinding.NewSqlDataSource(sqlRepo)
 	storageRepo := databinding.NewSnapshotAwareStorageConnectorRepository(databinding.NewPostgresStorageConnectorRepository(db), snapshotConnectors)
 	storageDS := databinding.NewStorageDataSource(storageRepo)
-	dataSources := databinding.NewDataSourceRegistry(entityDS).SetRest(restDS).SetSql(sqlDS).SetStorage(storageDS)
+	googleSheetsRepo := databinding.NewSnapshotAwareGoogleSheetsConnectorRepository(databinding.NewPostgresGoogleSheetsConnectorRepository(db), snapshotConnectors)
+	googleSheetsDS := databinding.NewGoogleSheetsDataSource(googleSheetsRepo, restDS)
+	dataSources := databinding.NewDataSourceRegistry(entityDS).SetRest(restDS).SetSql(sqlDS).SetStorage(storageDS).SetGoogleSheets(googleSheetsDS)
 	bindingSvc := databinding.NewService(resolver, dataSources)
 
 	formulaDeps.Resolver = resolver

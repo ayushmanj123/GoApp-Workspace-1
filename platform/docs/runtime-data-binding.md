@@ -40,6 +40,7 @@ Supported kinds today:
 | `entity` | PostgreSQL `entity_records` via record service | Implemented |
 | `rest` | External REST APIs | Implemented (Phases 7.1+) |
 | `sql` | External Postgres table/view connectors | Implemented (Phase 7.6) |
+| `google_sheets` | Google Sheets in Google Drive | Implemented (Excel Apps) |
 | `sharepoint` | SharePoint lists | Future |
 
 ## Control metadata

@@ -92,10 +92,11 @@ func cloneQueryResult(result *QueryResult) *QueryResult {
 
 // DataSourceRegistry selects a datasource implementation by kind.
 type DataSourceRegistry struct {
-	entity  DataSource
-	rest    DataSource
-	sql     DataSource
-	storage DataSource
+	entity       DataSource
+	rest         DataSource
+	sql          DataSource
+	storage      DataSource
+	googleSheets DataSource
 }
 
 func NewDataSourceRegistry(entity DataSource) *DataSourceRegistry {
@@ -128,6 +129,13 @@ func (r *DataSourceRegistry) SetStorage(storage DataSource) *DataSourceRegistry 
 	return r
 }
 
+func (r *DataSourceRegistry) SetGoogleSheets(googleSheets DataSource) *DataSourceRegistry {
+	if r != nil {
+		r.googleSheets = googleSheets
+	}
+	return r
+}
+
 func (r *DataSourceRegistry) ForKind(kind DataSourceKind) (DataSource, error) {
 	switch kind {
 	case DataSourceKindEntity:
@@ -150,6 +158,11 @@ func (r *DataSourceRegistry) ForKind(kind DataSourceKind) (DataSource, error) {
 			return nil, fmt.Errorf("databinding: storage datasource unavailable")
 		}
 		return r.storage, nil
+	case DataSourceKindGoogleSheets:
+		if r.googleSheets == nil {
+			return nil, fmt.Errorf("databinding: google sheets datasource unavailable")
+		}
+		return r.googleSheets, nil
 	default:
 		return nil, fmt.Errorf("databinding: unsupported datasource kind %q", kind)
 	}

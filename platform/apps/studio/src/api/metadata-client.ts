@@ -1,5 +1,5 @@
 // Central metadata API client.
-// In development, requests go through the Vite proxy (/api → localhost:8082/api)
+// In development, requests go through the Vite proxy (/api → localhost:8090/api (gateway))
 // so no CORS headers are needed. In production, set VITE_API_BASE_URL.
 
 import { activeSession, authHeaders } from "../auth/session";

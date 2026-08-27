@@ -1,9 +1,9 @@
-import { defineConfig } from "vite";
+﻿import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
 // Gateway (:8090) authenticates and routes to metadata / publish / runtime.
-const GATEWAY = "http://localhost:8090";
+const GATEWAY = "http://127.0.0.1:8090";
 
 export default defineConfig({
   plugins: [react()],
@@ -17,6 +17,7 @@ export default defineConfig({
     dedupe: ["react", "react-dom"],
   },
   server: {
+    host: true,
     port: 5173,
     proxy: {
       // Metadata + most /api/v1 traffic via gateway
@@ -37,7 +38,7 @@ export default defineConfig({
         rewrite: (p) => p.replace(/^\/runtime-api/, ""),
       },
       "/formula-api": {
-        target: "http://localhost:8091",
+        target: "http://127.0.0.1:8091",
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/formula-api/, ""),
       },

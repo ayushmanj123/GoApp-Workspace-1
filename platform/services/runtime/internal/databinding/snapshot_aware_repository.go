@@ -193,3 +193,61 @@ func (r *SnapshotAwareStorageConnectorRepository) fromSnapshot(ctx context.Conte
 		Prefix:      strings.TrimSpace(auth.Prefix),
 	}, nil
 }
+
+// SnapshotAwareGoogleSheetsConnectorRepository resolves google_sheets connector
+// config from the frozen publish snapshot when applicable.
+type SnapshotAwareGoogleSheetsConnectorRepository struct {
+	live     *PostgresGoogleSheetsConnectorRepository
+	snapshot *SnapshotConnectorSource
+}
+
+func NewSnapshotAwareGoogleSheetsConnectorRepository(live *PostgresGoogleSheetsConnectorRepository, snapshot *SnapshotConnectorSource) *SnapshotAwareGoogleSheetsConnectorRepository {
+	return &SnapshotAwareGoogleSheetsConnectorRepository{live: live, snapshot: snapshot}
+}
+
+func (r *SnapshotAwareGoogleSheetsConnectorRepository) GetConnectorConfig(ctx context.Context, tenantID, connectorID uuid.UUID, environmentID *uuid.UUID, userID uuid.UUID) (*GoogleSheetsConnectorConfig, error) {
+	if IsPublishedChannel(ctx) {
+		if sc, err := r.snapshot.ByID(ctx, tenantID, connectorID, environmentID); err == nil && strings.EqualFold(sc.ConnectorType, "google_sheets") {
+			return r.fromSnapshot(ctx, tenantID, sc, environmentID, userID)
+		}
+	}
+	return r.live.GetConnectorConfig(ctx, tenantID, connectorID, environmentID, userID)
+}
+
+func (r *SnapshotAwareGoogleSheetsConnectorRepository) fromSnapshot(ctx context.Context, tenantID uuid.UUID, sc *SnapshotConnector, environmentID *uuid.UUID, userID uuid.UUID) (*GoogleSheetsConnectorConfig, error) {
+	var raw googleSheetsAuthConfig
+	if len(sc.AuthConfig) > 0 {
+		if err := json.Unmarshal(sc.AuthConfig, &raw); err != nil {
+			return nil, fmt.Errorf("databinding: parse snapshot google sheets auth_config: %w", err)
+		}
+	}
+	auth := RestAuthConfig{
+		Type:            raw.Type,
+		SecretID:        raw.SecretID,
+		RefreshSecretID: raw.RefreshSecretID,
+		TokenURL:        raw.TokenURL,
+		ClientID:        raw.ClientID,
+		Scope:           raw.Scope,
+		ConnectionScope: raw.ConnectionScope,
+	}
+	if auth.Type == "" {
+		auth.Type = sc.AuthenticationType
+	}
+	restRepo := &PostgresRestConnectorRepository{db: r.live.db, masterKey: r.live.masterKey}
+	if err := restRepo.resolveAuthSecret(ctx, tenantID, sc.ID, environmentID, userID, &auth); err != nil {
+		return nil, err
+	}
+	headerRow := raw.HeaderRow
+	if headerRow <= 0 {
+		headerRow = 1
+	}
+	return &GoogleSheetsConnectorConfig{
+		ConnectorID:   sc.ID,
+		Name:          sc.Name,
+		SpreadsheetID: strings.TrimSpace(raw.SpreadsheetID),
+		SheetName:     strings.TrimSpace(raw.SheetName),
+		HeaderRow:     headerRow,
+		KeyColumn:     strings.TrimSpace(raw.KeyColumn),
+		Auth:          auth,
+	}, nil
+}

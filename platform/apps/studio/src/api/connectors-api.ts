@@ -1,6 +1,6 @@
 import { apiClient, PagedData } from "./metadata-client";
 
-export type ConnectorType = "rest" | "sql" | "storage";
+export type ConnectorType = "rest" | "sql" | "storage" | "google_sheets";
 export type AuthenticationType =
   | "none"
   | "header"
@@ -38,6 +38,10 @@ export interface ConnectorAuthConfig {
   access_key_id?: string;
   use_ssl?: boolean;
   prefix?: string;
+  spreadsheet_id?: string;
+  sheet_name?: string;
+  header_row?: number;
+  key_column?: string;
 }
 
 export interface ConnectorRecord {
@@ -95,6 +99,21 @@ export interface UpdateConnectorActionPayload {
   endpoint?: string;
 }
 
+export interface GoogleSpreadsheetFile {
+  id: string;
+  name: string;
+}
+
+export interface GoogleSheetTab {
+  title: string;
+  index: number;
+}
+
+export interface GoogleSheetPreview {
+  columns: string[];
+  rows: unknown[][];
+}
+
 export const connectorsApi = {
   list: (applicationId: string, limit = 100, offset = 0) =>
     apiClient.get<PagedData<ConnectorRecord>>(
@@ -143,4 +162,19 @@ export const connectorsApi = {
 
   disconnectOAuth: (connectorId: string) =>
     apiClient.delete(`/connectors/${connectorId}/oauth/connection`),
+
+  listGoogleFiles: (connectorId: string, q = "", limit = 50) =>
+    apiClient.get<GoogleSpreadsheetFile[]>(
+      `/connectors/${connectorId}/google/files?q=${encodeURIComponent(q)}&limit=${limit}`,
+    ),
+
+  listGoogleSheets: (connectorId: string, spreadsheetId?: string) =>
+    apiClient.get<GoogleSheetTab[]>(
+      `/connectors/${connectorId}/google/sheets${spreadsheetId ? `?spreadsheet_id=${encodeURIComponent(spreadsheetId)}` : ""}`,
+    ),
+
+  previewGoogleSheet: (connectorId: string, sheet?: string, limit = 5) =>
+    apiClient.get<GoogleSheetPreview>(
+      `/connectors/${connectorId}/google/preview?limit=${limit}${sheet ? `&sheet=${encodeURIComponent(sheet)}` : ""}`,
+    ),
 };

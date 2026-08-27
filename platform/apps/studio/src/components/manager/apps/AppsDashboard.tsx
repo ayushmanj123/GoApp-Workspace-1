@@ -60,9 +60,14 @@ export function AppsDashboard() {
             real-time telemetry and deployment controls.
           </p>
         </div>
-        <Button variant="primary" size="lg" onClick={() => setCreateOpen(true)}>
-          + New App
-        </Button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button variant="secondary" size="lg" onClick={() => navigate("/studio/excel-apps")}>
+            Excel Apps
+          </Button>
+          <Button variant="primary" size="lg" onClick={() => setCreateOpen(true)}>
+            + New App
+          </Button>
+        </div>
       </div>
 
       <div className={styles.toolbar}>

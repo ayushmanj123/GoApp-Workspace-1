@@ -6,6 +6,9 @@ import {
   type ConnectorActionRecord,
   type ConnectorAuthConfig,
   type ConnectorRecord,
+  type GoogleSheetPreview,
+  type GoogleSpreadsheetFile,
+  type GoogleSheetTab,
 } from "../../../api/connectors-api";
 import { Button } from "../../ui";
 import { CreateActionModal } from "./CreateActionModal";
@@ -43,6 +46,10 @@ function parseAuthConfig(
       client_id: cfg.client_id ?? "",
       scope: cfg.scope ?? "",
       connection_scope: cfg.connection_scope === "user" ? "user" : "app",
+      spreadsheet_id: cfg.spreadsheet_id ?? "",
+      sheet_name: cfg.sheet_name ?? "",
+      key_column: cfg.key_column ?? "",
+      header_row: cfg.header_row ?? 1,
     };
   }
   if (cfg.type === "s3") {
@@ -98,9 +105,17 @@ export function ConnectorDetailView() {
   const [secretAccessKey, setSecretAccessKey] = useState("");
   const [useSsl, setUseSsl] = useState(false);
   const [prefix, setPrefix] = useState("");
+  const [spreadsheetId, setSpreadsheetId] = useState("");
+  const [sheetName, setSheetName] = useState("");
+  const [keyColumn, setKeyColumn] = useState("");
+  const [headerRow, setHeaderRow] = useState("1");
+  const [googleFiles, setGoogleFiles] = useState<GoogleSpreadsheetFile[]>([]);
+  const [googleSheets, setGoogleSheets] = useState<GoogleSheetTab[]>([]);
+  const [sheetPreview, setSheetPreview] = useState<GoogleSheetPreview | null>(null);
 
   const isSql = connector?.connector_type === "sql";
   const isStorage = connector?.connector_type === "storage";
+  const isGoogleSheets = connector?.connector_type === "google_sheets";
 
   const load = useCallback(async () => {
     if (!connectorId) return;
@@ -122,6 +137,20 @@ export function ConnectorDetailView() {
         setConnectionString("");
         const actionPage = await connectorsApi.listActions(connectorId);
         setActions(actionPage.items ?? []);
+      } else if (conn.connector_type === "google_sheets") {
+        setAuthType("oauth_authorization_code");
+        setSpreadsheetId(cfg.spreadsheet_id ?? "");
+        setSheetName(cfg.sheet_name ?? "");
+        setKeyColumn(cfg.key_column ?? "");
+        setHeaderRow(String(cfg.header_row ?? 1));
+        setConnectionScope(cfg.connection_scope === "user" ? "user" : "app");
+        setActions([]);
+        try {
+          const status = await connectorsApi.getOAuthConnection(connectorId);
+          setHasConnection(Boolean(status.connected));
+        } catch {
+          setHasConnection(false);
+        }
       } else if (conn.connector_type === "storage") {
         setAuthType("s3");
         setEndpoint(cfg.endpoint ?? "");
@@ -221,6 +250,17 @@ export function ConnectorDetailView() {
             ? { connection_string: connectionString.trim() }
             : {}),
         };
+      } else if (isGoogleSheets) {
+        authentication_type = "oauth_authorization_code";
+        base_url = "";
+        auth_config = {
+          type: "oauth_authorization_code",
+          connection_scope: connectionScope,
+          spreadsheet_id: spreadsheetId.trim(),
+          sheet_name: sheetName.trim(),
+          key_column: keyColumn.trim(),
+          header_row: parseInt(headerRow, 10) || 1,
+        };
       } else if (isStorage) {
         authentication_type = "s3";
         base_url = "";
@@ -283,6 +323,37 @@ export function ConnectorDetailView() {
     }
   };
 
+  const handleLoadGoogleFiles = async () => {
+    if (!connectorId) return;
+    try {
+      const files = await connectorsApi.listGoogleFiles(connectorId);
+      setGoogleFiles(files);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to list spreadsheets");
+    }
+  };
+
+  const handleLoadGoogleSheets = async (fileId?: string) => {
+    if (!connectorId) return;
+    try {
+      const id = fileId ?? spreadsheetId;
+      const sheets = await connectorsApi.listGoogleSheets(connectorId, id);
+      setGoogleSheets(sheets);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to list sheets");
+    }
+  };
+
+  const handlePreviewSheet = async () => {
+    if (!connectorId) return;
+    try {
+      const preview = await connectorsApi.previewGoogleSheet(connectorId, sheetName);
+      setSheetPreview(preview);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to preview sheet");
+    }
+  };
+
   const handleDeleteAction = async (action: ConnectorActionRecord) => {
     const confirmed = window.confirm(`Delete action "${action.action_name}"?`);
     if (!confirmed) return;
@@ -332,7 +403,9 @@ export function ConnectorDetailView() {
               ? "SQL"
               : isStorage
                 ? "Storage"
-                : "REST"}{" "}
+                : isGoogleSheets
+                  ? "Google Sheets"
+                  : "REST"}{" "}
             connector · bind Gallery Items to <code>{connector.name}</code>
             {isStorage
               ? " · upload via Form/Patch (key + content); delete via Remove(Connector, ThisItem)"
@@ -418,6 +491,128 @@ export function ConnectorDetailView() {
                 data-testid="connector-detail-connection-string"
               />
             </div>
+          </>
+        ) : isGoogleSheets ? (
+          <>
+            <div>
+              <label className={styles.fieldLabel}>Google account</label>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void handleConnectOAuth()}
+                  disabled={oauthConnecting}
+                >
+                  {oauthConnecting ? "Starting…" : hasConnection ? "Reconnect Google" : "Connect Google"}
+                </Button>
+                <span style={{ fontSize: 12, color: "var(--color-text-muted, #666)" }}>
+                  {hasConnection ? "Connected" : "Connect to browse spreadsheets in Drive"}
+                </span>
+              </div>
+            </div>
+            <div>
+              <label className={styles.fieldLabel} htmlFor="gs-spreadsheet-id">
+                Spreadsheet ID
+              </label>
+              <input
+                id="gs-spreadsheet-id"
+                className={styles.fieldInput}
+                value={spreadsheetId}
+                onChange={(e) => setSpreadsheetId(e.target.value)}
+              />
+              {spreadsheetId.trim() ? (
+                <p style={{ marginTop: 6, fontSize: 12 }}>
+                  <a
+                    href={`https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId.trim())}/edit`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open spreadsheet in Google Sheets
+                  </a>
+                </p>
+              ) : null}
+            </div>
+            {hasConnection ? (
+              <div>
+                <Button variant="secondary" size="sm" onClick={() => void handleLoadGoogleFiles()}>
+                  Browse Drive spreadsheets
+                </Button>
+                {googleFiles.length > 0 ? (
+                  <select
+                    className={styles.fieldSelect}
+                    style={{ marginTop: 8, width: "100%" }}
+                    value={spreadsheetId}
+                    onChange={(e) => {
+                      setSpreadsheetId(e.target.value);
+                      void handleLoadGoogleSheets(e.target.value);
+                    }}
+                  >
+                    <option value="">Select spreadsheet…</option>
+                    {googleFiles.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+              </div>
+            ) : null}
+            <div>
+              <label className={styles.fieldLabel} htmlFor="gs-sheet-name">
+                Sheet name
+              </label>
+              <input
+                id="gs-sheet-name"
+                className={styles.fieldInput}
+                value={sheetName}
+                onChange={(e) => setSheetName(e.target.value)}
+                list="gs-sheet-options"
+              />
+              {googleSheets.length > 0 ? (
+                <datalist id="gs-sheet-options">
+                  {googleSheets.map((s) => (
+                    <option key={s.title} value={s.title} />
+                  ))}
+                </datalist>
+              ) : null}
+            </div>
+            <div>
+              <label className={styles.fieldLabel} htmlFor="gs-key-column">
+                Key column
+              </label>
+              <input
+                id="gs-key-column"
+                className={styles.fieldInput}
+                value={keyColumn}
+                onChange={(e) => setKeyColumn(e.target.value)}
+                placeholder="Id"
+              />
+            </div>
+            <div>
+              <label className={styles.fieldLabel} htmlFor="gs-header-row">
+                Header row
+              </label>
+              <input
+                id="gs-header-row"
+                className={styles.fieldInput}
+                type="number"
+                min={1}
+                value={headerRow}
+                onChange={(e) => setHeaderRow(e.target.value)}
+              />
+            </div>
+            {hasConnection && sheetName ? (
+              <div>
+                <Button variant="secondary" size="sm" onClick={() => void handlePreviewSheet()}>
+                  Preview columns
+                </Button>
+                {sheetPreview ? (
+                  <p style={{ fontSize: 12, marginTop: 8 }}>
+                    Columns: {sheetPreview.columns.join(", ") || "(none)"}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </>
         ) : isStorage ? (
           <>
@@ -675,7 +870,7 @@ export function ConnectorDetailView() {
         )}
       </div>
 
-      {!isStorage ? (
+      {!isStorage && !isGoogleSheets ? (
         <>
       <div className={styles.sectionHeader}>
         <h2 className={styles.sectionTitle}>{isSql ? "Named queries" : "Actions"}</h2>
@@ -744,6 +939,11 @@ export function ConnectorDetailView() {
         />
       ) : null}
         </>
+      ) : isGoogleSheets ? (
+        <div className={styles.empty}>
+          Google Sheets connectors bind Gallery/Form/DataTable to live spreadsheet rows. Connect Google,
+          pick a spreadsheet and sheet, then bind controls to <code>{connector.name}</code> in Studio.
+        </div>
       ) : (
         <div className={styles.empty}>
           Storage connectors list objects from the bucket (optional prefix). Bind Gallery Items to{" "}

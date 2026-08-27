@@ -237,6 +237,19 @@ func (s *Service) Submit(ctx context.Context, sessionID, tenantID, userID, appID
 		s.store.Set(sessionID, control.Name, state)
 		return cloneState(state), sourceName, nil
 	}
+	if state.DataSourceKind == string(databinding.DataSourceKindGoogleSheets) {
+		updated, sourceName, err := s.submitGoogleSheets(ctx, tenantID, userID, state, payload)
+		if err != nil {
+			return nil, "", err
+		}
+		state.CurrentRecord = updated
+		state.OriginalRecord = cloneRecord(state.CurrentRecord)
+		state.DirtyFields = map[string]interface{}{}
+		state.Mode = ModeView
+		state.ValidationErrors = nil
+		s.store.Set(sessionID, control.Name, state)
+		return cloneState(state), sourceName, nil
+	}
 
 	switch state.Mode {
 	case ModeEdit:
@@ -379,6 +392,45 @@ func (s *Service) submitStorage(
 	return dataItemToFormMap(item, state.EntityID), state.DataSource, nil
 }
 
+func (s *Service) submitGoogleSheets(
+	ctx context.Context,
+	tenantID, userID uuid.UUID,
+	state *State,
+	payload map[string]interface{},
+) (map[string]interface{}, string, error) {
+	if s.sources == nil {
+		return nil, "", ErrRecordUnavailable
+	}
+	source, err := s.sources.ForKind(databinding.DataSourceKindGoogleSheets)
+	if err != nil {
+		return nil, "", err
+	}
+	key := databinding.DataSourceKey{
+		Kind:     databinding.DataSourceKindGoogleSheets,
+		EntityID: state.EntityID,
+	}
+	switch state.Mode {
+	case ModeEdit:
+		recordID, err := sqlRecordIdentity(state.CurrentRecord)
+		if err != nil {
+			return nil, "", err
+		}
+		item, err := source.Update(ctx, tenantID, userID, key, recordID, payload, 0)
+		if err != nil {
+			return nil, "", err
+		}
+		return dataItemToFormMap(item, state.EntityID), state.DataSource, nil
+	case ModeNew:
+		item, err := source.Create(ctx, tenantID, userID, key, payload)
+		if err != nil {
+			return nil, "", err
+		}
+		return dataItemToFormMap(item, state.EntityID), state.DataSource, nil
+	default:
+		return nil, "", ErrInvalidMode
+	}
+}
+
 // SyncGallerySelection updates forms bound to a gallery selection.
 func (s *Service) SyncGallerySelection(sessionID uuid.UUID, galleryName string, controls []ControlMetadata) []string {
 	if s == nil || s.gallery == nil {
@@ -511,7 +563,8 @@ func (s *Service) validateState(ctx context.Context, tenantID uuid.UUID, state *
 	}
 	if state.DataSourceKind == string(databinding.DataSourceKindSql) ||
 		state.DataSourceKind == string(databinding.DataSourceKindRest) ||
-		state.DataSourceKind == string(databinding.DataSourceKindStorage) {
+		state.DataSourceKind == string(databinding.DataSourceKindStorage) ||
+		state.DataSourceKind == string(databinding.DataSourceKindGoogleSheets) {
 		if state.Mode == ModeNew && len(submissionPayload(state)) == 0 {
 			return []ValidationIssue{{Message: "at least one field is required"}}
 		}

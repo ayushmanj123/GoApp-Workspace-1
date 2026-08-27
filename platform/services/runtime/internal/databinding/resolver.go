@@ -170,7 +170,7 @@ func (r *PostgresMetadataRepository) ResolveEntity(ctx context.Context, tenantID
 	var connector connectorCatalogRow
 	connErr := r.db.WithContext(ctx).
 		Table("connectors").
-		Where("tenant_id = ? AND application_id = ? AND name = ? AND connector_type IN ('rest','sql','storage') AND deleted_at IS NULL", tenantID, appID, dataSourceName).
+		Where("tenant_id = ? AND application_id = ? AND name = ? AND connector_type IN ('rest','sql','storage','google_sheets') AND deleted_at IS NULL", tenantID, appID, dataSourceName).
 		First(&connector).Error
 	if errors.Is(connErr, gorm.ErrRecordNotFound) {
 		// The live connector row may have been renamed/deleted after the app
@@ -199,6 +199,8 @@ func (r *PostgresMetadataRepository) ResolveEntity(ctx context.Context, tenantID
 		kind = DataSourceKindSql
 	case "storage":
 		kind = DataSourceKindStorage
+	case "google_sheets":
+		kind = DataSourceKindGoogleSheets
 	}
 
 	return &ResolvedBinding{
@@ -237,6 +239,8 @@ func (r *PostgresMetadataRepository) resolveConnectorFromSnapshot(ctx context.Co
 		kind = DataSourceKindSql
 	case "storage":
 		kind = DataSourceKindStorage
+	case "google_sheets":
+		kind = DataSourceKindGoogleSheets
 	}
 	return &ResolvedBinding{
 		Name:       dataSourceName,

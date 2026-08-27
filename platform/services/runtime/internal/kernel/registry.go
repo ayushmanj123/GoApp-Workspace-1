@@ -286,7 +286,7 @@ func (l *PostgresMetadataLoader) Load(ctx context.Context, tenantID, appID uuid.
 	connectors := []connectorRow{}
 	if err := l.db.WithContext(ctx).
 		Select("name").
-		Where("tenant_id = ? AND application_id = ? AND connector_type IN ('rest','sql','storage') AND deleted_at IS NULL", tenantID, appID).
+		Where("tenant_id = ? AND application_id = ? AND connector_type IN ('rest','sql','storage','google_sheets') AND deleted_at IS NULL", tenantID, appID).
 		Find(&connectors).Error; err != nil {
 		return nil, fmt.Errorf("load connectors: %w", err)
 	}

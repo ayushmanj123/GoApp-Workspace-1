@@ -52,6 +52,10 @@ type connectorAuthConfig struct {
 	AccessKeyID       string `json:"access_key_id,omitempty"`
 	UseSSL            *bool  `json:"use_ssl,omitempty"`
 	Prefix            string `json:"prefix,omitempty"`
+	SpreadsheetID     string `json:"spreadsheet_id,omitempty"`
+	SheetName         string `json:"sheet_name,omitempty"`
+	HeaderRow         int    `json:"header_row,omitempty"`
+	KeyColumn         string `json:"key_column,omitempty"`
 }
 
 var sqlIdentifierPart = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
@@ -278,6 +282,18 @@ func (s *ConnectorService) persistAuthConfig(
 		cfg.AccessKeyID = ""
 		cfg.UseSSL = nil
 		cfg.Prefix = ""
+		if cfg.SpreadsheetID == "" {
+			cfg.SpreadsheetID = existingCfg.SpreadsheetID
+		}
+		if cfg.SheetName == "" {
+			cfg.SheetName = existingCfg.SheetName
+		}
+		if cfg.HeaderRow <= 0 {
+			cfg.HeaderRow = existingCfg.HeaderRow
+		}
+		if cfg.KeyColumn == "" {
+			cfg.KeyColumn = existingCfg.KeyColumn
+		}
 		if cfg.AuthorizationURL == "" {
 			cfg.AuthorizationURL = existingCfg.AuthorizationURL
 		}

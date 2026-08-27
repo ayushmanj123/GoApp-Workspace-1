@@ -40,4 +40,21 @@ export const applicationsApi = {
 
   delete: (id: string) =>
     apiClient.delete(`/applications/${id}`),
+
+  scaffoldExcelApp: (payload: {
+    app_name: string;
+    spreadsheet_id: string;
+    bootstrap_connector_id: string;
+    template?: "gallery_form" | "datatable_form";
+    sheets: Array<{
+      sheet_name: string;
+      connector_name: string;
+      key_column?: string;
+      header_row?: number;
+    }>;
+  }) =>
+    apiClient.post<{ application_id: string; connector_ids: string[] }>(
+      "/applications/excel-app-scaffold",
+      payload,
+    ),
 };

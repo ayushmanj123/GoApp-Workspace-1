@@ -15,6 +15,7 @@ import { ConnectorDetailView } from "./components/manager/connectors/ConnectorDe
 import { WorkflowsManagerPage } from "./components/manager/workflows/WorkflowsManagerPage";
 import { WorkflowsListView } from "./components/manager/workflows/WorkflowsListView";
 import { WorkflowDetailView } from "./components/manager/workflows/WorkflowDetailView";
+import { ExcelAppsPage } from "./components/manager/excel-apps/ExcelAppsPage";
 import { LoginPage } from "./auth/LoginPage";
 import { RequireAuth } from "./auth/RequireAuth";
 
@@ -29,6 +30,7 @@ export default function App() {
             <Route index element={<TablesListView />} />
             <Route path="tables/:entityId" element={<TablePropertyView />} />
           </Route>
+          <Route path="excel-apps" element={<ExcelAppsPage />} />
           <Route path="connectors" element={<ConnectorsManagerPage />}>
             <Route index element={<ConnectorsListView />} />
             <Route path=":connectorId" element={<ConnectorDetailView />} />

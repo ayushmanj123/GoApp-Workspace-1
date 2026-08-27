@@ -42,6 +42,10 @@ export function CreateConnectorModal({
   const [secretAccessKey, setSecretAccessKey] = useState("");
   const [useSsl, setUseSsl] = useState(false);
   const [prefix, setPrefix] = useState("");
+  const [spreadsheetId, setSpreadsheetId] = useState("");
+  const [sheetName, setSheetName] = useState("");
+  const [keyColumn, setKeyColumn] = useState("Id");
+  const [headerRow, setHeaderRow] = useState("1");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,6 +73,10 @@ export function CreateConnectorModal({
     setSecretAccessKey("");
     setUseSsl(false);
     setPrefix("");
+    setSpreadsheetId("");
+    setSheetName("");
+    setKeyColumn("Id");
+    setHeaderRow("1");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -104,6 +112,18 @@ export function CreateConnectorModal({
           secret_access_key: secretAccessKey.trim(),
           use_ssl: useSsl,
           ...(prefix.trim() ? { prefix: prefix.trim() } : {}),
+        };
+      } else if (connectorType === "google_sheets") {
+        connector_type = "google_sheets";
+        authentication_type = "oauth_authorization_code";
+        base_url = "";
+        auth_config = {
+          type: "oauth_authorization_code",
+          connection_scope: connectionScope,
+          spreadsheet_id: spreadsheetId.trim(),
+          sheet_name: sheetName.trim(),
+          key_column: keyColumn.trim(),
+          header_row: parseInt(headerRow, 10) || 1,
         };
       } else if (authType === "header") {
         auth_config = {
@@ -154,7 +174,9 @@ export function CreateConnectorModal({
     !!name.trim() &&
     (connectorType === "sql"
       ? !!connectionString.trim()
-      : connectorType === "storage"
+      : connectorType === "google_sheets"
+        ? !!sheetName.trim()
+        : connectorType === "storage"
         ? !!endpoint.trim() &&
           !!bucket.trim() &&
           !!accessKeyId.trim() &&
@@ -188,12 +210,19 @@ export function CreateConnectorModal({
             <select
               style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px" }}
               value={connectorType}
-              onChange={(e) => setConnectorType(e.target.value as ConnectorType)}
+              onChange={(e) => {
+                const next = e.target.value as ConnectorType;
+                setConnectorType(next);
+                if (next === "google_sheets") {
+                  setConnectionScope("user");
+                }
+              }}
               data-testid="connector-type"
             >
               <option value="rest">REST</option>
               <option value="sql">SQL (Postgres)</option>
               <option value="storage">Storage (S3 / MinIO)</option>
+              <option value="google_sheets">Google Sheets (Excel Apps)</option>
             </select>
           </label>
           <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
@@ -207,7 +236,9 @@ export function CreateConnectorModal({
                   ? "OrdersDb"
                   : connectorType === "storage"
                     ? "DocsBucket"
-                    : "Weather"
+                    : connectorType === "google_sheets"
+                      ? "Customers"
+                      : "Weather"
               }
               autoFocus
               required
@@ -249,6 +280,63 @@ export function CreateConnectorModal({
                   placeholder="id"
                   data-testid="connector-primary-key"
                 />
+              </label>
+            </>
+          ) : connectorType === "google_sheets" ? (
+            <>
+              <p style={{ fontSize: 11, color: "#666", marginTop: 0 }}>
+                OAuth credentials are configured on the server. After create, open the connector and click Connect to authorize Google Drive.
+              </p>
+              <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
+                Spreadsheet ID (optional — pick after connect)
+                <input
+                  style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px" }}
+                  value={spreadsheetId}
+                  onChange={(e) => setSpreadsheetId(e.target.value)}
+                  placeholder="Google Sheets file ID"
+                />
+              </label>
+              <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
+                Sheet name
+                <input
+                  style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px" }}
+                  value={sheetName}
+                  onChange={(e) => setSheetName(e.target.value)}
+                  placeholder="Sheet1"
+                  required
+                />
+              </label>
+              <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
+                Key column
+                <input
+                  style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px" }}
+                  value={keyColumn}
+                  onChange={(e) => setKeyColumn(e.target.value)}
+                  placeholder="Id"
+                />
+              </label>
+              <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
+                Header row
+                <input
+                  style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px" }}
+                  value={headerRow}
+                  onChange={(e) => setHeaderRow(e.target.value)}
+                  type="number"
+                  min={1}
+                />
+              </label>
+              <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
+                Connection scope
+                <select
+                  style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px" }}
+                  value={connectionScope}
+                  onChange={(e) =>
+                    setConnectionScope(e.target.value === "user" ? "user" : "app")
+                  }
+                >
+                  <option value="user">Per-user (recommended for Google Drive)</option>
+                  <option value="app">App (shared account)</option>
+                </select>
               </label>
             </>
           ) : connectorType === "storage" ? (

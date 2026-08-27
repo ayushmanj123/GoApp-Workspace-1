@@ -17,12 +17,17 @@ import (
 )
 
 type applicationHandler struct {
-	svc *services.ApplicationService
-	v   *validator.Validate
+	svc       *services.ApplicationService
+	excelSvc  *services.ExcelAppService
+	v         *validator.Validate
 }
 
 func NewApplicationHandler(store repositories.Store) *applicationHandler {
-	return &applicationHandler{svc: services.NewApplicationService(store), v: validator.New()}
+	return &applicationHandler{
+		svc:      services.NewApplicationService(store),
+		excelSvc: services.NewExcelAppService(store),
+		v:        validator.New(),
+	}
 }
 
 func (h *applicationHandler) Create(c *fiber.Ctx) error {
@@ -159,4 +164,46 @@ func (h *applicationHandler) Delete(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(contracts.APIResponse{Success:false,Error:err.Error()})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *applicationHandler) ExcelAppScaffold(c *fiber.Ctx) error {
+	var req contracts.ExcelAppScaffoldRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(contracts.APIResponse{Success: false, Error: err.Error()})
+	}
+	if err := h.v.Struct(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(contracts.APIResponse{Success: false, Error: err.Error()})
+	}
+	tid, err := tenant.GetTenantID(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(contracts.APIResponse{Success: false, Error: "tenant missing"})
+	}
+	userID := uuid.Nil
+	if uid := tenant.GetUserID(c); uid != nil {
+		userID = *uid
+	}
+	bootstrapID, err := uuid.Parse(req.BootstrapConnectorID)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(contracts.APIResponse{Success: false, Error: "invalid bootstrap_connector_id"})
+	}
+	sheets := make([]services.ExcelAppSheetInput, 0, len(req.Sheets))
+	for _, sh := range req.Sheets {
+		sheets = append(sheets, services.ExcelAppSheetInput{
+			SheetName:     sh.SheetName,
+			ConnectorName: sh.ConnectorName,
+			KeyColumn:     sh.KeyColumn,
+			HeaderRow:     sh.HeaderRow,
+		})
+	}
+	result, err := h.excelSvc.Scaffold(context.Background(), tid, userID, services.ExcelAppScaffoldInput{
+		AppName:              req.AppName,
+		SpreadsheetID:        req.SpreadsheetID,
+		Sheets:               sheets,
+		Template:             req.Template,
+		BootstrapConnectorID: bootstrapID,
+	})
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(contracts.APIResponse{Success: false, Error: err.Error()})
+	}
+	return c.Status(fiber.StatusCreated).JSON(contracts.APIResponse{Success: true, Data: result})
 }

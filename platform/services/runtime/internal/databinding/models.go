@@ -20,7 +20,8 @@ const (
 	DataSourceKindEntity  DataSourceKind = "entity"
 	DataSourceKindRest    DataSourceKind = "rest"
 	DataSourceKindSql     DataSourceKind = "sql"
-	DataSourceKindStorage DataSourceKind = "storage"
+	DataSourceKindStorage       DataSourceKind = "storage"
+	DataSourceKindGoogleSheets  DataSourceKind = "google_sheets"
 )
 
 // ControlBindingMetadata is control-level datasource configuration from metadata.

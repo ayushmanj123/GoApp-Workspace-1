@@ -1,6 +1,8 @@
 package api
 
 import (
+	"strings"
+
 	"github.com/goapps-platform/metadata-service/internal/api/handlers"
 	"github.com/goapps-platform/metadata-service/internal/api/tenant"
 	"github.com/goapps-platform/metadata-service/internal/repositories"
@@ -13,14 +15,26 @@ import (
 // Public webhook routes are registered without auth middlewares.
 func RegisterRoutes(app *fiber.App, store repositories.Store, middlewares ...fiber.Handler) *services.WorkflowService {
 	workflowHandler := handlers.NewWorkflowHandler(store)
+	connectorHandler := handlers.NewConnectorHandler(store)
 
 	public := app.Group("/api/v1/public")
 	public.Post("/workflows/:id/hook", func(c *fiber.Ctx) error { return workflowHandler.PublicHook(c) })
 
-	v1 := app.Group("/api/v1", middlewares...)
+	// Fiber Group middleware mounts as /api/v1* and would otherwise block Google's redirect.
+	authed := make([]fiber.Handler, 0, len(middlewares))
+	for _, mw := range middlewares {
+		authed = append(authed, skipConnectorOAuthCallback(mw))
+	}
+	v1 := app.Group("/api/v1", authed...)
+
+	// Public OAuth callback (auth skipped above). Must stay on this path — Google redirect URI.
+	v1.Get("/connectors/oauth/callback", func(c *fiber.Ctx) error { return connectorHandler.OAuthCallback(c) })
 
 	// Applications
 	v1.Post("/applications", func(c *fiber.Ctx) error { return handlers.NewApplicationHandler(store).Create(c) })
+	v1.Post("/applications/excel-app-scaffold", func(c *fiber.Ctx) error {
+		return handlers.NewApplicationHandler(store).ExcelAppScaffold(c)
+	})
 	v1.Get("/applications", func(c *fiber.Ctx) error { return handlers.NewApplicationHandler(store).List(c) })
 	v1.Get("/applications/:id", func(c *fiber.Ctx) error { return handlers.NewApplicationHandler(store).Get(c) })
 	v1.Put("/applications/:id", func(c *fiber.Ctx) error { return handlers.NewApplicationHandler(store).Update(c) })
@@ -86,16 +100,17 @@ func RegisterRoutes(app *fiber.App, store repositories.Store, middlewares ...fib
 	})
 
 	// Connectors
-	connectorHandler := handlers.NewConnectorHandler(store)
 	v1.Post("/applications/:appId/connectors", func(c *fiber.Ctx) error { return connectorHandler.Create(c) })
 	v1.Get("/applications/:appId/connectors", func(c *fiber.Ctx) error { return connectorHandler.List(c) })
-	v1.Get("/connectors/oauth/callback", func(c *fiber.Ctx) error { return connectorHandler.OAuthCallback(c) })
 	v1.Get("/connectors/:id", func(c *fiber.Ctx) error { return connectorHandler.Get(c) })
 	v1.Put("/connectors/:id", func(c *fiber.Ctx) error { return connectorHandler.Update(c) })
 	v1.Delete("/connectors/:id", func(c *fiber.Ctx) error { return connectorHandler.Delete(c) })
 	v1.Post("/connectors/:id/oauth/start", func(c *fiber.Ctx) error { return connectorHandler.StartOAuth(c) })
 	v1.Get("/connectors/:id/oauth/connection", func(c *fiber.Ctx) error { return connectorHandler.GetOAuthConnection(c) })
 	v1.Delete("/connectors/:id/oauth/connection", func(c *fiber.Ctx) error { return connectorHandler.DeleteOAuthConnection(c) })
+	v1.Get("/connectors/:id/google/files", func(c *fiber.Ctx) error { return connectorHandler.ListGoogleFiles(c) })
+	v1.Get("/connectors/:id/google/sheets", func(c *fiber.Ctx) error { return connectorHandler.ListGoogleSheets(c) })
+	v1.Get("/connectors/:id/google/preview", func(c *fiber.Ctx) error { return connectorHandler.PreviewGoogleSheet(c) })
 	v1.Post("/connectors/:connectorId/actions", func(c *fiber.Ctx) error { return connectorHandler.CreateAction(c) })
 	v1.Get("/connectors/:connectorId/actions", func(c *fiber.Ctx) error { return connectorHandler.ListActions(c) })
 	v1.Put("/connector-actions/:id", func(c *fiber.Ctx) error { return connectorHandler.UpdateAction(c) })
@@ -157,6 +172,17 @@ func RegisterRoutes(app *fiber.App, store repositories.Store, middlewares ...fib
 	})
 
 	return workflowHandler.Service()
+}
+
+// skipConnectorOAuthCallback lets Google's browser redirect reach the callback without JWT / X-Tenant-Id.
+// Fiber mounts Group middleware as /api/v1*, so a separate app.Get is not enough.
+func skipConnectorOAuthCallback(next fiber.Handler) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if c.Method() == fiber.MethodGet && strings.HasSuffix(c.Path(), "/connectors/oauth/callback") {
+			return c.Next()
+		}
+		return next(c)
+	}
 }
 
 // Helper to extract tenant id from Fiber context. It prefers Locals("tenant_id") then header.

@@ -50,6 +50,8 @@ func New(cfg config.Config) (*fiber.App, error) {
 
 	// Public workflow webhooks (no Keycloak) — must be registered before the authed /api group.
 	app.All("/api/v1/public/*", proxyHandler.ForwardPublic)
+	// Public connector OAuth callback — Google redirects here without auth headers.
+	app.Get("/api/v1/connectors/oauth/callback", proxyHandler.ForwardPublic)
 
 	api := app.Group("/api", authMiddleware, auth.RequireAuthenticated())
 	api.All("/*", proxyHandler.Forward)

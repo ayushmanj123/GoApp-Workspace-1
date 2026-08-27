@@ -348,6 +348,8 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
 
       pageSize: { value: 10 },
 
+      showRefresh: { value: true },
+
     },
 
   },
@@ -369,6 +371,10 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
     properties: {
 
       item: { formula: "Gallery.Selected" },
+
+      layout: { value: "Vertical" },
+
+      columns: { value: 2 },
 
     },
 

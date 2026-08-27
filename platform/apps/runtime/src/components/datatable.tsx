@@ -2,7 +2,7 @@ import React, { useCallback, useMemo } from "react";
 import {
   useGallerySelectionStore,
 } from "../formula/formula-context";
-import { useResolvedGalleryRecords } from "../hooks/use-resolved-gallery-items";
+import { useSessionGalleryItems } from "../hooks/use-session-gallery-items";
 import { usePagedRecords } from "../hooks/use-paged-records";
 import { readItemsFormula } from "../utils/gallery-rows";
 import { useIsDesignSurface } from "../design-mode-context";
@@ -15,20 +15,53 @@ const STUDIO_PLACEHOLDER_RECORDS = [
   { Name: "Bob", Status: "Pending" },
 ];
 
+const NOISE_COLUMN_KEYS = new Set([
+  "recordid",
+  "entityid",
+  "version",
+  "_rid",
+  "_self",
+]);
+
+function readColumnsProp(value: unknown): string[] {
+  let raw: unknown = value;
+  if (raw && typeof raw === "object" && "value" in raw) {
+    raw = (raw as { value?: unknown }).value;
+  }
+  if (typeof raw !== "string") return [];
+  return raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 function inferColumns(records: Record<string, unknown>[]): string[] {
   if (records.length === 0) {
-    return ["Name"];
+    return [];
   }
   const keys = new Set<string>();
   for (const record of records) {
     for (const key of Object.keys(record)) {
-      if (!key.startsWith("_")) {
-        keys.add(key);
-      }
+      if (key.startsWith("_")) continue;
+      if (NOISE_COLUMN_KEYS.has(key.toLowerCase())) continue;
+      keys.add(key);
     }
   }
-  const columns = Array.from(keys);
-  return columns.length > 0 ? columns.sort() : ["Name"];
+  return Array.from(keys).sort();
+}
+
+function resolveColumns(
+  records: Record<string, unknown>[],
+  columnsProp: unknown,
+  columnHints?: string[],
+): string[] {
+  const fromProp = readColumnsProp(columnsProp);
+  if (fromProp.length > 0) return fromProp;
+  if (Array.isArray(columnHints) && columnHints.length > 0) {
+    return columnHints.map(String).filter(Boolean);
+  }
+  const inferred = inferColumns(records);
+  return inferred.length > 0 ? inferred : ["Name"];
 }
 
 function formatCell(value: unknown): string {
@@ -43,16 +76,35 @@ function formatCell(value: unknown): string {
 
 export const DataTable: React.FC<{
   name?: string;
+  controlId?: string;
   items?: unknown;
+  Items?: unknown;
   pageSize?: unknown;
+  columns?: unknown;
+  columnHints?: string[];
+  /** Studio Data-pane property; refresh UX lives in Property Panel, not runtime UI. */
+  showRefresh?: unknown;
   disabled?: boolean;
   readOnly?: boolean;
-}> = ({ name, items, pageSize, disabled = false }) => {
-  const records = useResolvedGalleryRecords(items);
+}> = ({
+  name,
+  controlId,
+  items,
+  Items,
+  pageSize,
+  columns,
+  columnHints,
+  disabled = false,
+}) => {
+  const itemsProp = items ?? Items;
+  const { records, loading, error } = useSessionGalleryItems(
+    controlId ?? name,
+    itemsProp,
+  );
   const selectionStore = useGallerySelectionStore();
   const isStudioCanvas = useIsDesignSurface();
   const { appId, sessionId, runtimeUnavailable } = useRuntime();
-  const hasFormula = Boolean(readItemsFormula(items));
+  const hasFormula = Boolean(readItemsFormula(itemsProp));
   const tableName = name?.trim() ?? "";
   const canSelect = Boolean(tableName) && !isStudioCanvas && !disabled;
   const selectedRecord = canSelect ? selectionStore.get(tableName) : undefined;
@@ -68,7 +120,10 @@ export const DataTable: React.FC<{
     displayRecords,
     pageSize,
   );
-  const columns = useMemo(() => inferColumns(displayRecords), [displayRecords]);
+  const resolvedColumns = useMemo(
+    () => resolveColumns(displayRecords, columns, columnHints),
+    [displayRecords, columns, columnHints],
+  );
 
   const handleRowClick = useCallback(
     (record: Record<string, unknown>, index: number) => {
@@ -78,12 +133,34 @@ export const DataTable: React.FC<{
         void selectGalleryItem({
           appId,
           sessionId,
-          galleryName: tableName,
+          galleryName: controlId ?? tableName,
           index,
         }).catch((err) => console.error(err));
       }
     },
-    [canSelect, tableName, selectionStore, sessionId, appId, runtimeUnavailable],
+    [
+      canSelect,
+      tableName,
+      controlId,
+      selectionStore,
+      sessionId,
+      appId,
+      runtimeUnavailable,
+    ],
+  );
+
+  const handleRowKeyDown = useCallback(
+    (
+      event: React.KeyboardEvent,
+      record: Record<string, unknown>,
+      index: number,
+    ) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        handleRowClick(record, index);
+      }
+    },
+    [handleRowClick],
   );
 
   const isRowSelected = useCallback(
@@ -96,7 +173,17 @@ export const DataTable: React.FC<{
 
   return (
     <div style={{ ...fillParentStyle(), display: "flex", flexDirection: "column" }}>
-      <div style={{ flex: 1, overflow: "auto", border: "1px solid #d0d0d0", borderRadius: 4 }}>
+      {error && !isStudioCanvas ? (
+        <div style={{ marginBottom: 4, fontSize: 11, color: "#b00020" }}>{error}</div>
+      ) : null}
+      <div
+        style={{
+          flex: 1,
+          overflow: "auto",
+          border: "1px solid #d0d0d0",
+          borderRadius: 4,
+        }}
+      >
         <table
           style={{
             width: "100%",
@@ -106,7 +193,7 @@ export const DataTable: React.FC<{
         >
           <thead>
             <tr>
-              {columns.map((column) => (
+              {resolvedColumns.map((column) => (
                 <th
                   key={column}
                   style={{
@@ -124,16 +211,41 @@ export const DataTable: React.FC<{
             </tr>
           </thead>
           <tbody>
+            {visibleRecords.length === 0 && !loading ? (
+              <tr>
+                <td
+                  colSpan={Math.max(resolvedColumns.length, 1)}
+                  style={{ padding: "12px 8px", color: "#666", fontSize: 12 }}
+                >
+                  {error
+                    ? "Unable to load records."
+                    : isStudioCanvas
+                      ? "No sample rows"
+                      : "No records"}
+                </td>
+              </tr>
+            ) : null}
             {visibleRecords.map((record, index) => (
               <tr
                 key={`${index}-${JSON.stringify(record)}`}
-                onClick={canSelect ? () => handleRowClick(record, index) : undefined}
+                role={canSelect ? "row" : undefined}
+                tabIndex={canSelect ? 0 : undefined}
+                aria-selected={canSelect ? isRowSelected(record) : undefined}
+                onClick={
+                  canSelect ? () => handleRowClick(record, index) : undefined
+                }
+                onKeyDown={
+                  canSelect
+                    ? (event) => handleRowKeyDown(event, record, index)
+                    : undefined
+                }
                 style={{
                   cursor: canSelect ? "pointer" : undefined,
                   background: isRowSelected(record) ? "#e8f0fe" : undefined,
+                  outline: isRowSelected(record) ? "1px solid #4A90D9" : undefined,
                 }}
               >
-                {columns.map((column) => (
+                {resolvedColumns.map((column) => (
                   <td
                     key={column}
                     style={{
@@ -149,6 +261,9 @@ export const DataTable: React.FC<{
           </tbody>
         </table>
       </div>
+      {loading && visibleRecords.length === 0 ? (
+        <div style={{ marginTop: 4, fontSize: 12, color: "#666" }}>Loading…</div>
+      ) : null}
       {hasMore ? (
         <button
           type="button"

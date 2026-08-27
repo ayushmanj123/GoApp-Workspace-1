@@ -16,6 +16,7 @@ import {
 import {
   DesignerComponent,
   DesignerContainer,
+  DesignerDataCard,
   DesignerDataTable,
   DesignerForm,
   DesignerGallery,
@@ -28,6 +29,7 @@ const DESIGNER_TYPES = [
   "Gallery",
   "DataTable",
   "Form",
+  "DataCard",
   "Component",
   "Timer",
   "Dropdown",
@@ -74,6 +76,8 @@ function getDesignerRenderer(type: string): DesignerRenderer {
       return (p) => (
         <DesignerGallery
           items={p.items}
+          columnHints={p.columnHints as string[] | undefined}
+          previewRows={p.previewRows as Record<string, unknown>[] | undefined}
           templateControls={p.templateControls as never[]}
           selected={p.selected as boolean}
           renderChild={p.renderChild as (c: Control) => ReactNode}
@@ -84,6 +88,8 @@ function getDesignerRenderer(type: string): DesignerRenderer {
         <DesignerDataTable
           items={p.items}
           pageSize={p.pageSize}
+          columnHints={p.columnHints as string[] | undefined}
+          previewRows={p.previewRows as Record<string, unknown>[] | undefined}
           selected={p.selected as boolean}
         />
       );
@@ -92,6 +98,15 @@ function getDesignerRenderer(type: string): DesignerRenderer {
         <DesignerForm
           item={p.item}
           mode={p.mode}
+          templateControls={p.templateControls as never[]}
+          selected={p.selected as boolean}
+          renderChild={p.renderChild as (c: Control) => ReactNode}
+        />
+      );
+    case "DataCard":
+      return (p) => (
+        <DesignerDataCard
+          dataField={p.dataField}
           templateControls={p.templateControls as never[]}
           selected={p.selected as boolean}
           renderChild={p.renderChild as (c: Control) => ReactNode}

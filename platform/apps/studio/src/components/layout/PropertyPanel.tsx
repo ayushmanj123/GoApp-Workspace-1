@@ -23,7 +23,8 @@ import {
 import { useStudioStore } from "../../store/studioStore";
 import { useApplicationStore } from "../../store/applicationStore";
 import { buildStudioFormulaContext } from "../../utils/build-studio-formula-context";
-import { resolveFormEntity } from "../../utils/generate-form-fields";
+import { resolveFormEntity, resolveFormGoogleSheetsConnector } from "../../utils/generate-form-fields";
+import { isGoogleSheetsConnector } from "../../utils/google-sheets-columns";
 import { PropertyCard, TabBar } from "../ui";
 import styles from "./PropertyPanel.module.css";
 
@@ -353,14 +354,22 @@ export function PropertyPanel() {
   const entities = useApplicationStore((s) => s.entities);
   const entityFieldsByEntityId = useApplicationStore((s) => s.entityFieldsByEntityId);
   const connectors = useApplicationStore((s) => s.connectors);
+  const sheetColumnsByConnectorId = useApplicationStore((s) => s.sheetColumnsByConnectorId);
   const selectedApplicationId = useApplicationStore((s) => s.selectedApplicationId);
   const loadConnectors = useApplicationStore((s) => s.loadConnectors);
   const loadEntities = useApplicationStore((s) => s.loadEntities);
+  const loadSheetColumns = useApplicationStore((s) => s.loadSheetColumns);
+  const refreshSheetPreview = useApplicationStore((s) => s.refreshSheetPreview);
+  const sheetColumnsLoadingByConnectorId = useApplicationStore(
+    (s) => s.sheetColumnsLoadingByConnectorId,
+  );
   const updateControl = useApplicationStore((s) => s.updateControl);
   const generateFormFields = useApplicationStore((s) => s.generateFormFields);
   const updateScreenOnVisible = useApplicationStore((s) => s.updateScreenOnVisible);
   const deleteControl = useApplicationStore((s) => s.deleteControl);
   const [onVisibleEditorOpen, setOnVisibleEditorOpen] = useState(false);
+  const [generatingFields, setGeneratingFields] = useState(false);
+  const [refreshingPreview, setRefreshingPreview] = useState(false);
 
   const applicationId = routeAppId ?? selectedApplicationId;
 
@@ -382,9 +391,23 @@ export function PropertyPanel() {
   const resolvedFormEntity = selectedControl
     ? resolveFormEntity(selectedControl, entities)
     : null;
+  const resolvedSheetsConnector = selectedControl
+    ? resolveFormGoogleSheetsConnector(selectedControl, connectors)
+    : null;
   const resolvedFormFieldCount = resolvedFormEntity
     ? (entityFieldsByEntityId[resolvedFormEntity.id] ?? []).length
-    : 0;
+    : resolvedSheetsConnector
+      ? (sheetColumnsByConnectorId[resolvedSheetsConnector.id] ?? []).length
+      : 0;
+  const canGenerateFormFields = Boolean(
+    (resolvedFormEntity && resolvedFormFieldCount > 0) ||
+      resolvedSheetsConnector,
+  );
+
+  useEffect(() => {
+    if (!resolvedSheetsConnector) return;
+    void loadSheetColumns(resolvedSheetsConnector.id);
+  }, [resolvedSheetsConnector, loadSheetColumns]);
 
   const updateNumericField = (
     field: "x" | "y" | "width" | "height",
@@ -529,6 +552,10 @@ export function PropertyPanel() {
                         "filter",
                         "sort",
                         "limit",
+                        "pageSize",
+                        "offset",
+                        "columns",
+                        "showRefresh",
                         "dataSource",
                       ].includes(d.name),
                     );
@@ -543,12 +570,17 @@ export function PropertyPanel() {
                     }
                     const hasItems = dataProps.some((d) => d.name === "items");
                     const hasItem = dataProps.some((d) => d.name === "item");
+                    const hasDataSource = dataProps.some((d) => d.name === "dataSource");
                     const itemsFormula = readPropertyFormula(
                       selectedControl.properties?.items,
                     );
                     const itemFormula = readPropertyFormula(
                       selectedControl.properties?.item,
                     );
+                    const dataSourceValue = String(
+                      readPropertyValue("text", selectedControl.properties?.dataSource) ||
+                        readPropertyFormula(selectedControl.properties?.dataSource),
+                    ).trim();
                     const galleryNames = controls
                       .filter(
                         (c) =>
@@ -560,6 +592,10 @@ export function PropertyPanel() {
                       ...entities.map((e) => e.name),
                       ...connectors.map((c) => c.name),
                     ];
+                    const connectorOptionLabel = (connector: (typeof connectors)[number]) =>
+                      isGoogleSheetsConnector(connector)
+                        ? `${connector.name} (google_sheets)`
+                        : connector.name;
                     return (
                       <>
                         {hasItems ? (
@@ -603,7 +639,7 @@ export function PropertyPanel() {
                                 <optgroup label="Connectors">
                                   {connectors.map((connector) => (
                                     <option key={connector.id} value={connector.name}>
-                                      {connector.name}
+                                      {connectorOptionLabel(connector)}
                                     </option>
                                   ))}
                                 </optgroup>
@@ -617,6 +653,121 @@ export function PropertyPanel() {
                             <p className={styles.stubHint}>
                               Sets Items to the selected name (e.g. <code>Weather</code>).
                               Use Edit formula for advanced expressions.
+                            </p>
+                          </div>
+                        ) : null}
+                        {hasItems &&
+                        (normalizeControlType(selectedControl.control_type) ===
+                          "datatable" ||
+                          normalizeControlType(selectedControl.control_type) ===
+                            "gallery") &&
+                        (selectedControl.properties?.showRefresh === undefined ||
+                          readPropertyValue(
+                            "boolean",
+                            selectedControl.properties?.showRefresh,
+                          ) === true) ? (
+                          <div className={styles.propBlock}>
+                            <button
+                              type="button"
+                              className={styles.formulaEditorBtn}
+                              data-testid="property-refresh-data-btn"
+                              disabled={
+                                refreshingPreview ||
+                                !itemsFormula ||
+                                (() => {
+                                  const sheets = connectors.find(
+                                    (c) =>
+                                      c.name === itemsFormula &&
+                                      isGoogleSheetsConnector(c),
+                                  );
+                                  return Boolean(
+                                    sheets &&
+                                      sheetColumnsLoadingByConnectorId[sheets.id],
+                                  );
+                                })()
+                              }
+                              onClick={() => {
+                                if (!itemsFormula) return;
+                                const sheets = connectors.find(
+                                  (c) =>
+                                    c.name === itemsFormula &&
+                                    isGoogleSheetsConnector(c),
+                                );
+                                setRefreshingPreview(true);
+                                const done = () => setRefreshingPreview(false);
+                                if (sheets) {
+                                  void refreshSheetPreview(sheets.id).finally(done);
+                                  return;
+                                }
+                                if (applicationId) {
+                                  void loadEntities(applicationId)
+                                    .then(() => loadConnectors(applicationId))
+                                    .finally(done);
+                                  return;
+                                }
+                                done();
+                              }}
+                            >
+                              {refreshingPreview ? "Refreshing…" : "Refresh data"}
+                            </button>
+                            <p className={styles.stubHint}>
+                              Reloads designer preview columns/sample rows from the
+                              Items datasource. Toggle with{" "}
+                              <code>Show Refresh</code> below. Published apps use{" "}
+                              <code>Refresh(DataSource)</code> in Power Fx.
+                            </p>
+                          </div>
+                        ) : null}
+                        {hasDataSource ? (
+                          <div className={styles.propBlock}>
+                            <label className={styles.propLabel} htmlFor="form-datasource-picker">
+                              Form dataSource
+                            </label>
+                            <select
+                              id="form-datasource-picker"
+                              className={styles.datasourceSelect}
+                              data-testid="form-datasource-picker"
+                              value={
+                                datasourceNames.includes(dataSourceValue)
+                                  ? dataSourceValue
+                                  : ""
+                              }
+                              onChange={(event) => {
+                                const name = event.currentTarget.value;
+                                if (!name || !selectedControl) return;
+                                updateMetadataProperty(
+                                  { name: "dataSource", label: "DataSource", type: "text" },
+                                  writePropertyValue("text", name),
+                                );
+                              }}
+                            >
+                              <option value="">
+                                {dataSourceValue && !datasourceNames.includes(dataSourceValue)
+                                  ? `Custom: ${dataSourceValue}`
+                                  : "Choose entity or connector…"}
+                              </option>
+                              {entities.length > 0 ? (
+                                <optgroup label="Entities">
+                                  {entities.map((entity) => (
+                                    <option key={entity.id} value={entity.name}>
+                                      {entity.display_name || entity.name}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ) : null}
+                              {connectors.length > 0 ? (
+                                <optgroup label="Connectors">
+                                  {connectors.map((connector) => (
+                                    <option key={connector.id} value={connector.name}>
+                                      {connectorOptionLabel(connector)}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ) : null}
+                            </select>
+                            <p className={styles.stubHint}>
+                              Target for SubmitForm create/update (entity or Google Sheets
+                              connector name).
                             </p>
                           </div>
                         ) : null}
@@ -677,7 +828,7 @@ export function PropertyPanel() {
                                 <optgroup label="Connectors">
                                   {connectors.map((connector) => (
                                     <option key={connector.id} value={connector.name}>
-                                      {connector.name}
+                                      {connectorOptionLabel(connector)}
                                     </option>
                                   ))}
                                 </optgroup>
@@ -689,7 +840,14 @@ export function PropertyPanel() {
                             </p>
                           </div>
                         ) : null}
-                        {dataProps.map((definition) => (
+                        {dataProps
+                          .filter((definition) => {
+                            if (hasItems && definition.name === "items") return false;
+                            if (hasItem && definition.name === "item") return false;
+                            if (hasDataSource && definition.name === "dataSource") return false;
+                            return true;
+                          })
+                          .map((definition) => (
                           <MetadataPropRow
                             key={definition.name}
                             definition={definition}
@@ -701,21 +859,36 @@ export function PropertyPanel() {
                           />
                         ))}
                         {normalizeControlType(selectedControl.control_type) === "form" &&
-                        resolvedFormEntity ? (
+                        canGenerateFormFields ? (
                           <div className={styles.propBlock}>
                             <button
                               type="button"
                               className={styles.formulaEditorBtn}
                               data-testid="generate-form-fields-btn"
-                              disabled={resolvedFormFieldCount === 0}
-                              onClick={() => generateFormFields(selectedControl.id)}
+                              disabled={
+                                generatingFields ||
+                                (Boolean(resolvedFormEntity) && resolvedFormFieldCount === 0)
+                              }
+                              onClick={() => {
+                                setGeneratingFields(true);
+                                void generateFormFields(selectedControl.id).finally(() => {
+                                  setGeneratingFields(false);
+                                });
+                              }}
                             >
-                              Generate fields
+                              {generatingFields ? "Generating…" : "Generate fields"}
                             </button>
                             <p className={styles.stubHint}>
                               Creates Label + TextInput children bound to{" "}
-                              <code>{resolvedFormEntity.name}</code> fields via{" "}
-                              <code>ThisItem.FieldName</code>.
+                              <code>
+                                {resolvedFormEntity?.name ??
+                                  resolvedSheetsConnector?.name ??
+                                  "datasource"}
+                              </code>{" "}
+                              {resolvedSheetsConnector
+                                ? "sheet columns"
+                                : "fields"}{" "}
+                              via <code>ThisItem.FieldName</code>.
                             </p>
                           </div>
                         ) : null}

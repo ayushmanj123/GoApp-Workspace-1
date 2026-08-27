@@ -117,6 +117,10 @@ Entity queries call `RecordService.List` with `FilterExpr` pushed into Postgres 
 
 `gallery.Service.Load` (and `ReloadForSource`) read the gallery control's own `filter` property — `ReadFilterFormula` checks a `filter`-named formula binding first, then `Properties["filter"]` — and pass it through as `databinding.QueryOverrides.Filter` on the entity/REST/SQL query. Collection sources apply the same `ParseFilterExpr` matcher in-memory. An empty/absent control filter leaves any metadata-driven filter from `control_properties` untouched. Supported predicates: equals, `<>`/`>`/`<`/`>=`/`<=`, And/Or of leaves (see [gallery-runtime.md](./gallery-runtime.md)).
 
+## DataTable / Gallery session binding
+
+With an active runtime session, DataTable and Gallery prefer `GET /api/runtime/session/{sessionId}/gallery/{controlId}` (session `AllItems` cache). The React client hydrates entity **and** connector names into the collection store as a secondary path for bare `Items` formulas. `Refresh(DataSource)` and the DataTable Refresh button call `ReloadForSource` / `POST …/gallery/:controlId/reload` respectively (see [gallery-runtime.md](./gallery-runtime.md)).
+
 ## Per-request cache
 
 Each HTTP request gets an in-memory cache (`RequestCacheMiddleware`). Repeated datasource queries with identical tenant, app, datasource, and normalized query input reuse the first result. This avoids duplicate database reads when multiple controls on the same screen request the same datasource during one render pass.

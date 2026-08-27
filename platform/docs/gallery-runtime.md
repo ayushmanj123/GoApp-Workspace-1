@@ -72,6 +72,18 @@ Response:
 
 The kernel preloads galleries for the active screen during session start and `OnVisible`.
 
+### Reload gallery / DataTable
+
+```http
+POST /api/runtime/session/{sessionId}/gallery/{controlId}/reload
+
+{
+  "appId": "…"
+}
+```
+
+Forces `gallery.Service.Load` for that control and returns the same `GalleryResponse` shape as GET. Used by formula `Refresh(DataSource)` (via `ReloadForSource`) and client gallery reloads.
+
 ### Select gallery row
 
 ```http
@@ -105,6 +117,26 @@ Collection galleries apply the same predicate in-memory (Phase 7.19). Entity dat
 ## Paging (Phase 7.29)
 
 Gallery and DataTable controls support optional `pageSize` and `offset` properties. Runtime passes them through as `QueryOverrides.Limit` and `QueryOverrides.Offset` on entity/REST/SQL queries. The client shows a **Load more** button when cached rows exceed `pageSize`, revealing additional rows without reloading the screen.
+
+## DataTable client binding
+
+DataTable (and Gallery) read rows from `GET …/gallery/:controlId` when a runtime session is active (`useSessionGalleryItems`). Offline / no-session falls back to formula evaluation and the hydrated collection store (entities **and** connector names).
+
+Columns are resolved in order:
+
+1. Optional `columns` text property (comma-separated field names)
+2. Designer `columnHints` when present (Sheets)
+3. Inferred keys from loaded records (excluding `recordId` / `entityId` / `version` noise)
+
+DataTable Data property `showRefresh` (boolean, default `true`) controls the Studio property-pane **Refresh data** button (designer preview). It does **not** render a button inside the published runtime app. To refresh live data at runtime, use Power Fx `Refresh(DataSource)` on a Button (or other) `OnSelect`.
+
+## Refresh(DataSource)
+
+```text
+Refresh(Customers)
+```
+
+Calls `ReloadForSource` for galleries/DataTables bound to that datasource and publishes `DatasourceChanged` refresh instructions so the React client re-fetches session gallery state.
 
 ## LookUp (Phase 7.18)
 

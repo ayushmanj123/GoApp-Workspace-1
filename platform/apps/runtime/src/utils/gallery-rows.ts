@@ -1,9 +1,25 @@
 export function readItemsFormula(property: unknown): string {
+  if (Array.isArray(property)) {
+    return "";
+  }
   if (property && typeof property === "object" && "formula" in property) {
     const formula = (property as { formula?: unknown }).formula;
     return typeof formula === "string" ? formula.trim() : "";
   }
+  if (typeof property === "string") {
+    return property.trim();
+  }
   return "";
+}
+
+/** Prefer lowercase items, then PascalCase Items (server render merge). */
+export function coalesceItemsProp(
+  props: Record<string, unknown> | null | undefined,
+): unknown {
+  if (!props) return undefined;
+  if (props.items !== undefined) return props.items;
+  if (props.Items !== undefined) return props.Items;
+  return undefined;
 }
 
 export function firstStringLikeField(record: Record<string, unknown>): string {

@@ -70,6 +70,8 @@ func (d *Dispatcher) Dispatch(rtCtx *RuntimeFormulaContext, formula string) (any
 		return d.execSetFormMode(rtCtx, trimmed, "EditForm", "Edit")
 	case strings.HasPrefix(strings.ToUpper(trimmed), "VIEWFORM("):
 		return d.execSetFormMode(rtCtx, trimmed, "ViewForm", "View")
+	case strings.HasPrefix(strings.ToUpper(trimmed), "REFRESH("):
+		return d.execRefresh(rtCtx, trimmed)
 	case strings.HasPrefix(strings.ToUpper(trimmed), "IF("):
 		return d.execIf(rtCtx, trimmed)
 	case strings.EqualFold(strings.TrimSpace(trimmed), "Back()"):
@@ -264,15 +266,24 @@ func (d *Dispatcher) execDefaults(rtCtx *RuntimeFormulaContext, formula string) 
 	if rtCtx.Resolver == nil || rtCtx.DataSources == nil {
 		return nil, newFormulaError("RUNTIME_ERROR", "data services are unavailable", nil)
 	}
-	binding, _, err := rtCtx.Resolver.Resolve(rtCtx.Ctx, rtCtx.User.TenantID, rtCtx.App.AppID, dataSource, databinding.QueryOverrides{})
+	binding, query, err := rtCtx.Resolver.Resolve(rtCtx.Ctx, rtCtx.User.TenantID, rtCtx.App.AppID, dataSource, databinding.QueryOverrides{Limit: 1})
 	if err != nil {
 		if errors.Is(err, databinding.ErrDataSourceNotFound) {
 			return nil, newFormulaError("DATASOURCE_NOT_FOUND", err.Error(), nil)
 		}
 		return nil, newFormulaError("RUNTIME_ERROR", err.Error(), nil)
 	}
-	_ = binding
-	return databinding.DataItem{}, nil
+	defaults := map[string]interface{}{}
+	source, sourceErr := rtCtx.DataSources.ForKind(binding.Kind)
+	if sourceErr == nil {
+		result, queryErr := source.Query(rtCtx.Ctx, query)
+		if queryErr == nil && result != nil && len(result.Items) > 0 && result.Items[0] != nil {
+			for key := range result.Items[0] {
+				defaults[key] = nil
+			}
+		}
+	}
+	return defaults, nil
 }
 
 func (d *Dispatcher) execPatch(rtCtx *RuntimeFormulaContext, formula string) (any, error) {
@@ -282,7 +293,18 @@ func (d *Dispatcher) execPatch(rtCtx *RuntimeFormulaContext, formula string) (an
 	}
 	record, err := parseRecordObject(objectLiteral)
 	if err != nil {
-		return nil, err
+		// Support Patch(DS, Form.Updates) / Patch(DS, Form.Item).
+		if rtCtx.Forms != nil {
+			if value, resolved := rtCtx.Forms.ResolveReference(strings.TrimSpace(objectLiteral)); resolved {
+				if asMap, isMap := value.(map[string]interface{}); isMap {
+					record = asMap
+					err = nil
+				}
+			}
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 	if rtCtx.Resolver == nil || rtCtx.DataSources == nil {
 		return nil, newFormulaError("RUNTIME_ERROR", "data services are unavailable", nil)
@@ -613,12 +635,20 @@ func (d *Dispatcher) execSubmitForm(rtCtx *RuntimeFormulaContext, formula string
 	}
 	dataSource, err := rtCtx.FormActions.SubmitForm(formName)
 	if err != nil {
+		if failure := strings.TrimSpace(rtCtx.FormActions.FormBehaviorFormula(formName, "onFailure")); failure != "" {
+			_, _ = d.Dispatch(rtCtx, failure)
+		}
 		return nil, mapFormActionError(err)
 	}
 	if rtCtx.Events != nil {
 		rtCtx.RecordRefresh(rtCtx.Events.FormChanged(rtCtx.Session.SessionID, rtCtx.App.AppID, formName))
 		if strings.TrimSpace(dataSource) != "" {
 			rtCtx.RecordRefresh(rtCtx.Events.DatasourceChanged(rtCtx.Session.SessionID, rtCtx.App.AppID, dataSource))
+		}
+	}
+	if success := strings.TrimSpace(rtCtx.FormActions.FormBehaviorFormula(formName, "onSuccess")); success != "" {
+		if _, successErr := d.Dispatch(rtCtx, success); successErr != nil {
+			return nil, successErr
 		}
 	}
 	return true, nil
@@ -637,6 +667,23 @@ func (d *Dispatcher) execResetForm(rtCtx *RuntimeFormulaContext, formula string)
 	}
 	if rtCtx.Events != nil {
 		rtCtx.RecordRefresh(rtCtx.Events.FormChanged(rtCtx.Session.SessionID, rtCtx.App.AppID, formName))
+	}
+	return true, nil
+}
+
+func (d *Dispatcher) execRefresh(rtCtx *RuntimeFormulaContext, formula string) (any, error) {
+	source, ok := parseSingleIdentifierCall(formula, "Refresh")
+	if !ok {
+		return nil, newFormulaError("INVALID_FORMULA", "invalid Refresh() formula", nil)
+	}
+	if rtCtx.GalleryActions == nil {
+		return nil, newFormulaError("RUNTIME_ERROR", "gallery actions are unavailable", nil)
+	}
+	if err := rtCtx.GalleryActions.ReloadDataSource(source); err != nil {
+		return nil, mapRuntimeDataError(err)
+	}
+	if rtCtx.Events != nil {
+		rtCtx.RecordRefresh(rtCtx.Events.DatasourceChanged(rtCtx.Session.SessionID, rtCtx.App.AppID, source))
 	}
 	return true, nil
 }

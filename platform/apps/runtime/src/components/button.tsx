@@ -62,6 +62,7 @@ export const Button: React.FC<any> = ({
     currentScreenName,
     navigateFromServer,
     runtimeUnavailable,
+    bumpGalleryRefresh,
   } = useRuntime();
   const resolvedControlName = controlName ?? name;
   const controls = useMemo(() => {
@@ -92,8 +93,12 @@ export const Button: React.FC<any> = ({
         sessionId && appId && currentScreenName && !runtimeUnavailable
           ? { appId, sessionId, screen: currentScreenName }
           : undefined,
-      entityNames: pkg?.entities?.map((entity) => entity.name) ?? [],
+      entityNames: [
+        ...(pkg?.entities?.map((entity) => entity.name) ?? []),
+        ...(pkg?.connectors?.map((connector) => connector.name) ?? []),
+      ],
       navigateFromServer: navigateFromServer ?? undefined,
+      bumpGalleryRefresh,
     };
 
     try {
@@ -130,6 +135,7 @@ export const Button: React.FC<any> = ({
     navigateFromServer,
     runtimeUnavailable,
     pkg,
+    bumpGalleryRefresh,
   ]);
 
   return (

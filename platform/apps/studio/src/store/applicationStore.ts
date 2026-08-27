@@ -24,7 +24,11 @@ import {
   type ToolboxControlType,
 } from "../control-defaults";
 import { buildPropertiesPayload } from "../utils/control-properties";
-import { resolveFormEntity, buildFormFieldControls } from "../utils/generate-form-fields";
+import { resolveFormEntity, resolveFormGoogleSheetsConnector, buildFormFieldControls, sheetColumnsToEntityFields } from "../utils/generate-form-fields";
+import {
+  fetchGoogleSheetPreview,
+  isGoogleSheetsConnector,
+} from "../utils/google-sheets-columns";
 import { computeLayerUpdates, type LayerAction } from "../utils/layer-actions";
 import {
   computeComponentBounds,
@@ -40,6 +44,11 @@ function pushControlHistory(controls: Control[]) {
   useHistoryStore.getState().pushSnapshot(controls);
 }
 
+let screensLoadSeq = 0;
+let controlsLoadSeq = 0;
+let entitiesLoadSeq = 0;
+let connectorsLoadSeq = 0;
+
 export interface SaveScreenResult {
   success: boolean;
   errors: string[];
@@ -54,6 +63,12 @@ export interface ApplicationState {
   entities: EntityRecord[];
   entityFieldsByEntityId: Record<string, EntityFieldRecord[]>;
   connectors: ConnectorRecord[];
+  /** Cached Google Sheets header columns keyed by connector id. */
+  sheetColumnsByConnectorId: Record<string, string[]>;
+  /** Cached sample rows for designer canvas preview (keyed by connector id). */
+  sheetPreviewRowsByConnectorId: Record<string, Record<string, unknown>[]>;
+  sheetColumnsErrorByConnectorId: Record<string, string>;
+  sheetColumnsLoadingByConnectorId: Record<string, boolean>;
 
   // Selection
   selectedApplicationId: string | null;
@@ -71,6 +86,9 @@ export interface ApplicationState {
   appsError: string | null;
   screensError: string | null;
   controlsError: string | null;
+  entitiesError: string | null;
+  connectorsError: string | null;
+  dataLoadError: string | null;
 
   // Actions
   loadApplications: () => Promise<void>;
@@ -79,6 +97,9 @@ export interface ApplicationState {
   loadComponentDefinitions: (applicationId: string) => Promise<void>;
   loadEntities: (applicationId: string) => Promise<void>;
   loadConnectors: (applicationId: string) => Promise<void>;
+  loadSheetColumns: (connectorId: string, force?: boolean) => Promise<string[]>;
+  /** Force-refresh sheet columns + sample rows for designer preview. */
+  refreshSheetPreview: (connectorId: string) => Promise<string[]>;
   createEntity: (name: string, displayName: string) => Promise<void>;
   addEntityField: (
     entityId: string,
@@ -113,7 +134,7 @@ export interface ApplicationState {
       y?: number;
     },
   ) => void;
-  generateFormFields: (formControlId: string) => void;
+  generateFormFields: (formControlId: string) => Promise<void>;
   deleteControl: (controlId: string) => Promise<void>;
   setControlsFromHistory: (controls: Control[]) => void;
 
@@ -131,6 +152,10 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
   entities: [],
   entityFieldsByEntityId: {},
   connectors: [],
+  sheetColumnsByConnectorId: {},
+  sheetPreviewRowsByConnectorId: {},
+  sheetColumnsErrorByConnectorId: {},
+  sheetColumnsLoadingByConnectorId: {},
   selectedApplicationId: null,
   selectedScreenId: null,
   selectedEntityId: null,
@@ -144,6 +169,9 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
   appsError: null,
   screensError: null,
   controlsError: null,
+  entitiesError: null,
+  connectorsError: null,
+  dataLoadError: null,
 
   loadApplications: async () => {
     set({ appsLoading: true, appsError: null });
@@ -160,11 +188,14 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
   },
 
   loadScreens: async (applicationId: string) => {
+    const seq = ++screensLoadSeq;
     set({ screensLoading: true, screensError: null });
     try {
       const data = await screensApi.list(applicationId);
+      if (seq !== screensLoadSeq) return;
       set({ screens: data.items, screensLoading: false });
     } catch (err) {
+      if (seq !== screensLoadSeq) return;
       set({
         screensLoading: false,
         screensError:
@@ -184,6 +215,9 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
       entityFieldsByEntityId: {},
       connectors: [],
       selectedEntityId: null,
+      entitiesError: null,
+      connectorsError: null,
+      dataLoadError: null,
     });
     useStudioStore.getState().selectControl(null);
     useStudioStore.getState().setDirty(false);
@@ -201,6 +235,7 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
   },
 
   loadControls: async (screenId: string) => {
+    const seq = ++controlsLoadSeq;
     set({ controlsLoading: true, controlsError: null });
     try {
       const data = await controlsApi.list(screenId);
@@ -214,10 +249,12 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
           }
         }),
       );
+      if (seq !== controlsLoadSeq) return;
       set({ controls: controlsWithProperties, controlsLoading: false });
       useStudioStore.getState().setDirty(false);
       useStudioStore.getState().setSaveMessage(null);
     } catch (err) {
+      if (seq !== controlsLoadSeq) return;
       set({
         controlsLoading: false,
         controlsError:
@@ -240,7 +277,8 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
   },
 
   loadEntities: async (applicationId) => {
-    set({ entitiesLoading: true });
+    const seq = ++entitiesLoadSeq;
+    set({ entitiesLoading: true, entitiesError: null, dataLoadError: null });
     try {
       const data = await entitiesApi.list(applicationId);
       const fieldsByEntity: Record<string, EntityFieldRecord[]> = {};
@@ -250,26 +288,123 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
           fieldsByEntity[entity.id] = fields.items;
         }),
       );
+      if (seq !== entitiesLoadSeq) return;
       set({
         entities: data.items,
         entityFieldsByEntityId: fieldsByEntity,
         entitiesLoading: false,
+        entitiesError: null,
       });
-    } catch {
-      set({ entitiesLoading: false, entities: [], entityFieldsByEntityId: {} });
+    } catch (err) {
+      if (seq !== entitiesLoadSeq) return;
+      const message =
+        err instanceof Error ? err.message : "Failed to load entities";
+      set({
+        entitiesLoading: false,
+        entities: [],
+        entityFieldsByEntityId: {},
+        entitiesError: message,
+        dataLoadError: message,
+      });
     }
   },
 
   loadConnectors: async (applicationId) => {
-    set({ connectorsLoading: true });
+    const seq = ++connectorsLoadSeq;
+    set({ connectorsLoading: true, connectorsError: null });
     try {
       const data = await connectorsApi.list(applicationId);
+      if (seq !== connectorsLoadSeq) return;
       set({
         connectors: data.items ?? [],
         connectorsLoading: false,
+        connectorsError: null,
       });
-    } catch {
-      set({ connectorsLoading: false, connectors: [] });
+    } catch (err) {
+      if (seq !== connectorsLoadSeq) return;
+      const message =
+        err instanceof Error ? err.message : "Failed to load connectors";
+      set({
+        connectorsLoading: false,
+        connectors: [],
+        connectorsError: message,
+        dataLoadError: message,
+      });
+    }
+  },
+
+  loadSheetColumns: async (connectorId, force = false) => {
+    const state = get();
+    if (!force && state.sheetColumnsByConnectorId[connectorId]) {
+      return state.sheetColumnsByConnectorId[connectorId];
+    }
+    return get().refreshSheetPreview(connectorId);
+  },
+
+  refreshSheetPreview: async (connectorId) => {
+    const state = get();
+    const connector = state.connectors.find((item) => item.id === connectorId);
+    if (!connector || !isGoogleSheetsConnector(connector)) {
+      return [];
+    }
+    set((prev) => ({
+      sheetColumnsLoadingByConnectorId: {
+        ...prev.sheetColumnsLoadingByConnectorId,
+        [connectorId]: true,
+      },
+      sheetColumnsErrorByConnectorId: {
+        ...prev.sheetColumnsErrorByConnectorId,
+        [connectorId]: "",
+      },
+    }));
+    try {
+      const preview = await fetchGoogleSheetPreview(connector, 5);
+      const rows: Record<string, unknown>[] = (preview.rows ?? []).map((row) => {
+        const record: Record<string, unknown> = {};
+        if (Array.isArray(row)) {
+          preview.columns.forEach((column, index) => {
+            record[column] = row[index];
+          });
+          return record;
+        }
+        if (row && typeof row === "object") {
+          return { ...(row as Record<string, unknown>) };
+        }
+        return record;
+      });
+      set((prev) => ({
+        sheetColumnsByConnectorId: {
+          ...prev.sheetColumnsByConnectorId,
+          [connectorId]: preview.columns,
+        },
+        sheetPreviewRowsByConnectorId: {
+          ...prev.sheetPreviewRowsByConnectorId,
+          [connectorId]: rows,
+        },
+        sheetColumnsLoadingByConnectorId: {
+          ...prev.sheetColumnsLoadingByConnectorId,
+          [connectorId]: false,
+        },
+        sheetColumnsErrorByConnectorId: {
+          ...prev.sheetColumnsErrorByConnectorId,
+          [connectorId]: "",
+        },
+      }));
+      return preview.columns;
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to load sheet columns";
+      set((prev) => ({
+        sheetColumnsLoadingByConnectorId: {
+          ...prev.sheetColumnsLoadingByConnectorId,
+          [connectorId]: false,
+        },
+        sheetColumnsErrorByConnectorId: {
+          ...prev.sheetColumnsErrorByConnectorId,
+          [connectorId]: message,
+        },
+      }));
+      return [];
     }
   },
 
@@ -681,19 +816,30 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     useStudioStore.getState().setSaveMessage(null);
   },
 
-  generateFormFields: (formControlId) => {
-    const { controls, entities, entityFieldsByEntityId } = get();
+  generateFormFields: async (formControlId) => {
+    const { controls, entities, entityFieldsByEntityId, connectors } = get();
     const form = controls.find((item) => item.id === formControlId);
     if (!form) {
       return;
     }
 
     const entity = resolveFormEntity(form, entities);
-    if (!entity) {
-      return;
+    let fields: EntityFieldRecord[] = [];
+
+    if (entity) {
+      fields = entityFieldsByEntityId[entity.id] ?? [];
+    } else {
+      const sheetsConnector = resolveFormGoogleSheetsConnector(form, connectors);
+      if (!sheetsConnector) {
+        return;
+      }
+      const columns = await get().loadSheetColumns(sheetsConnector.id, true);
+      if (columns.length === 0) {
+        return;
+      }
+      fields = sheetColumnsToEntityFields(columns);
     }
 
-    const fields = entityFieldsByEntityId[entity.id] ?? [];
     if (fields.length === 0) {
       return;
     }

@@ -62,6 +62,13 @@ type FormActions interface {
 	SubmitForm(formName string) (dataSource string, err error)
 	ResetForm(formName string) error
 	SetFormMode(formName, mode string) error
+	// FormBehaviorFormula returns OnSuccess/OnFailure (or similar) formula text for a form.
+	FormBehaviorFormula(formName, property string) string
+}
+
+// GalleryActions executes datasource refresh for gallery/DataTable-bound sources.
+type GalleryActions interface {
+	ReloadDataSource(source string) error
 }
 
 // RuntimeFormulaContext is the sole execution context for runtime formulas.
@@ -75,6 +82,7 @@ type RuntimeFormulaContext struct {
 	Gallery      GalleryReader
 	Forms        FormReader
 	FormActions  FormActions
+	GalleryActions GalleryActions
 	User         UserContext
 	App          AppContext
 	Session      SessionContext

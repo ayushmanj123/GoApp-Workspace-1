@@ -10,8 +10,11 @@ import {
   expandDefinitionForInstance,
   readComponentDefinitionId,
 } from "../../utils/component-definition";
+import { readPropertyFormula, readPropertyValue } from "../../utils/control-properties";
+import { isGoogleSheetsConnector } from "../../utils/google-sheets-columns";
 import { renderStudioDesignerPreview } from "./register-designer-renderers";
 import styles from "../../components/canvas/StudioControlRenderer.module.css";
+import { useEffect } from "react";
 
 ensureStudioRegistry();
 
@@ -44,14 +47,42 @@ function FallbackBox({ label }: { label: string }) {
   );
 }
 
+function resolveItemsDatasourceName(control: Control): string {
+  const formula = readPropertyFormula(control.properties?.items).trim();
+  if (formula) return formula;
+  return String(readPropertyValue("text", control.properties?.items) ?? "").trim();
+}
+
 export function DesignerNodeRenderer({
   control,
   selected = false,
 }: DesignerNodeRendererProps) {
   const allControls = useApplicationStore((s) => s.controls);
   const componentDefinitions = useApplicationStore((s) => s.componentDefinitions);
+  const connectors = useApplicationStore((s) => s.connectors);
+  const sheetColumnsByConnectorId = useApplicationStore((s) => s.sheetColumnsByConnectorId);
+  const sheetPreviewRowsByConnectorId = useApplicationStore(
+    (s) => s.sheetPreviewRowsByConnectorId,
+  );
+  const loadSheetColumns = useApplicationStore((s) => s.loadSheetColumns);
 
   const resolvedType = resolveRegistryType(control.control_type);
+  const controlKind = normalizeControlType(control.control_type);
+  const itemsName =
+    controlKind === "gallery" || controlKind === "datatable"
+      ? resolveItemsDatasourceName(control)
+      : "";
+  const boundSheetsConnector = itemsName
+    ? connectors.find(
+        (connector) =>
+          connector.name === itemsName && isGoogleSheetsConnector(connector),
+      )
+    : undefined;
+
+  useEffect(() => {
+    if (!boundSheetsConnector) return;
+    void loadSheetColumns(boundSheetsConnector.id);
+  }, [boundSheetsConnector, loadSheetColumns]);
 
   if (!supportsStudioRegistryRendering(control.control_type)) {
     return <FallbackBox label={control.name || resolvedType} />;
@@ -66,7 +97,13 @@ export function DesignerNodeRenderer({
   );
   props.renderChild = renderChild;
 
-  if (normalizeControlType(control.control_type) === "gallery") {
+  if (boundSheetsConnector) {
+    props.columnHints = sheetColumnsByConnectorId[boundSheetsConnector.id] ?? [];
+    props.previewRows =
+      sheetPreviewRowsByConnectorId[boundSheetsConnector.id] ?? [];
+  }
+
+  if (controlKind === "gallery") {
     props.templateControls = allControls
       .filter((item) => item.parent_control_id === control.id)
       .slice()
@@ -74,7 +111,7 @@ export function DesignerNodeRenderer({
       .map((item) => ({ ...item, children: [] }));
   }
 
-  if (normalizeControlType(control.control_type) === "form") {
+  if (controlKind === "form") {
     props.templateControls = allControls
       .filter((item) => item.parent_control_id === control.id)
       .slice()
@@ -82,7 +119,15 @@ export function DesignerNodeRenderer({
       .map((item) => ({ ...item, children: [] }));
   }
 
-  if (normalizeControlType(control.control_type) === "component") {
+  if (controlKind === "datacard") {
+    props.templateControls = allControls
+      .filter((item) => item.parent_control_id === control.id)
+      .slice()
+      .sort((a, b) => a.z_index - b.z_index)
+      .map((item) => ({ ...item, children: [] }));
+  }
+
+  if (controlKind === "component") {
     const definitionId = readComponentDefinitionId(control.properties);
     const compDef = componentDefinitions.find((item) => item.id === definitionId);
     if (compDef) {
@@ -90,7 +135,7 @@ export function DesignerNodeRenderer({
     }
   }
 
-  if (normalizeControlType(control.control_type) === "container") {
+  if (controlKind === "container") {
     props.templateControls = allControls
       .filter((item) => item.parent_control_id === control.id)
       .slice()

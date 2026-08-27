@@ -31,6 +31,11 @@ func RegisterRoutes(router fiber.Router, handler *Handler) {
 		return
 	}
 	router.Get("/runtime/session/:sessionId/gallery/:controlId", handler.GetGallery)
+	router.Post("/runtime/session/:sessionId/gallery/:controlId/reload", handler.ReloadGallery)
+}
+
+type galleryAppRequest struct {
+	AppID uuid.UUID `json:"appId"`
 }
 
 type GalleryResponse struct {
@@ -60,6 +65,39 @@ func (h *Handler) GetGallery(c *fiber.Ctx) error {
 	if errors.Is(err, ErrGalleryNotFound) {
 		state, err = h.svc.Load(c.UserContext(), sessionID, tenantID, userID, appID, control)
 	}
+	if err != nil {
+		return mapHandlerError(c, err)
+	}
+	return c.JSON(response.OK(GalleryResponse{
+		ControlID: control.Name,
+		Source:    state.Source,
+		Items:     state.Items,
+		Selected:  state.Selected,
+		Count:     len(state.Items),
+	}, requestID))
+}
+
+// ReloadGallery forces a fresh Load for one gallery/DataTable control.
+func (h *Handler) ReloadGallery(c *fiber.Ctx) error {
+	requestID, _ := c.Locals("requestID").(string)
+	if _, err := requireAuth(c); err != nil {
+		return err
+	}
+	sessionID, err := uuid.Parse(c.Params("sessionId"))
+	if err != nil {
+		return badRequest(c, "invalid sessionId")
+	}
+	var req galleryAppRequest
+	_ = c.BodyParser(&req)
+	control, tenantID, userID, appID, err := h.session.GalleryControl(sessionID, c.Params("controlId"))
+	if err != nil {
+		return mapHandlerError(c, err)
+	}
+	if req.AppID != uuid.Nil && req.AppID != appID {
+		return badRequest(c, "appId does not match session")
+	}
+
+	state, err := h.svc.Load(c.UserContext(), sessionID, tenantID, userID, appID, control)
 	if err != nil {
 		return mapHandlerError(c, err)
 	}

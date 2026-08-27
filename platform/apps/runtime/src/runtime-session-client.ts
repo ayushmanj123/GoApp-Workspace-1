@@ -1,5 +1,9 @@
 import type { RenderScreenPayload } from "./utils/merge-render-package";
-import { authHeaders as sessionAuthHeaders } from "./auth/session";
+import {
+  authHeaders as sessionAuthHeaders,
+  clearSession,
+  authMode,
+} from "./auth/session";
 
 export interface RuntimeFormulaSession {
   appId: string;
@@ -43,6 +47,22 @@ function authHeaders(): HeadersInit {
   return sessionAuthHeaders();
 }
 
+function redirectToLoginOnUnauthorized(): void {
+  clearSession();
+  if (authMode() === "development") return;
+  const loginPath = "/login";
+  if (typeof window !== "undefined" && !window.location.pathname.startsWith(loginPath)) {
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    window.location.assign(`${loginPath}?returnTo=${encodeURIComponent(returnTo)}`);
+  }
+}
+
+async function handleUnauthorized(res: Response): Promise<void> {
+  if (res.status === 401) {
+    redirectToLoginOnUnauthorized();
+  }
+}
+
 export async function startRuntimeSession(
   appId: string,
   screen: string,
@@ -59,6 +79,7 @@ export async function startRuntimeSession(
       ...(environmentId ? { environmentId } : {}),
     }),
   });
+  await handleUnauthorized(res);
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body?.success) {
     return undefined;
@@ -74,6 +95,7 @@ export async function fetchRenderedScreen(
     `${runtimeBaseUrl()}/api/runtime/session/${sessionId}/render/${screenId}`,
     { headers: authHeaders(), cache: "no-store" },
   );
+  await handleUnauthorized(res);
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body?.success) {
     return undefined;
@@ -100,6 +122,7 @@ export async function fetchRuntimeStateSnapshot(
 export interface RuntimeFormulaEvaluateResult {
   result?: unknown;
   currentScreen?: string;
+  refresh?: Array<{ controlId: string; reason: string }>;
 }
 
 export async function evaluateRuntimeFormula(input: {
@@ -132,6 +155,9 @@ export async function evaluateRuntimeFormula(input: {
   return {
     result: body.data?.result,
     currentScreen: body.data?.currentScreen as string | undefined,
+    refresh: body.data?.refresh as
+      | Array<{ controlId: string; reason: string }>
+      | undefined,
   };
 }
 
@@ -193,4 +219,132 @@ export async function selectGalleryItem(input: {
     throw new Error(message);
   }
   return body.data?.selected;
+}
+
+export interface RuntimeFormState {
+  controlId: string;
+  mode: "View" | "Edit" | "New" | string;
+  currentRecord?: Record<string, unknown>;
+  originalRecord?: Record<string, unknown>;
+  dirtyFields?: Record<string, unknown>;
+  validationErrors?: Array<{ field?: string; message: string }>;
+  dataSource?: string;
+  unsaved?: boolean;
+  valid?: boolean;
+  lastSubmit?: Record<string, unknown>;
+  error?: { message?: string; issues?: Array<{ field?: string; message: string }> } | null;
+  updates?: Record<string, unknown>;
+}
+
+async function parseFormResponse(res: Response): Promise<RuntimeFormState> {
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body?.success) {
+    const message =
+      (body?.error?.message as string | undefined) ??
+      `Form request failed (${res.status}).`;
+    throw new Error(message);
+  }
+  return (body.data?.form ?? body.data) as RuntimeFormState;
+}
+
+export async function fetchRuntimeForm(input: {
+  sessionId: string;
+  controlId: string;
+}): Promise<RuntimeFormState> {
+  const res = await fetch(
+    `${runtimeBaseUrl()}/api/runtime/session/${input.sessionId}/form/${encodeURIComponent(input.controlId)}`,
+    { headers: authHeaders(), cache: "no-store" },
+  );
+  await handleUnauthorized(res);
+  return parseFormResponse(res);
+}
+
+export async function updateRuntimeForm(input: {
+  appId: string;
+  sessionId: string;
+  controlId: string;
+  fields: Record<string, unknown>;
+}): Promise<RuntimeFormState> {
+  const res = await fetch(
+    `${runtimeBaseUrl()}/api/runtime/session/${input.sessionId}/form/${encodeURIComponent(input.controlId)}/update`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ appId: input.appId, fields: input.fields }),
+    },
+  );
+  await handleUnauthorized(res);
+  return parseFormResponse(res);
+}
+
+export async function resetRuntimeForm(input: {
+  appId: string;
+  sessionId: string;
+  controlId: string;
+}): Promise<RuntimeFormState> {
+  const res = await fetch(
+    `${runtimeBaseUrl()}/api/runtime/session/${input.sessionId}/form/${encodeURIComponent(input.controlId)}/reset`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ appId: input.appId }),
+    },
+  );
+  await handleUnauthorized(res);
+  return parseFormResponse(res);
+}
+
+export interface RuntimeGalleryState {
+  controlId: string;
+  source?: string;
+  items: Record<string, unknown>[];
+  selected?: Record<string, unknown>;
+  count: number;
+}
+
+async function parseGalleryResponse(res: Response): Promise<RuntimeGalleryState> {
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body?.success) {
+    const message =
+      (body?.error?.message as string | undefined) ??
+      `Gallery request failed (${res.status}).`;
+    throw new Error(message);
+  }
+  const data = (body.data?.gallery ?? body.data) as RuntimeGalleryState;
+  return {
+    controlId: data.controlId,
+    source: data.source,
+    items: Array.isArray(data.items) ? data.items : [],
+    selected: data.selected,
+    count: typeof data.count === "number" ? data.count : (data.items?.length ?? 0),
+  };
+}
+
+export async function fetchRuntimeGallery(input: {
+  sessionId: string;
+  controlId: string;
+}): Promise<RuntimeGalleryState> {
+  const res = await fetch(
+    `${runtimeBaseUrl()}/api/runtime/session/${input.sessionId}/gallery/${encodeURIComponent(input.controlId)}`,
+    { headers: authHeaders(), cache: "no-store" },
+  );
+  await handleUnauthorized(res);
+  return parseGalleryResponse(res);
+}
+
+export async function reloadRuntimeGallery(input: {
+  appId: string;
+  sessionId: string;
+  controlId: string;
+}): Promise<RuntimeGalleryState> {
+  const res = await fetch(
+    `${runtimeBaseUrl()}/api/runtime/session/${input.sessionId}/gallery/${encodeURIComponent(input.controlId)}/reload`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ appId: input.appId }),
+    },
+  );
+  await handleUnauthorized(res);
+  return parseGalleryResponse(res);
 }

@@ -13,11 +13,20 @@ function isBareCollectionReference(formula: string): boolean {
   return /^[A-Za-z][A-Za-z0-9]*$/.test(formula);
 }
 
+function asRecordArray(value: unknown): Record<string, unknown>[] | null {
+  if (!Array.isArray(value)) return null;
+  return normalizeGalleryRecords(value);
+}
+
 export function useResolvedGalleryRecords(
   items: unknown,
 ): Record<string, unknown>[] {
   const engine = useFormulaEngine();
   const context = useFormulaEvaluationContext();
+
+  // Pre-evaluated array (render payload or static).
+  const arrayRecords = useMemo(() => asRecordArray(items), [items]);
+
   const formula = readItemsFormula(items);
   const isDirectCollection =
     Boolean(formula) && isBareCollectionReference(formula);
@@ -35,7 +44,7 @@ export function useResolvedGalleryRecords(
   >([]);
 
   useEffect(() => {
-    if (isDirectCollection) {
+    if (arrayRecords || isDirectCollection) {
       return;
     }
 
@@ -64,9 +73,11 @@ export function useResolvedGalleryRecords(
     return () => {
       cancelled = true;
     };
-  }, [items, engine, context, formula, isDirectCollection]);
+  }, [items, engine, context, formula, isDirectCollection, arrayRecords]);
 
-  return isDirectCollection ? directRecords : computedRecords;
+  if (arrayRecords) return arrayRecords;
+  if (isDirectCollection) return directRecords;
+  return computedRecords;
 }
 
 export function useResolvedGalleryItems(items: unknown): string[] {
@@ -76,6 +87,13 @@ export function useResolvedGalleryItems(items: unknown): string[] {
 
   useEffect(() => {
     let cancelled = false;
+    const asArray = asRecordArray(items);
+    if (asArray) {
+      setRows(normalizeGalleryRows(asArray));
+      return () => {
+        cancelled = true;
+      };
+    }
     const formula = readItemsFormula(items);
 
     if (!formula) {

@@ -4,14 +4,14 @@ import {
   GalleryRowProvider,
   useGallerySelectionStore,
 } from "../formula/formula-context";
-import { useResolvedGalleryRecords } from "../hooks/use-resolved-gallery-items";
+import { useSessionGalleryItems } from "../hooks/use-session-gallery-items";
 import { usePagedRecords } from "../hooks/use-paged-records";
 import {
   firstStringLikeField,
   readItemsFormula,
 } from "../utils/gallery-rows";
 import { useIsDesignSurface } from "../design-mode-context";
-import { fillParentStyle, relativeContainerStyle } from "../utils/control-layout";
+import { fillParentStyle } from "../utils/control-layout";
 import type { ControlPackage } from "../runtime-types";
 import { useRuntime } from "../runtime-hooks";
 import { selectGalleryItem } from "../runtime-session-client";
@@ -20,17 +20,31 @@ const STUDIO_PLACEHOLDER_RECORDS = [{ Name: "Item 1" }, { Name: "Item 2" }];
 
 export const Gallery: React.FC<{
   name?: string;
+  controlId?: string;
   items?: unknown;
+  Items?: unknown;
   pageSize?: unknown;
   templateControls?: ControlPackage[];
   disabled?: boolean;
   readOnly?: boolean;
-}> = ({ name, items, pageSize, templateControls = [], disabled = false }) => {
-  const records = useResolvedGalleryRecords(items);
+}> = ({
+  name,
+  controlId,
+  items,
+  Items,
+  pageSize,
+  templateControls = [],
+  disabled = false,
+}) => {
+  const itemsProp = items ?? Items;
+  const { records, loading, error } = useSessionGalleryItems(
+    controlId ?? name,
+    itemsProp,
+  );
   const selectionStore = useGallerySelectionStore();
   const isStudioCanvas = useIsDesignSurface();
   const { appId, sessionId, runtimeUnavailable } = useRuntime();
-  const hasFormula = Boolean(readItemsFormula(items));
+  const hasFormula = Boolean(readItemsFormula(itemsProp));
   const galleryName = name?.trim() ?? "";
   const canSelect = Boolean(galleryName) && !isStudioCanvas && !disabled;
   const selectedRecord = canSelect ? selectionStore.get(galleryName) : undefined;
@@ -56,12 +70,20 @@ export const Gallery: React.FC<{
         void selectGalleryItem({
           appId,
           sessionId,
-          galleryName,
+          galleryName: controlId ?? galleryName,
           index,
         }).catch((err) => console.error(err));
       }
     },
-    [canSelect, galleryName, selectionStore, sessionId, appId, runtimeUnavailable],
+    [
+      canSelect,
+      galleryName,
+      controlId,
+      selectionStore,
+      sessionId,
+      appId,
+      runtimeUnavailable,
+    ],
   );
 
   const isRowSelected = useCallback(
@@ -81,6 +103,8 @@ export const Gallery: React.FC<{
       }}
     >
       <div
+        role={canSelect ? "listbox" : undefined}
+        aria-label={galleryName || "Gallery"}
         style={{
           flex: 1,
           overflow: "auto",
@@ -89,36 +113,62 @@ export const Gallery: React.FC<{
           padding: 4,
         }}
       >
-      {visibleRecords.map((record, index) => (
-        <div
-          key={`${index}-${JSON.stringify(record)}`}
-          onClick={canSelect ? () => handleRowClick(record, index) : undefined}
-          style={{
-            position: "relative",
-            minHeight: 32,
-            padding: "4px 6px",
-            borderBottom: "1px solid #eee",
-            marginBottom: 2,
-            cursor: canSelect ? "pointer" : undefined,
-            background: isRowSelected(record) ? "#e8f0fe" : undefined,
-          }}
-        >
-          {hasTemplate ? (
-            <GalleryRowProvider thisItem={record}>
-              {templateControls.map((control) => (
-                <ControlRenderer
-                  key={`${index}-${control.id}`}
-                  control={control}
-                  nested
-                />
-              ))}
-            </GalleryRowProvider>
-          ) : (
-            firstStringLikeField(record)
-          )}
-        </div>
-      ))}
+        {visibleRecords.length === 0 && !loading ? (
+          <div style={{ padding: "8px 6px", color: "#666", fontSize: 12 }}>
+            {error
+              ? "Unable to load items."
+              : isStudioCanvas
+                ? "No sample items"
+                : "No items"}
+          </div>
+        ) : null}
+        {visibleRecords.map((record, index) => (
+          <div
+            key={`${index}-${JSON.stringify(record)}`}
+            role={canSelect ? "option" : undefined}
+            aria-selected={canSelect ? isRowSelected(record) : undefined}
+            tabIndex={canSelect ? 0 : undefined}
+            onClick={canSelect ? () => handleRowClick(record, index) : undefined}
+            onKeyDown={
+              canSelect
+                ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      handleRowClick(record, index);
+                    }
+                  }
+                : undefined
+            }
+            style={{
+              position: "relative",
+              minHeight: 32,
+              padding: "4px 6px",
+              borderBottom: "1px solid #eee",
+              marginBottom: 2,
+              cursor: canSelect ? "pointer" : undefined,
+              background: isRowSelected(record) ? "#e8f0fe" : undefined,
+              outline: isRowSelected(record) ? "1px solid #4A90D9" : undefined,
+            }}
+          >
+            {hasTemplate ? (
+              <GalleryRowProvider thisItem={record}>
+                {templateControls.map((control) => (
+                  <ControlRenderer
+                    key={`${index}-${control.id}`}
+                    control={control}
+                    nested
+                  />
+                ))}
+              </GalleryRowProvider>
+            ) : (
+              firstStringLikeField(record)
+            )}
+          </div>
+        ))}
       </div>
+      {loading && visibleRecords.length === 0 ? (
+        <div style={{ marginTop: 4, fontSize: 12, color: "#666" }}>Loading…</div>
+      ) : null}
       {hasMore ? (
         <button
           type="button"

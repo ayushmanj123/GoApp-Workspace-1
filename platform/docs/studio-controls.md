@@ -34,7 +34,7 @@ node infrastructure/scripts/validate-phase-7.31.mjs
 | Image | `image` | `<img src>` | HTML preview | `src`, `alt` |
 | Icon | `icon` | emoji / named glyph | HTML preview | `icon`, `color` |
 | DatePicker | `datepicker` | `<input type="date">` | HTML preview | `value`, `default`, `onChange` |
-| DataTable | `datatable` | table + paging | sample rows | `items`, `pageSize`, `offset` |
+| DataTable | `datatable` | table + paging | sample/live preview rows | `items`, `pageSize`, `offset`, `columns`, `showRefresh` (Studio Refresh data button) |
 
 ### Designer chrome
 

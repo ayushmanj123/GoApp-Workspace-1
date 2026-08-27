@@ -16,12 +16,33 @@ export interface RuntimeActionServices extends ActionServices {
   session?: RuntimeFormulaSession;
   entityNames?: string[];
   navigateFromServer?: (screenName: string) => void;
+  bumpGalleryRefresh?: () => void;
+}
+
+function shouldBumpGalleryRefresh(
+  formula: string,
+  refresh?: Array<{ controlId: string; reason: string }>,
+): boolean {
+  if (/Refresh\s*\(|Patch\s*\(|Collect\s*\(|ClearCollect\s*\(|Remove\s*\(|SubmitForm\s*\(/i.test(formula)) {
+    return true;
+  }
+  if (!refresh?.length) return false;
+  return refresh.some((item) => {
+    const reason = (item.reason ?? "").toLowerCase();
+    return (
+      reason.includes("datasource") ||
+      reason.includes("collection") ||
+      reason.includes("gallery")
+    );
+  });
 }
 
 async function applySessionSideEffects(
   session: RuntimeFormulaSession,
   services: RuntimeActionServices,
   currentScreen?: string,
+  refresh?: Array<{ controlId: string; reason: string }>,
+  formula?: string,
 ): Promise<void> {
   if (services.store && services.collectionStore && services.entityNames) {
     await hydrateSessionContext({
@@ -35,6 +56,9 @@ async function applySessionSideEffects(
   }
   if (currentScreen && services.navigateFromServer) {
     services.navigateFromServer(currentScreen);
+  }
+  if (formula && shouldBumpGalleryRefresh(formula, refresh)) {
+    services.bumpGalleryRefresh?.();
   }
 }
 
@@ -60,7 +84,13 @@ export async function executeRuntimeAction(
     screen: session.screen,
     formula,
   });
-  await applySessionSideEffects(session, services, response.currentScreen);
+  await applySessionSideEffects(
+    session,
+    services,
+    response.currentScreen,
+    response.refresh,
+    formula,
+  );
 }
 
 export async function syncServerScreenVisible(

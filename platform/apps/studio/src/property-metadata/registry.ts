@@ -38,7 +38,7 @@ export function isFormulaOnly(definition: PropertyFieldDefinition): boolean {
 
 /** Data-binding formulas (Items / Item / Default / Filter) vs action/event formulas. */
 
-const DATA_FORMULA_NAMES = new Set(["items", "item", "default", "filter"]);
+const DATA_FORMULA_NAMES = new Set(["items", "item", "default", "filter", "update"]);
 
 
 
@@ -88,7 +88,15 @@ const TEXT_INPUT_PROPERTIES: PropertyFieldDefinition[] = [
 
   { name: "placeholder", label: "Placeholder", type: "text" },
 
+  { name: "inputMode", label: "InputMode", type: "text" },
+
   { name: "disabled", label: "Disabled", type: "boolean" },
+
+  { name: "visible", label: "Visible", type: "boolean" },
+
+  { name: "displayMode", label: "DisplayMode", type: "text" },
+
+  { name: "required", label: "Required", type: "boolean" },
 
 ];
 
@@ -126,6 +134,14 @@ const DATATABLE_PROPERTIES: PropertyFieldDefinition[] = [
 
   { name: "offset", label: "Offset", type: "number" },
 
+  { name: "columns", label: "Columns", type: "text" },
+
+  {
+    name: "showRefresh",
+    label: "Show Refresh",
+    type: "boolean",
+  },
+
 ];
 
 
@@ -137,6 +153,32 @@ const FORM_PROPERTIES: PropertyFieldDefinition[] = [
   { name: "dataSource", label: "DataSource", type: "text" },
 
   { name: "mode", label: "Mode", type: "text" },
+
+  { name: "layout", label: "Layout", type: "text" },
+
+  { name: "columns", label: "Columns", type: "number" },
+
+  { name: "onSuccess", label: "OnSuccess", type: "formula" },
+
+  { name: "onFailure", label: "OnFailure", type: "formula" },
+
+];
+
+
+
+const DATACARD_PROPERTIES: PropertyFieldDefinition[] = [
+
+  { name: "dataField", label: "DataField", type: "text" },
+
+  { name: "default", label: "Default", type: "formula" },
+
+  { name: "update", label: "Update", type: "formula" },
+
+  { name: "required", label: "Required", type: "boolean" },
+
+  { name: "visible", label: "Visible", type: "boolean" },
+
+  { name: "displayMode", label: "DisplayMode", type: "text" },
 
 ];
 
@@ -162,6 +204,12 @@ const DROPDOWN_PROPERTIES: PropertyFieldDefinition[] = [
 
   { name: "disabled", label: "Disabled", type: "boolean" },
 
+  { name: "visible", label: "Visible", type: "boolean" },
+
+  { name: "displayMode", label: "DisplayMode", type: "text" },
+
+  { name: "required", label: "Required", type: "boolean" },
+
   { name: "onChange", label: "OnChange", type: "formula" },
 
 ];
@@ -186,6 +234,12 @@ const CHECKBOX_PROPERTIES: PropertyFieldDefinition[] = [
 
   { name: "disabled", label: "Disabled", type: "boolean" },
 
+  { name: "visible", label: "Visible", type: "boolean" },
+
+  { name: "displayMode", label: "DisplayMode", type: "text" },
+
+  { name: "required", label: "Required", type: "boolean" },
+
   { name: "onChange", label: "OnChange", type: "formula" },
 
 ];
@@ -201,6 +255,12 @@ const TOGGLE_PROPERTIES: PropertyFieldDefinition[] = [
   { name: "default", label: "Default", type: "formula" },
 
   { name: "disabled", label: "Disabled", type: "boolean" },
+
+  { name: "visible", label: "Visible", type: "boolean" },
+
+  { name: "displayMode", label: "DisplayMode", type: "text" },
+
+  { name: "required", label: "Required", type: "boolean" },
 
   { name: "onChange", label: "OnChange", type: "formula" },
 
@@ -235,6 +295,12 @@ const DATEPICKER_PROPERTIES: PropertyFieldDefinition[] = [
   { name: "default", label: "Default", type: "formula" },
 
   { name: "disabled", label: "Disabled", type: "boolean" },
+
+  { name: "visible", label: "Visible", type: "boolean" },
+
+  { name: "displayMode", label: "DisplayMode", type: "text" },
+
+  { name: "required", label: "Required", type: "boolean" },
 
   { name: "onChange", label: "OnChange", type: "formula" },
 
@@ -315,6 +381,8 @@ const PROPERTY_METADATA: Record<string, PropertyFieldDefinition[]> = {
   datatable: DATATABLE_PROPERTIES,
 
   form: FORM_PROPERTIES,
+
+  datacard: DATACARD_PROPERTIES,
 
   timer: TIMER_PROPERTIES,
 

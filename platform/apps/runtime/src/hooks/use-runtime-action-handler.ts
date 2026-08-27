@@ -16,6 +16,7 @@ import {
 } from "../runtime-hooks";
 import { executeRuntimeAction } from "../formula/execute-runtime-action";
 import { executeAction } from "../formula/execute-action";
+import { flushAllFormUpdates } from "../formula/form-update-flush";
 import type { RuntimeNavigationStore } from "../formula/runtime-navigation-store";
 
 function readActionFormula(property: unknown): string | null {
@@ -57,6 +58,10 @@ export function useRuntimeActionHandler(
     currentScreenName,
     navigateFromServer,
     runtimeUnavailable,
+    reportActionError,
+    clearActionError,
+    bumpFormRefresh,
+    bumpGalleryRefresh,
   } = useRuntime();
 
   const controls =
@@ -84,18 +89,39 @@ export function useRuntimeActionHandler(
         sessionId && appId && currentScreenName && !runtimeUnavailable
           ? { appId, sessionId, screen: currentScreenName }
           : undefined,
-      entityNames: pkg?.entities?.map((entity) => entity.name) ?? [],
+      entityNames: [
+        ...(pkg?.entities?.map((entity) => entity.name) ?? []),
+        ...(pkg?.connectors?.map((connector) => connector.name) ?? []),
+      ],
       navigateFromServer: navigateFromServer ?? undefined,
+      bumpGalleryRefresh,
     };
 
     try {
+      if (/SubmitForm|ResetForm|NewForm|EditForm|ViewForm/i.test(formula)) {
+        await flushAllFormUpdates();
+      }
       if (actionServices.session) {
         await executeRuntimeAction({ formula, controlName, event }, actionServices);
       } else {
         await executeAction({ formula }, actionServices);
+        if (/Refresh\s*\(/i.test(formula)) {
+          bumpGalleryRefresh?.();
+        }
       }
+      if (/SubmitForm|ResetForm|NewForm|EditForm|ViewForm/i.test(formula)) {
+        bumpFormRefresh?.();
+        if (/ResetForm/i.test(formula)) {
+          formUpdatesStore.clear();
+        }
+      }
+      clearActionError?.();
     } catch (err) {
       console.error(err);
+      const message = err instanceof Error ? err.message : "Action failed";
+      reportActionError?.(message);
+      bumpFormRefresh?.();
+      bumpGalleryRefresh?.();
     }
   }, [
     actionProperty,
@@ -118,5 +144,9 @@ export function useRuntimeActionHandler(
     navigateFromServer,
     runtimeUnavailable,
     pkg,
+    reportActionError,
+    clearActionError,
+    bumpFormRefresh,
+    bumpGalleryRefresh,
   ]);
 }

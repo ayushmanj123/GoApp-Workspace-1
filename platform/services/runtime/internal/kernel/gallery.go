@@ -165,6 +165,30 @@ func galleryControlsForPackage(pkg *Package) []gallery.ControlMetadata {
 	return controls
 }
 
+type kernelGalleryActions struct {
+	ctx     context.Context
+	kernel  *RuntimeKernel
+	session *RuntimeSession
+}
+
+func (a *kernelGalleryActions) ReloadDataSource(source string) error {
+	if a == nil || a.kernel == nil || a.kernel.registry == nil || a.kernel.registry.Gallery == nil || a.session == nil {
+		return gallery.ErrGalleryNotFound
+	}
+	controls := galleryControlsForPackage(a.session.Package)
+	_, err := a.kernel.registry.Gallery.ReloadForSource(
+		a.ctx,
+		a.session.ID,
+		a.session.TenantID,
+		a.session.UserID,
+		a.session.AppID,
+		source,
+		controls,
+		a.session.State,
+	)
+	return err
+}
+
 func uniqueControls(pkg *Package) []RuntimeControl {
 	if pkg == nil {
 		return nil

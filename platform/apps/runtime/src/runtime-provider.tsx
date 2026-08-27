@@ -52,6 +52,10 @@ const ScreenResolverContext = createContext<
 export interface RuntimeContextValue {
   pkg?: AppPackage;
   loading: boolean;
+  loadError?: string | null;
+  actionError?: string | null;
+  clearActionError?: () => void;
+  reportActionError?: (message: string) => void;
   currentScreen?: string;
   navigate: (screenId: string, options?: { preserveState?: boolean }) => void;
   variables: Record<string, any>;
@@ -62,15 +66,25 @@ export interface RuntimeContextValue {
   sessionId?: string;
   currentScreenName?: string;
   navigateFromServer?: (screenName: string) => void;
+  formRefreshTick?: number;
+  bumpFormRefresh?: () => void;
+  galleryRefreshTick?: number;
+  bumpGalleryRefresh?: () => void;
 }
 
 export const RuntimeContext = createContext<RuntimeContextValue>({
   loading: true,
+  loadError: null,
+  actionError: null,
   navigate: () => {},
   variables: {},
   collections: {},
   renderLoading: false,
   runtimeUnavailable: false,
+  formRefreshTick: 0,
+  bumpFormRefresh: () => {},
+  galleryRefreshTick: 0,
+  bumpGalleryRefresh: () => {},
 });
 
 function ActionRunner({
@@ -229,12 +243,27 @@ export const RuntimeProvider: React.FC<{
   const [pkg, setPkg] = useState<AppPackage | undefined>();
   const [renderedPkg, setRenderedPkg] = useState<AppPackage | undefined>();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [renderLoading, setRenderLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [sessionInitComplete, setSessionInitComplete] = useState(false);
   const [runtimeUnavailable, setRuntimeUnavailable] = useState(false);
   const [navTick, setNavTick] = useState(0);
+  const [formRefreshTick, setFormRefreshTick] = useState(0);
+  const [galleryRefreshTick, setGalleryRefreshTick] = useState(0);
   const [variables] = useState<Record<string, any>>({});
+
+  const clearActionError = useCallback(() => setActionError(null), []);
+  const reportActionError = useCallback((message: string) => {
+    setActionError(message);
+  }, []);
+  const bumpFormRefresh = useCallback(() => {
+    setFormRefreshTick((value) => value + 1);
+  }, []);
+  const bumpGalleryRefresh = useCallback(() => {
+    setGalleryRefreshTick((value) => value + 1);
+  }, []);
 
   const variableStoreRef = useRef(new InMemoryVariableStore({}));
   const screenContextStoreRef = useRef(new InMemoryScreenContextStore());
@@ -294,6 +323,7 @@ export const RuntimeProvider: React.FC<{
     const qs = query.toString();
     const url = `${baseUrl || ""}/api/v1/runtime/applications/${appId}${qs ? `?${qs}` : ""}`;
     setLoading(true);
+    setLoadError(null);
     setRuntimeUnavailable(false);
     setSessionId(undefined);
     setSessionInitComplete(false);
@@ -301,32 +331,49 @@ export const RuntimeProvider: React.FC<{
       headers: authHeaders(),
       cache: "no-store",
     })
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (res.status === 401) {
+          throw new Error("Session expired");
+        }
+        if (!res.ok) {
+          throw new Error(`Failed to load application (${res.status})`);
+        }
+        return res.json();
+      })
       .then(async (body) => {
         if (!mounted) return;
         const data = body?.success ? body.data : body?.data;
-        if (data) {
-          setPkg(data);
-          if (data.screens?.length > 0) {
-            navigationStoreRef.current.navigate(data.screens[0].id);
-          }
-          const firstScreen = data.screens?.[0];
-          const sessionChannel = environmentId ? "published" : channel;
-          const session = await startRuntimeSession(
-            appId,
-            firstScreen?.name ?? firstScreen?.id ?? "",
-            sessionChannel,
-            environmentId,
-          );
-          if (mounted) {
-            setSessionId(session);
-            if (!session) {
-              setRuntimeUnavailable(true);
-            }
+        if (!data) {
+          setLoadError("Package not found");
+          return;
+        }
+        setPkg(data);
+        if (data.screens?.length > 0) {
+          navigationStoreRef.current.navigate(data.screens[0].id);
+        }
+        const firstScreen = data.screens?.[0];
+        const sessionChannel = environmentId ? "published" : channel;
+        const session = await startRuntimeSession(
+          appId,
+          firstScreen?.name ?? firstScreen?.id ?? "",
+          sessionChannel,
+          environmentId,
+        );
+        if (mounted) {
+          setSessionId(session);
+          if (!session) {
+            setRuntimeUnavailable(true);
           }
         }
       })
-      .catch(() => {})
+      .catch((err) => {
+        if (mounted) {
+          setPkg(undefined);
+          setLoadError(
+            err instanceof Error ? err.message : "Failed to load application",
+          );
+        }
+      })
       .finally(() => {
         if (mounted) {
           setLoading(false);
@@ -383,7 +430,10 @@ export const RuntimeProvider: React.FC<{
           appId,
           sessionId,
           screen: serverScreen ?? currentScreenName,
-          entityNames: pkg.entities?.map((entity) => entity.name) ?? [],
+          entityNames: [
+            ...(pkg.entities?.map((entity) => entity.name) ?? []),
+            ...(pkg.connectors?.map((connector) => connector.name) ?? []),
+          ],
           variableStore: variableStoreRef.current,
           collectionStore: collectionStoreRef.current,
         });
@@ -414,31 +464,42 @@ export const RuntimeProvider: React.FC<{
     setRenderLoading(true);
     const screen = pkg.screens?.find((item) => item.id === currentScreen);
     const loadRender = async () => {
-      let activeSession = sessionId;
-      if (!activeSession) {
-        activeSession = await startRuntimeSession(
-          appId,
-          screen?.name ?? currentScreen,
-          channel,
-          environmentId,
-        );
-        if (!cancelled && activeSession) {
-          setSessionId(activeSession);
+      try {
+        let activeSession = sessionId;
+        if (!activeSession) {
+          activeSession = await startRuntimeSession(
+            appId,
+            screen?.name ?? currentScreen,
+            channel,
+            environmentId,
+          );
+          if (!cancelled && activeSession) {
+            setSessionId(activeSession);
+          }
         }
-      }
-      if (!activeSession) {
+        if (!activeSession) {
+          if (!cancelled) {
+            setRenderedPkg(pkg);
+            setRuntimeUnavailable(true);
+          }
+          return;
+        }
+        setRuntimeUnavailable(false);
+        const render = await fetchRenderedScreen(activeSession, currentScreen);
         if (!cancelled) {
-          setRenderedPkg(pkg);
-          setRenderLoading(false);
-          setRuntimeUnavailable(true);
+          setRenderedPkg(mergeRenderIntoPackage(pkg, currentScreen, render));
         }
-        return;
-      }
-      setRuntimeUnavailable(false);
-      const render = await fetchRenderedScreen(activeSession, currentScreen);
-      if (!cancelled) {
-        setRenderedPkg(mergeRenderIntoPackage(pkg, currentScreen, render));
-        setRenderLoading(false);
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError(
+            err instanceof Error ? err.message : "Failed to render screen",
+          );
+          setRenderedPkg(pkg);
+        }
+      } finally {
+        if (!cancelled) {
+          setRenderLoading(false);
+        }
       }
     };
     void loadRender();
@@ -482,6 +543,10 @@ export const RuntimeProvider: React.FC<{
             value={{
               pkg: activePackage,
               loading: loading || renderLoading,
+              loadError,
+              actionError,
+              clearActionError,
+              reportActionError,
               currentScreen,
               navigate,
               variables,
@@ -492,6 +557,10 @@ export const RuntimeProvider: React.FC<{
               sessionId,
               currentScreenName,
               navigateFromServer,
+              formRefreshTick,
+              bumpFormRefresh,
+              galleryRefreshTick,
+              bumpGalleryRefresh,
             }}
           >
             {children}

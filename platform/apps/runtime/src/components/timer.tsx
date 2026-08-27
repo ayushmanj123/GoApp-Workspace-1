@@ -65,6 +65,7 @@ export const Timer: React.FC<any> = ({
     currentScreenName,
     navigateFromServer,
     runtimeUnavailable,
+    bumpGalleryRefresh,
   } = useRuntime();
   const resolvedControlName = controlName ?? name;
   const controls = useMemo(() => {
@@ -103,8 +104,12 @@ export const Timer: React.FC<any> = ({
           sessionId && appId && currentScreenName && !runtimeUnavailable
             ? { appId, sessionId, screen: currentScreenName }
             : undefined,
-        entityNames: pkg?.entities?.map((entity) => entity.name) ?? [],
+        entityNames: [
+          ...(pkg?.entities?.map((entity) => entity.name) ?? []),
+          ...(pkg?.connectors?.map((connector) => connector.name) ?? []),
+        ],
         navigateFromServer: navigateFromServer ?? undefined,
+        bumpGalleryRefresh,
       };
 
       const run = actionServices.session
@@ -147,6 +152,7 @@ export const Timer: React.FC<any> = ({
     pkg,
     navigateFromServer,
     resolvedControlName,
+    bumpGalleryRefresh,
   ]);
 
   return <span>[Timer]</span>;

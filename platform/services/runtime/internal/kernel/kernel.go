@@ -247,6 +247,7 @@ func (k *RuntimeKernel) buildFormulaContext(ctx context.Context, session *Runtim
 		Gallery:     k.registry.Gallery.Reader(session.ID),
 		Forms:       k.registry.Form.Reader(session.ID),
 		FormActions: &kernelFormActions{ctx: ctx, kernel: k, session: session},
+		GalleryActions: &kernelGalleryActions{ctx: ctx, kernel: k, session: session},
 		User: formula.UserContext{
 			TenantID: session.TenantID,
 			UserID:   session.UserID,

@@ -539,6 +539,7 @@ Macro phases (product roadmap):
 | 7.24 | Workflow triggers v2 | COMPLETE (schedule poller + HTTP webhook + Studio trigger editor) |
 | 7.25 | Action parity + delete + binding props | COMPLETE (Studio actions/; , Remove entity/SQL/REST, gallery filter/sort/limit, Timer kernel) |
 | 7.26 | Form designer completeness | COMPLETE (nest-into Form/Gallery drop, Generate fields, REST SubmitForm, client New mode) |
+| F0–F5 | Form component enhancement | COMPLETE (session Form bridge, ThisItem binder, LastSubmit/Updates/Error, OnSuccess/OnFailure, DataCard Generate, typed fields, Layout/Columns, hardening) |
 | 7.27 | control palette + Konva shapes | COMPLETE (HTML controls + Konva decorative shape primitives) |
 | 7.28 | search + lookup picker + typed Generate Fields | COMPLETE (Contains/StartsWith filters, lookup Dropdown Items, checkbox/datepicker Generate fields) |
 | 7.29 | DataTable + gallery paging | COMPLETE (DataTable control, pageSize/offset + Load more, QueryOverrides.Offset) |
@@ -547,6 +548,10 @@ Macro phases (product roadmap):
 | 8.0 | Enterprise ALM | COMPLETE (unpublish/rollback/deprecate, environments + promote, audit events) |
 | 8.1 | MinIO publish artifacts | COMPLETE (snapshot blob uploaded to MinIO on publish; `packages.package_url`/`package_hash`; runtime prefers the artifact, falls back to `snapshot_json`) |
 | 8.2 | MinIO artifact GC | COMPLETE (ref-safe GC on Deprecate when unreferenced by app + envs; Unpublish stays pointer-only; `snapshot_json` retained) |
+| 9.0 | Production security hardening | COMPLETE (prod auth fail-closed, secrets key, RLS GUC fix, RequireRole, CORS allowlist, webhook rate limit, K8s Secrets, REST SSRF guard) |
+| 9.1 | Production reliability | COMPLETE (fail-fast metadata/publish + DB ready, MinIO hard-fail when configured, gateway deploy, scaffolds excluded from kustomize, migration unify, SESSION_MAX) |
+| 9.2 | Frontend production states | COMPLETE (401→login, honest load/render errors, action errors, store race guards, manager UX consistency, prod env footguns) |
+| 9.3 | Ops / CI readiness | COMPLETE (metrics on gateway/metadata, validators 7.1/7.2/8.0, FE unit checks + CI, production checklist) |
 
 ---
 
@@ -561,6 +566,8 @@ Granular sub-phases use different numbering than macro phases:
 - **6.0** — Entity foundation (schema + Studio + runtime package)
 - **6.1** — Publishing pipeline (immutable snapshots + publish service)
 - **7.0** — Core loop polish (seed screen, Open Runtime, create→publish→runtime)
+- **7.1** — REST connector framework (static validator)
+- **7.2** — Keycloak production auth (static validator)
 - **7.3** — Studio connector designer (manager UI + Items datasource picker)
 - **7.4** — Auth trust boundary (gateway proxies, service auth middleware, Keycloak PKCE realm)
 - **7.5** — Connector secrets (encrypted `secrets` table, write-only Studio UX, runtime resolve)
@@ -589,9 +596,13 @@ Granular sub-phases use different numbering than macro phases:
 - **7.29** — DataTable control + gallery/datatable paging (`pageSize`, `offset`, Load more, `QueryOverrides.Offset`)
 - **7.30** — Studio canvas UX polish (single-line toolbox + Shapes flyout, designer host CSS, container nest-any + insert-into-selection)
 - **7.31** — Studio canvas editor UX (context menu, nest menu, Shift-only snap guides, property typing guards)
+- **8.0** — Enterprise ALM (static validator: unpublish/rollback/deprecate + promote)
 - **8.1** — MinIO publish artifacts (upload snapshot blob to MinIO on publish, record `packages.package_url`/`package_hash`, runtime prefers the artifact with `snapshot_json` fallback)
 - **8.2** — MinIO artifact GC (ref-safe deprecate GC; Unpublish never deletes blobs)
+- **9.0 → 9.3** — Production hardening (security, reliability, frontend states, ops/CI)
 
+Run: `node infrastructure/scripts/validate-phase-7.1.mjs`
+Run: `node infrastructure/scripts/validate-phase-7.2.mjs`
 Run: `node infrastructure/scripts/validate-phase-7.13.mjs`
 Run: `node infrastructure/scripts/validate-phase-7.14.mjs`
 Run: `node infrastructure/scripts/validate-phase-7.15.mjs`
@@ -611,6 +622,7 @@ Run: `node infrastructure/scripts/validate-phase-7.28.mjs`
 Run: `node infrastructure/scripts/validate-phase-7.29.mjs`
 Run: `node infrastructure/scripts/validate-phase-7.30.mjs`
 Run: `node infrastructure/scripts/validate-phase-7.31.mjs`
+Run: `node infrastructure/scripts/validate-phase-8.0.mjs`
 Run: `node infrastructure/scripts/validate-phase-8.1.mjs`
 Run: `node infrastructure/scripts/validate-phase-8.2.mjs`
 
@@ -693,7 +705,7 @@ Metadata service only:
 
 - `PublishService.Publish` now uploads the same snapshot bytes it writes to `application_snapshots.snapshot_json` into MinIO, then records the resulting URL + sha256 hash on the `packages` table (`ApplicationVersionID`, `PackageURL`, `PackageHash` — previously unused columns).
 - `RuntimeService.loadPublishedPackage` (used by the `published` channel and environment-scoped loads) now prefers the MinIO artifact when a `packages` row exists and downloads/verifies successfully, and transparently falls back to `application_snapshots.snapshot_json` on any miss: no row, download error, or sha256 mismatch.
-- Publish never fails because of MinIO. If MinIO is unreachable/unconfigured, or the `packages` insert fails (e.g. a duplicate hash), the failure is logged and swallowed — the version still publishes successfully with the DB snapshot as its only backing store.
+- When MinIO is configured (`MINIO_ENDPOINT` set), upload or packages-row failures **fail the publish** (Phase 9.1). When MinIO is unset, publish remains DB-only for local/dev.
 - `snapshot_json` remains the source of truth and is kept as the fallback for at least one release; no read path removes it.
 
 ## Config
@@ -723,7 +735,7 @@ If `MINIO_ENDPOINT` is unset, the artifact store is treated as "not configured" 
 - `ArtifactStore.Delete` removes a publish artifact by URL (same URL parse path as Download).
 - After a successful `Deprecate`, if the version is **not** referenced by `applications.current_version_id` and no `environments.current_version_id`, best-effort MinIO delete runs and the `packages` row is removed. `application_snapshots.snapshot_json` is kept as the runtime fallback.
 - **Unpublish stays pointer-only** — never deletes MinIO blobs (environments may still reference versions).
-- GC failures are logged and swallowed (same soft-fail policy as Phase 8.1 upload).
+- GC failures are logged and swallowed (best-effort; prefer metrics/alerts over blocking Deprecate).
 
 ## Out of scope (8.2)
 
@@ -754,7 +766,7 @@ No Marketplace yet.
 
 Next focus:
 
-Workflow entity-change / record triggers (post 7.31).
+Post–Phase 9.x: optional Redis-backed runtime sessions for multi-replica; workflow entity-change / record triggers (new feature — only after hardening is accepted).
 
 
 ---

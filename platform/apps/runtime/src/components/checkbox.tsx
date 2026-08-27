@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
 import { useParentItemDefault } from "../hooks/use-parent-item-default";
 import { useFormEditContext } from "../form-edit-context";
 import { parseParentItemField } from "../utils/parent-item-field";
 import { useControlValueStore } from "../formula/formula-context";
 import { useRuntimeActionHandler } from "../hooks/use-runtime-action-handler";
+import { parseLooseBoolean } from "../hooks/use-editable-control-value";
 
 function readPropertyFormula(property: unknown): string {
   if (property && typeof property === "object" && "formula" in property) {
@@ -19,7 +20,7 @@ function readBooleanProperty(property: unknown, fallback = false): boolean {
     return property;
   }
   if (property && typeof property === "object" && "value" in property) {
-    return Boolean((property as { value?: unknown }).value);
+    return parseLooseBoolean((property as { value?: unknown }).value);
   }
   return fallback;
 }
@@ -29,37 +30,44 @@ export const Checkbox: React.FC<any> = ({
   checked = false,
   default: defaultProperty,
   disabled = false,
+  readOnly = false,
   onChange,
   controlName,
   name,
+  id,
 }) => {
   const label = useResolvedPropertyText(text, "Checkbox");
   const formEdit = useFormEditContext();
   const controlValueStore = useControlValueStore();
   const defaultFormula = readPropertyFormula(defaultProperty);
   const bindingField = defaultFormula ? parseParentItemField(defaultFormula) : null;
-  const usesDefaultBinding = Boolean(formEdit && bindingField && defaultProperty);
+  const usesDefaultBinding = Boolean(bindingField && defaultProperty);
   const resolvedDefault = useParentItemDefault(defaultProperty);
   const staticChecked = readBooleanProperty(checked, false);
   const resolvedControlName = controlName ?? name;
   const runOnChange = useRuntimeActionHandler(onChange, resolvedControlName, "OnChange");
+  const externalChecked = usesDefaultBinding
+    ? parseLooseBoolean(resolvedDefault)
+    : staticChecked;
+  const isLocked = Boolean(disabled || readOnly || formEdit?.isReadOnly);
 
-  const [localChecked, setLocalChecked] = useState(
-    usesDefaultBinding ? resolvedDefault === "true" : staticChecked,
-  );
+  const [localChecked, setLocalChecked] = useState(externalChecked);
+  const focusedRef = useRef(false);
+  const prevRecordKey = useRef(formEdit?.recordKey ?? null);
 
   useEffect(() => {
-    if (usesDefaultBinding) {
-      setLocalChecked(resolvedDefault === "true");
-    }
-  }, [usesDefaultBinding, resolvedDefault]);
-
-  const isChecked = usesDefaultBinding ? localChecked : staticChecked;
+    const recordKey = formEdit?.recordKey ?? null;
+    const recordChanged = prevRecordKey.current !== recordKey;
+    prevRecordKey.current = recordKey;
+    if (focusedRef.current && !recordChanged) return;
+    setLocalChecked(externalChecked);
+  }, [externalChecked, formEdit?.recordKey]);
 
   const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (isLocked) return;
     const nextValue = event.target.checked;
+    setLocalChecked(nextValue);
     if (usesDefaultBinding && bindingField) {
-      setLocalChecked(nextValue);
       formEdit?.reportUpdate(bindingField, nextValue);
     }
     if (resolvedControlName) {
@@ -68,21 +76,33 @@ export const Checkbox: React.FC<any> = ({
     await runOnChange();
   };
 
+  const onFocus = useCallback(() => {
+    focusedRef.current = true;
+  }, []);
+  const onBlur = useCallback(() => {
+    focusedRef.current = false;
+  }, []);
+
   return (
     <label
+      htmlFor={id}
       style={{
         display: "flex",
         alignItems: "center",
         gap: 8,
         width: "100%",
-        height: "100%",
+        minHeight: 32,
         boxSizing: "border-box",
+        opacity: isLocked ? 0.7 : 1,
       }}
     >
       <input
+        id={id}
         type="checkbox"
-        checked={isChecked}
-        disabled={disabled}
+        checked={localChecked}
+        disabled={isLocked}
+        onFocus={onFocus}
+        onBlur={onBlur}
         onChange={handleChange}
       />
       {label}

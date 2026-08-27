@@ -44,9 +44,13 @@
 }
 
 .surface input:disabled,
-.surface select:disabled {
+.surface select:disabled,
+.surface input:read-only,
+.surface input[aria-readonly="true"],
+.surface select[aria-readonly="true"] {
   opacity: 0.55;
   cursor: not-allowed;
+  background: var(--color-bg-hover, #f2f2f7);
 }
 
 .surface span {

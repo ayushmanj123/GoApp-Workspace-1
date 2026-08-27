@@ -77,8 +77,12 @@ export function authHeaders(): Record<string, string> {
 }
 
 export function keycloakConfig() {
+  const url = import.meta.env.VITE_KEYCLOAK_URL as string | undefined;
+  if (import.meta.env.PROD && !url) {
+    throw new Error("VITE_KEYCLOAK_URL is required in production builds");
+  }
   return {
-    url: (import.meta.env.VITE_KEYCLOAK_URL as string | undefined) ?? "http://localhost:8080",
+    url: url ?? "http://localhost:8080",
     realm: (import.meta.env.VITE_KEYCLOAK_REALM as string | undefined) ?? "goapps",
     clientId:
       (import.meta.env.VITE_KEYCLOAK_CLIENT_ID as string | undefined) ?? "goapps-platform",

@@ -1,10 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
 import { useParentItemDefault } from "../hooks/use-parent-item-default";
 import { useFormEditContext } from "../form-edit-context";
 import { parseParentItemField } from "../utils/parent-item-field";
 import { useControlValueStore } from "../formula/formula-context";
 import { useRuntimeActionHandler } from "../hooks/use-runtime-action-handler";
+import {
+  normalizeDateInputValue,
+  useEditableControlValue,
+} from "../hooks/use-editable-control-value";
 
 function readPropertyFormula(property: unknown): string {
   if (property && typeof property === "object" && "formula" in property) {
@@ -14,38 +18,52 @@ function readPropertyFormula(property: unknown): string {
   return "";
 }
 
+const inputChrome: React.CSSProperties = {
+  width: "100%",
+  height: "100%",
+  minHeight: 32,
+  boxSizing: "border-box",
+  border: "1px solid #c8c8c8",
+  borderRadius: 4,
+  padding: "4px 8px",
+  font: "inherit",
+  background: "#fff",
+};
+
 export const DatePicker: React.FC<any> = ({
   value = "",
   default: defaultProperty,
   disabled = false,
+  readOnly = false,
   onChange,
   controlName,
   name,
+  id,
 }) => {
   const formEdit = useFormEditContext();
   const controlValueStore = useControlValueStore();
   const defaultFormula = readPropertyFormula(defaultProperty);
   const bindingField = defaultFormula ? parseParentItemField(defaultFormula) : null;
-  const usesDefaultBinding = Boolean(formEdit && bindingField && defaultProperty);
+  const usesDefaultBinding = Boolean(bindingField && defaultProperty);
   const resolvedDefault = useParentItemDefault(defaultProperty);
   const resolvedValue = useResolvedPropertyText(usesDefaultBinding ? undefined : value);
   const resolvedControlName = controlName ?? name;
   const runOnChange = useRuntimeActionHandler(onChange, resolvedControlName, "OnChange");
+  const externalValue = normalizeDateInputValue(
+    usesDefaultBinding ? resolvedDefault : resolvedValue,
+  );
+  const isLocked = Boolean(disabled || readOnly || formEdit?.isReadOnly);
 
-  const [localValue, setLocalValue] = useState(resolvedDefault);
-
-  useEffect(() => {
-    if (usesDefaultBinding) {
-      setLocalValue(resolvedDefault);
-    }
-  }, [usesDefaultBinding, resolvedDefault]);
-
-  const displayValue = usesDefaultBinding ? localValue : resolvedValue;
+  const { value: localValue, setValue, onFocus, onBlur } =
+    useEditableControlValue(externalValue, {
+      recordKey: formEdit?.recordKey ?? null,
+    });
 
   const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (isLocked) return;
     const nextValue = event.target.value;
+    setValue(nextValue);
     if (usesDefaultBinding && bindingField) {
-      setLocalValue(nextValue);
       formEdit?.reportUpdate(bindingField, nextValue);
     }
     if (resolvedControlName) {
@@ -56,12 +74,17 @@ export const DatePicker: React.FC<any> = ({
 
   return (
     <input
+      id={id}
       type="date"
       data-testid={resolvedControlName ? `datepicker-${resolvedControlName}` : undefined}
-      value={displayValue}
-      disabled={disabled}
+      value={localValue}
+      disabled={isLocked}
+      readOnly={Boolean(readOnly || formEdit?.isReadOnly)}
+      aria-readonly={isLocked || undefined}
+      onFocus={onFocus}
+      onBlur={onBlur}
       onChange={handleChange}
-      style={{ width: "100%", height: "100%", boxSizing: "border-box" }}
+      style={inputChrome}
     />
   );
 };

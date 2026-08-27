@@ -104,7 +104,7 @@ type PostgresRestConnectorRepository struct {
 }
 
 func NewPostgresRestConnectorRepository(db *gorm.DB) *PostgresRestConnectorRepository {
-	key, err := secrets.LoadMasterKey(true)
+	key, err := secrets.LoadMasterKeyFromEnv()
 	if err != nil {
 		log.Printf("databinding: secrets master key unavailable: %v", err)
 	}

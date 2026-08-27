@@ -24,6 +24,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: goapps-platform-config
+            - secretRef:
+                name: goapps-platform-secrets
           env:
             - name: SERVICE_NAME
               value: metadata-service

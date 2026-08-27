@@ -1,6 +1,16 @@
 import { apiClient, PagedData } from "./metadata-client";
 
-export type EntityFieldType = "text" | "number" | "boolean" | "date" | "lookup";
+export type EntityFieldType =
+  | "text"
+  | "number"
+  | "boolean"
+  | "date"
+  | "lookup"
+  | "integer"
+  | "decimal"
+  | "currency"
+  | "choice"
+  | "option";
 
 export interface EntityRecord {
   id: string;
@@ -25,6 +35,7 @@ export interface EntityFieldRecord {
   field_type: EntityFieldType;
   is_required?: boolean;
   related_entity_id?: string | null;
+  options?: string[];
   CreatedOn?: string;
   ModifiedOn?: string;
   created_on?: string;

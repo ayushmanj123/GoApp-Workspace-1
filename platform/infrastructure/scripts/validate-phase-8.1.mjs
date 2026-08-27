@@ -6,7 +6,8 @@
  * in-memory fake MinIO client to deterministically exercise:
  *   - publish uploads the snapshot blob and records packages.package_url/hash
  *   - runtime prefers the MinIO artifact over snapshot_json when present
- *   - publish still succeeds (DB snapshot only) when MinIO upload fails
+ *   - publish fails when MinIO is configured and upload fails (Phase 9.1)
+ *   - publish still succeeds with DB-only snapshot when MinIO is not configured
  *   - runtime falls back to snapshot_json on artifact download failure or
  *     sha256 hash mismatch
  * These pass with or without a real MinIO server, so they always run.

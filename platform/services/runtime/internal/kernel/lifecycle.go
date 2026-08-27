@@ -155,7 +155,7 @@ func extractGalleryReferences(control RuntimeControl) []string {
 	return references
 }
 
-var formReferencePat = regexp.MustCompile(`([A-Za-z][A-Za-z0-9]*)\.(Mode|Valid|Unsaved|Item)`)
+var formReferencePat = regexp.MustCompile(`([A-Za-z][A-Za-z0-9]*)\.(Mode|Valid|Unsaved|Item|Updates|LastSubmit|Error)`)
 
 func extractFormReferences(control RuntimeControl) []string {
 	references := []string{}

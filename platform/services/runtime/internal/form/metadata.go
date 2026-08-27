@@ -1,6 +1,7 @@
 package form
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -62,6 +63,50 @@ func ReadDataSource(properties map[string]interface{}) string {
 		return strings.TrimSpace(value)
 	}
 	return ""
+}
+
+// ReadRequiredColumns reads optional connector/form required column names
+// from properties.requiredColumns (string slice or comma-separated string).
+func ReadRequiredColumns(properties map[string]interface{}) []string {
+	if properties == nil {
+		return nil
+	}
+	raw, ok := properties["requiredColumns"]
+	if !ok {
+		return nil
+	}
+	switch typed := raw.(type) {
+	case []string:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if name := strings.TrimSpace(item); name != "" {
+				out = append(out, name)
+			}
+		}
+		return out
+	case []interface{}:
+		out := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if name := strings.TrimSpace(fmt.Sprint(item)); name != "" && name != "<nil>" {
+				out = append(out, name)
+			}
+		}
+		return out
+	case string:
+		parts := strings.Split(typed, ",")
+		out := make([]string, 0, len(parts))
+		for _, part := range parts {
+			if name := strings.TrimSpace(part); name != "" {
+				out = append(out, name)
+			}
+		}
+		return out
+	case map[string]interface{}:
+		if value, ok := typed["value"].(string); ok {
+			return ReadRequiredColumns(map[string]interface{}{"requiredColumns": value})
+		}
+	}
+	return nil
 }
 
 func ReadModeProperty(properties map[string]interface{}) Mode {

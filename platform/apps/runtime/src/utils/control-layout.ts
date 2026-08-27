@@ -43,21 +43,28 @@ function readVisible(properties: Record<string, unknown>): boolean {
   return true;
 }
 
-function readDisplayMode(properties: Record<string, unknown>): DisplayMode {
-  const raw = properties.DisplayMode ?? properties.displayMode;
-  if (raw && typeof raw === "object" && "value" in raw) {
-    const value = String((raw as { value?: unknown }).value ?? "").trim();
-    if (value.toLowerCase() === "disabled") return "Disabled";
-    if (value.toLowerCase() === "view") return "View";
-    return "Edit";
-  }
+export function resolveDisplayMode(raw: unknown): DisplayMode | null {
+  if (raw == null) return null;
+  let value = "";
   if (typeof raw === "string") {
-    const value = raw.trim();
-    if (value.toLowerCase() === "disabled") return "Disabled";
-    if (value.toLowerCase() === "view") return "View";
-    if (value.toLowerCase() === "edit") return "Edit";
+    value = raw.trim();
+  } else if (typeof raw === "object" && "value" in raw) {
+    value = String((raw as { value?: unknown }).value ?? "").trim();
+  } else if (typeof raw === "object" && "formula" in raw) {
+    value = String((raw as { formula?: unknown }).formula ?? "").trim();
   }
-  return "Edit";
+  if (!value) return null;
+  const lower = value.toLowerCase();
+  if (lower === "disabled") return "Disabled";
+  if (lower === "view") return "View";
+  if (lower === "edit") return "Edit";
+  return null;
+}
+
+function readDisplayMode(properties: Record<string, unknown>): DisplayMode {
+  return (
+    resolveDisplayMode(properties.DisplayMode ?? properties.displayMode) ?? "Edit"
+  );
 }
 
 export function resolveControlLayout(control: ControlPackage): ResolvedLayout {

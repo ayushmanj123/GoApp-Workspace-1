@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useStudioStore } from "../../store/studioStore";
 import { useApplicationStore } from "../../store/applicationStore";
+import {
+  googleSheetsConnectorReady,
+  isGoogleSheetsConnector,
+} from "../../utils/google-sheets-columns";
 import { CreateEntityModal } from "./CreateEntityModal";
 import { AddFieldModal } from "./AddFieldModal";
 import styles from "./DataPanel.module.css";
@@ -26,18 +30,25 @@ export function DataPanel() {
   const {
     entities,
     entitiesLoading,
+    entitiesError,
     entityFieldsByEntityId,
     connectors,
     connectorsLoading,
+    connectorsError,
+    sheetColumnsByConnectorId,
+    sheetColumnsErrorByConnectorId,
+    sheetColumnsLoadingByConnectorId,
     selectedEntityId,
     selectedApplicationId,
     selectEntity,
     loadEntities,
     loadConnectors,
+    loadSheetColumns,
   } = useApplicationStore();
 
   const [createEntityOpen, setCreateEntityOpen] = useState(false);
   const [addFieldOpen, setAddFieldOpen] = useState(false);
+  const [expandedConnectorId, setExpandedConnectorId] = useState<string | null>(null);
 
   const applicationId = routeAppId ?? selectedApplicationId;
 
@@ -46,6 +57,14 @@ export function DataPanel() {
     void loadEntities(applicationId);
     void loadConnectors(applicationId);
   }, [applicationId, loadEntities, loadConnectors]);
+
+  useEffect(() => {
+    if (!expandedConnectorId) return;
+    const connector = connectors.find((item) => item.id === expandedConnectorId);
+    if (!connector || !isGoogleSheetsConnector(connector)) return;
+    if (!googleSheetsConnectorReady(connector).ready) return;
+    void loadSheetColumns(expandedConnectorId);
+  }, [expandedConnectorId, connectors, loadSheetColumns]);
 
   return (
     <aside className={`${styles.panel} ${collapsed ? styles.collapsed : ""}`}>
@@ -79,6 +98,10 @@ export function DataPanel() {
 
           {entitiesLoading ? (
             <div className={styles.loadingMsg}>Loading entities…</div>
+          ) : entitiesError ? (
+            <div className={styles.emptyMsg} role="alert">
+              Failed to load entities: {entitiesError}
+            </div>
           ) : entities.length === 0 ? (
             <div className={styles.emptyMsg}>No entities yet. Create one to define your data model.</div>
           ) : (
@@ -136,30 +159,100 @@ export function DataPanel() {
           </div>
           {connectorsLoading ? (
             <div className={styles.loadingMsg}>Loading connectors…</div>
+          ) : connectorsError ? (
+            <div className={styles.emptyMsg} role="alert">
+              Failed to load connectors: {connectorsError}
+            </div>
           ) : connectors.length === 0 ? (
             <div className={styles.emptyMsg}>
               No connectors yet. Add one under Connectors in the manager.
             </div>
           ) : (
             <ul className={styles.entityList}>
-              {connectors.map((connector) => (
-                <li key={connector.id} className={styles.entityNode}>
-                  <div className={styles.entityRow}>
-                    <button
-                      type="button"
-                      className={styles.entityBtn}
-                      data-testid={`data-connector-${connector.name}`}
-                      title="Use this name as Gallery Items formula"
-                      onClick={() => {
-                        void navigator.clipboard?.writeText(connector.name);
-                      }}
-                    >
-                      {connector.name}
-                      <span className={styles.fieldType}>{connector.connector_type}</span>
-                    </button>
-                  </div>
-                </li>
-              ))}
+              {connectors.map((connector) => {
+                const isSheets = isGoogleSheetsConnector(connector);
+                const isExpanded = expandedConnectorId === connector.id;
+                const columns = sheetColumnsByConnectorId[connector.id] ?? [];
+                const columnsError = sheetColumnsErrorByConnectorId[connector.id];
+                const columnsLoading = Boolean(
+                  sheetColumnsLoadingByConnectorId[connector.id],
+                );
+                const ready = googleSheetsConnectorReady(connector);
+
+                return (
+                  <li key={connector.id} className={styles.entityNode}>
+                    <div className={styles.entityRow}>
+                      <button
+                        type="button"
+                        className={[
+                          styles.entityBtn,
+                          isExpanded ? styles.entityBtnSelected : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        data-testid={`data-connector-${connector.name}`}
+                        title={
+                          isSheets
+                            ? "Click to show sheet columns; name is also copied"
+                            : "Use this name as Gallery Items formula"
+                        }
+                        onClick={() => {
+                          void navigator.clipboard?.writeText(connector.name);
+                          if (!isSheets) return;
+                          setExpandedConnectorId((prev) =>
+                            prev === connector.id ? null : connector.id,
+                          );
+                        }}
+                      >
+                        {connector.name}
+                        <span className={styles.fieldType}>{connector.connector_type}</span>
+                      </button>
+                      {isSheets ? (
+                        <button
+                          type="button"
+                          className={styles.fieldBtn}
+                          title="Refresh columns"
+                          data-testid={`data-refresh-columns-${connector.name}`}
+                          onClick={() => {
+                            setExpandedConnectorId(connector.id);
+                            void loadSheetColumns(connector.id, true);
+                          }}
+                        >
+                          Columns
+                        </button>
+                      ) : null}
+                    </div>
+                    {isSheets && isExpanded ? (
+                      columnsLoading ? (
+                        <div className={styles.loadingMsg}>Loading columns…</div>
+                      ) : columnsError ? (
+                        <div className={styles.emptyMsg} role="alert">
+                          {columnsError}
+                        </div>
+                      ) : !ready.ready ? (
+                        <div className={styles.emptyMsg}>{ready.reason}</div>
+                      ) : columns.length === 0 ? (
+                        <div className={styles.emptyMsg}>
+                          No header columns found. Check sheet name and header row.
+                        </div>
+                      ) : (
+                        <ul className={styles.fieldList}>
+                          {columns.map((column) => (
+                            <li
+                              key={column}
+                              className={styles.fieldItem}
+                              data-testid={`data-sheet-column-${connector.name}-${column}`}
+                            >
+                              {column}
+                              <span className={styles.fieldType}>column</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

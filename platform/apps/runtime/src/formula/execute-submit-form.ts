@@ -50,6 +50,10 @@ export function parseSubmitFormFormula(formula: string): ParsedSubmitForm | null
 
 /**
  * Executes SubmitForm(FormName) by appending Form.Updates to RuntimeRecordStore.
+ *
+ * Gated to no-session / offline paths only. When a runtime session exists,
+ * use-runtime-action-handler must call executeRuntimeAction (Go Form Service)
+ * instead — this in-memory path must never shadow session SubmitForm.
  */
 export function executeSubmitForm(
   formula: string,

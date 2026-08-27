@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/goapps-platform/shared/ssrf"
 	"github.com/google/uuid"
 )
 
@@ -180,6 +181,9 @@ func (d *RestDataSource) do(ctx context.Context, cfg *RestConnectorConfig, userI
 	if err != nil {
 		return nil, 0, fmt.Errorf("databinding: build rest url: %w", err)
 	}
+	if err := ssrf.ValidateHTTPURL(target); err != nil {
+		return nil, 0, fmt.Errorf("databinding: rest url blocked: %w", err)
+	}
 
 	var reader io.Reader
 	if len(payload) > 0 {
@@ -242,6 +246,9 @@ func (d *RestDataSource) oauthAccessToken(ctx context.Context, cfg *RestConnecto
 	}
 	if strings.TrimSpace(cfg.Auth.TokenURL) == "" {
 		return "", fmt.Errorf("databinding: oauth token_url is required")
+	}
+	if err := ssrf.ValidateHTTPURL(cfg.Auth.TokenURL); err != nil {
+		return "", fmt.Errorf("databinding: oauth token_url blocked: %w", err)
 	}
 	if strings.TrimSpace(cfg.Auth.ClientID) == "" || strings.TrimSpace(cfg.Auth.ClientSecret) == "" {
 		return "", fmt.Errorf("databinding: oauth client_id and client_secret are required")

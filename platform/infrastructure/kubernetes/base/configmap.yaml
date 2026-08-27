@@ -8,10 +8,15 @@ metadata:
 data:
   APP_ENV: production
   LOG_LEVEL: info
+  AUTH_MODE: keycloak
+  # Comma-separated browser origins for Studio/Runtime (required in production; never "*").
+  CORS_ALLOW_ORIGINS: https://studio.example.com,https://runtime.example.com
   # Infrastructure endpoints — override per environment via overlays.
-  DATABASE_URL: postgres://goapps:changeme@postgres:5432/goapps?sslmode=disable
+  # Credentials live in goapps-platform-secrets (Secret), not here.
   REDIS_URL: redis://redis:6379
   KEYCLOAK_URL: http://keycloak:8080
   KEYCLOAK_REALM: goapps
+  KEYCLOAK_CLIENT_ID: goapps-platform
   MINIO_ENDPOINT: minio:9000
   MINIO_PUBLISH_BUCKET: goapps-publish
+  MINIO_USE_SSL: "false"

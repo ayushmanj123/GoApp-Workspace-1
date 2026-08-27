@@ -60,7 +60,7 @@ type PostgresGoogleSheetsConnectorRepository struct {
 }
 
 func NewPostgresGoogleSheetsConnectorRepository(db *gorm.DB) *PostgresGoogleSheetsConnectorRepository {
-	key, err := secrets.LoadMasterKey(true)
+	key, err := secrets.LoadMasterKeyFromEnv()
 	if err != nil {
 		log.Printf("databinding: secrets master key unavailable: %v", err)
 	}

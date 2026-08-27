@@ -102,9 +102,8 @@ export function ConnectorsListView() {
         <div className={styles.headerText}>
           <h1 className={styles.title}>Connectors</h1>
           <p className={styles.subtitle}>
-            Configure REST and SQL data sources for your apps. Bind a Gallery Items formula
-            to a connector name.
-            to a connector name to load external rows at runtime.
+            Configure REST and SQL data sources for your apps. Bind a Gallery Items
+            formula to a connector name to load external rows at runtime.
           </p>
         </div>
         <Button

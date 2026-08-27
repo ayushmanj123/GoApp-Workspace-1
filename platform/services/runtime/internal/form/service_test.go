@@ -547,3 +547,141 @@ func TestSubmitRESTUsesDataSource(t *testing.T) {
 	}
 }
 
+func TestLastSubmitAndUpdatesAndError(t *testing.T) {
+	store := NewSessionStore()
+	galleryStore := gallery.NewSessionStore()
+	sessionID := uuid.New()
+	entityID := uuid.New()
+	recordID := uuid.New()
+	galleryStore.Set(sessionID, "Gallery1", &gallery.State{
+		Selected: map[string]interface{}{
+			"recordId": recordID.String(),
+			"entityId": entityID.String(),
+			"version":  1,
+			"Name":     "Alice",
+		},
+	})
+	svc := NewService(store, &fakeRecordService{}, &fakeRecordService{}, nil, nil, galleryStore)
+	control := testFormControl()
+	tenantID := uuid.New()
+	if _, err := svc.SetMode(context.Background(), sessionID, tenantID, uuid.New(), control, ModeEdit); err != nil {
+		t.Fatalf("SetMode: %v", err)
+	}
+	if _, err := svc.Update(context.Background(), sessionID, tenantID, uuid.New(), control, map[string]interface{}{"Name": "Bob"}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	reader := NewReaderWithService(store, sessionID, svc)
+	updates, ok := reader.ResolveReference("Form1.Updates")
+	if !ok {
+		t.Fatal("expected Updates")
+	}
+	updateMap, _ := updates.(map[string]interface{})
+	if updateMap["Name"] != "Bob" {
+		t.Fatalf("expected Updates.Name=Bob, got %#v", updates)
+	}
+	_, _, err := svc.Submit(context.Background(), sessionID, tenantID, uuid.New(), uuid.New(), control)
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	last, ok := reader.ResolveReference("Form1.LastSubmit")
+	if !ok {
+		t.Fatal("expected LastSubmit")
+	}
+	lastMap, _ := last.(map[string]interface{})
+	if lastMap["Name"] != "Bob" && lastMap["Name"] != "Updated" {
+		t.Fatalf("expected LastSubmit name, got %#v", last)
+	}
+}
+
+func TestGallerySyncSkipsDirtyEdit(t *testing.T) {
+	store := NewSessionStore()
+	galleryStore := gallery.NewSessionStore()
+	sessionID := uuid.New()
+	galleryStore.Set(sessionID, "Gallery1", &gallery.State{
+		Selected: map[string]interface{}{"Name": "Alice", "recordId": uuid.New().String(), "entityId": uuid.New().String(), "version": 1},
+	})
+	svc := NewService(store, &fakeRecordService{}, &fakeRecordService{}, nil, nil, galleryStore)
+	control := testFormControl()
+	if _, err := svc.SetMode(context.Background(), sessionID, uuid.New(), uuid.New(), control, ModeEdit); err != nil {
+		t.Fatalf("SetMode: %v", err)
+	}
+	if _, err := svc.Update(context.Background(), sessionID, uuid.New(), uuid.New(), control, map[string]interface{}{"Name": "Dirty"}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	galleryStore.Set(sessionID, "Gallery1", &gallery.State{
+		Selected: map[string]interface{}{"Name": "Other", "recordId": uuid.New().String(), "entityId": uuid.New().String(), "version": 1},
+	})
+	updated := svc.SyncGallerySelection(sessionID, "Gallery1", []ControlMetadata{control})
+	if len(updated) != 0 {
+		t.Fatalf("expected dirty form not synced, got %#v", updated)
+	}
+	state, err := svc.Get(sessionID, control.Name)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if state.CurrentRecord["Name"] != "Dirty" {
+		t.Fatalf("expected Dirty preserved, got %#v", state.CurrentRecord)
+	}
+}
+
+func TestExplicitItemLiteralAndNewDefaults(t *testing.T) {
+	store := NewSessionStore()
+	entityID := uuid.New()
+	schema := &fakeRecordService{
+		schema: &records.EntitySchema{
+			EntityID: entityID,
+			Fields: []records.FieldSchema{
+				{Name: "Name", FieldType: "text", IsRequired: true},
+				{Name: "Age", FieldType: "number", IsRequired: false},
+			},
+		},
+	}
+	svc := NewService(store, schema, schema, &fakeBindingResolver{entityID: entityID, name: "Customers"}, nil, gallery.NewSessionStore())
+	control := ControlMetadata{
+		Name:        "Form1",
+		ControlType: "form",
+		Formulas:    []FormulaBinding{{PropertyName: "item", FormulaText: `{Name: "Pat"}`}},
+		Properties: map[string]interface{}{
+			"dataSource": "Customers",
+			"mode":       map[string]interface{}{"value": "View"},
+		},
+	}
+	state, err := svc.Load(context.Background(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), control)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if state.CurrentRecord["Name"] != "Pat" {
+		t.Fatalf("expected explicit item Name=Pat, got %#v", state.CurrentRecord)
+	}
+
+	sessionID := uuid.New()
+	control.Formulas = []FormulaBinding{{PropertyName: "item", FormulaText: "Gallery1.Selected"}}
+	if _, err := svc.SetMode(context.Background(), sessionID, uuid.New(), uuid.New(), control, ModeNew); err != nil {
+		t.Fatalf("NewForm: %v", err)
+	}
+	newState, err := svc.Get(sessionID, control.Name)
+	if err != nil {
+		t.Fatalf("Get new: %v", err)
+	}
+	if _, ok := newState.CurrentRecord["Name"]; !ok {
+		t.Fatalf("expected schema default keys on New, got %#v", newState.CurrentRecord)
+	}
+}
+
+type fakeBindingResolver struct {
+	entityID uuid.UUID
+	name     string
+}
+
+func (f *fakeBindingResolver) Resolve(ctx context.Context, tenantID, appID uuid.UUID, dataSourceName string, overrides databinding.QueryOverrides) (*databinding.ResolvedBinding, databinding.QueryInput, error) {
+	_ = ctx
+	_ = tenantID
+	_ = appID
+	_ = overrides
+	return &databinding.ResolvedBinding{
+		Name:     f.name,
+		Kind:     databinding.DataSourceKindEntity,
+		EntityID: f.entityID,
+	}, databinding.QueryInput{}, nil
+}
+

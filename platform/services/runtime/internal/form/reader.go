@@ -11,10 +11,15 @@ import (
 type Reader struct {
 	store     *SessionStore
 	sessionID uuid.UUID
+	service   *Service
 }
 
 func NewReader(store *SessionStore, sessionID uuid.UUID) *Reader {
 	return &Reader{store: store, sessionID: sessionID}
+}
+
+func NewReaderWithService(store *SessionStore, sessionID uuid.UUID, service *Service) *Reader {
+	return &Reader{store: store, sessionID: sessionID, service: service}
 }
 
 func (r *Reader) ResolveReference(reference string) (any, bool) {
@@ -34,6 +39,12 @@ func (r *Reader) ResolveReference(reference string) (any, bool) {
 	case "Mode":
 		return string(state.Mode), true
 	case "Valid":
+		if r.service != nil && state.TenantID != uuid.Nil {
+			state = r.service.refreshValidation(context.Background(), r.sessionID, state.TenantID, parts[0])
+			if state == nil {
+				return true, true
+			}
+		}
 		return len(state.ValidationErrors) == 0, true
 	case "Unsaved":
 		return len(state.DirtyFields) > 0, true
@@ -42,6 +53,24 @@ func (r *Reader) ResolveReference(reference string) (any, bool) {
 			return map[string]interface{}{}, true
 		}
 		return cloneRecord(state.CurrentRecord), true
+	case "Updates":
+		if state.DirtyFields == nil {
+			return map[string]interface{}{}, true
+		}
+		return cloneRecord(state.DirtyFields), true
+	case "LastSubmit":
+		if state.LastSubmit == nil {
+			return map[string]interface{}{}, true
+		}
+		return cloneRecord(state.LastSubmit), true
+	case "Error":
+		if state.LastError == nil {
+			return nil, true
+		}
+		return map[string]interface{}{
+			"message": state.LastError.Message,
+			"issues":  state.LastError.Issues,
+		}, true
 	default:
 		return nil, false
 	}

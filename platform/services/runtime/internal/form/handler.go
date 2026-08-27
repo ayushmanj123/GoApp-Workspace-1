@@ -43,7 +43,10 @@ type FormResponse struct {
 	CurrentRecord    map[string]interface{} `json:"currentRecord"`
 	OriginalRecord   map[string]interface{} `json:"originalRecord,omitempty"`
 	DirtyFields      map[string]interface{} `json:"dirtyFields,omitempty"`
+	Updates          map[string]interface{} `json:"updates,omitempty"`
 	ValidationErrors []ValidationIssue      `json:"validationErrors,omitempty"`
+	LastSubmit       map[string]interface{} `json:"lastSubmit,omitempty"`
+	Error            *FormError             `json:"error,omitempty"`
 	DataSource       string                 `json:"dataSource,omitempty"`
 	Unsaved          bool                   `json:"unsaved"`
 	Valid            bool                   `json:"valid"`
@@ -207,7 +210,10 @@ func toFormResponse(controlID string, state *State) FormResponse {
 		CurrentRecord:    state.CurrentRecord,
 		OriginalRecord:   state.OriginalRecord,
 		DirtyFields:      state.DirtyFields,
+		Updates:          state.DirtyFields,
 		ValidationErrors: state.ValidationErrors,
+		LastSubmit:       state.LastSubmit,
+		Error:            state.LastError,
 		DataSource:       state.DataSource,
 		Unsaved:          len(state.DirtyFields) > 0,
 		Valid:            len(state.ValidationErrors) == 0,

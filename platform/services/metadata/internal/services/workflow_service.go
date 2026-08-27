@@ -339,7 +339,7 @@ func (s *WorkflowService) RunWebhook(ctx context.Context, workflowID uuid.UUID, 
 	if err != nil || sec == nil {
 		return nil, fmt.Errorf("webhook unauthorized: secret not found")
 	}
-	key, err := secrets.LoadMasterKey(true)
+	key, err := secrets.LoadMasterKeyFromEnv()
 	if err != nil {
 		return nil, fmt.Errorf("load secrets master key: %w", err)
 	}
@@ -394,7 +394,7 @@ func upsertWorkflowWebhookSecret(
 	tenantID, appID uuid.UUID,
 	workflowName, plaintext, existingSecretID string,
 ) (string, error) {
-	key, err := secrets.LoadMasterKey(true)
+	key, err := secrets.LoadMasterKeyFromEnv()
 	if err != nil {
 		return "", fmt.Errorf("load secrets master key: %w", err)
 	}

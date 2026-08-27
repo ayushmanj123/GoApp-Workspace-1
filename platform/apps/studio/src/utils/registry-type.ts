@@ -12,6 +12,8 @@ const REGISTRY_ALIASES: Record<string, string> = {
 
   form: "Form",
 
+  datacard: "DataCard",
+
   timer: "Timer",
 
   component: "Component",
@@ -59,6 +61,8 @@ const STUDIO_REGISTRY_TYPES = new Set([
   "DataTable",
 
   "Form",
+
+  "DataCard",
 
   "Timer",
 

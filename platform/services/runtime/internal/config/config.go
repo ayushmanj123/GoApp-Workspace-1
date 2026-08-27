@@ -21,6 +21,9 @@ type Config struct {
 	MetricsEnabled          bool          `env:"METRICS_ENABLED" envDefault:"true"`
 }
 
+// defaultProductionSessionMax caps in-memory sessions when SESSION_MAX is unset in production.
+const defaultProductionSessionMax = 10000
+
 // Load reads configuration from the environment.
 func Load() (Config, error) {
 	var cfg Config
@@ -32,5 +35,8 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	cfg.Auth = authCfg
+	if config.IsProduction() && cfg.SessionMax <= 0 {
+		cfg.SessionMax = defaultProductionSessionMax
+	}
 	return cfg, nil
 }

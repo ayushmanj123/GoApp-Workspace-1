@@ -16,7 +16,10 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	app := server.New(cfg)
+	app, err := server.New(cfg)
+	if err != nil {
+		log.Fatalf("failed to create server: %v", err)
+	}
 
 	go func() {
 		if err := app.Listen(cfg.Addr()); err != nil {

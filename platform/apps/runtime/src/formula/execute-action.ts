@@ -78,6 +78,7 @@ export async function executeAction(
   }
 
   if (/^SubmitForm\s*\(/i.test(trimmed)) {
+    // Offline / design-time only. Session apps must use executeRuntimeAction → Go Form Service.
     executeSubmitForm(
       trimmed,
       services.formUpdatesStore,

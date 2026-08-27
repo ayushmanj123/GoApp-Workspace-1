@@ -301,7 +301,7 @@ func decryptSecretByID(ctx context.Context, sess repositories.TenantSession, id 
 	if err != nil || sec == nil {
 		return "", fmt.Errorf("load secret: %w", err)
 	}
-	key, err := secrets.LoadMasterKey(true)
+	key, err := secrets.LoadMasterKeyFromEnv()
 	if err != nil {
 		return "", fmt.Errorf("load secrets master key: %w", err)
 	}

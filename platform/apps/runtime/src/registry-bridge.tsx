@@ -21,6 +21,8 @@ import { DataTable } from "./components/datatable";
 
 import { Form } from "./components/form";
 
+import { DataCard } from "./components/datacard";
+
 import { Timer } from "./components/timer";
 
 import { Checkbox } from "./components/checkbox";
@@ -74,6 +76,8 @@ const RUNTIME_TYPES = [
   "DataTable",
 
   "Form",
+
+  "DataCard",
 
   "Timer",
 
@@ -173,6 +177,8 @@ function registerRuntime() {
 
           controlName={p.controlName}
 
+          id={p.id}
+
           onChange={p.onChange}
 
         />
@@ -205,9 +211,13 @@ function registerRuntime() {
 
           disabled={p.disabled}
 
+          readOnly={p.readOnly}
+
           controlName={p.controlName}
 
           name={p.name}
+
+          id={p.id}
 
           onChange={p.onChange}
 
@@ -294,6 +304,22 @@ function registerRuntime() {
       events: [],
 
       renderRuntime: (p: any) => <Form {...p} />,
+
+      renderDesigner: noopDesigner,
+
+    },
+
+    {
+
+      type: "DataCard",
+
+      category: "layout",
+
+      properties: [],
+
+      events: [],
+
+      renderRuntime: (p: any) => <DataCard {...p} />,
 
       renderDesigner: noopDesigner,
 

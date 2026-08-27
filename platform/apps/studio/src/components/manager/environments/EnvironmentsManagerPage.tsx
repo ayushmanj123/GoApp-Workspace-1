@@ -63,14 +63,19 @@ export function EnvironmentsManagerPage() {
   const openRuntime = (env: EnvironmentRecord) => {
     if (!selectedAppId) return;
     if (!env.current_version_id) {
-      window.alert(
+      setError(
         `Environment "${env.name}" has no promoted version yet. Promote a release first.`,
       );
       return;
     }
-    const base =
-      (import.meta.env.VITE_RUNTIME_APP_URL as string | undefined)?.replace(/\/$/, "") ??
-      "http://localhost:5174";
+    const configured = (
+      import.meta.env.VITE_RUNTIME_APP_URL as string | undefined
+    )?.replace(/\/$/, "");
+    if (!configured && import.meta.env.PROD) {
+      setError("VITE_RUNTIME_APP_URL is not configured");
+      return;
+    }
+    const base = configured ?? "http://localhost:5174";
     window.open(
       `${base}/apps/${selectedAppId}?environmentId=${encodeURIComponent(env.id)}`,
       "_blank",

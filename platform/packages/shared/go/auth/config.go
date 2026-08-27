@@ -36,6 +36,9 @@ func LoadConfig() (Config, error) {
 // Validate ensures configuration is coherent for the selected auth mode.
 func (c Config) Validate() error {
 	mode := strings.ToLower(strings.TrimSpace(c.Mode))
+	if config.IsProduction() && mode == ModeDevelopment {
+		return fmt.Errorf("auth: AUTH_MODE=development is not allowed when APP_ENV=production")
+	}
 	switch mode {
 	case ModeDevelopment:
 		return nil

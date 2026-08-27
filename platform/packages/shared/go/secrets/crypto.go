@@ -11,6 +11,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/goapps-platform/shared/config"
 )
 
 const (
@@ -24,9 +26,25 @@ var (
 	ErrDecryptFailed    = errors.New("secrets: decrypt failed")
 )
 
+// AllowDevDefault reports whether the hardcoded development master key may be used.
+// Always false when APP_ENV=production.
+func AllowDevDefault() bool {
+	return !config.IsProduction()
+}
+
+// LoadMasterKeyFromEnv loads SECRETS_MASTER_KEY, allowing the documented development
+// default only when APP_ENV is not production.
+func LoadMasterKeyFromEnv() ([]byte, error) {
+	return LoadMasterKey(AllowDevDefault())
+}
+
 // LoadMasterKey reads SECRETS_MASTER_KEY (base64, hex, or raw 32-byte string).
 // When unset and allowDevDefault is true, returns a documented development key.
+// allowDevDefault is ignored (forced false) when APP_ENV=production.
 func LoadMasterKey(allowDevDefault bool) ([]byte, error) {
+	if config.IsProduction() {
+		allowDevDefault = false
+	}
 	raw := strings.TrimSpace(os.Getenv(envMasterKey))
 	if raw == "" {
 		if allowDevDefault {

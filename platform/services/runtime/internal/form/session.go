@@ -28,11 +28,21 @@ type State struct {
 	OriginalRecord   map[string]interface{}
 	DirtyFields      map[string]interface{}
 	ValidationErrors []ValidationIssue
+	LastSubmit       map[string]interface{}
+	LastError        *FormError
 	DataSource       string
 	DataSourceKind   string
 	EntityID         uuid.UUID
+	TenantID         uuid.UUID
 	ItemFormula      string
 	GalleryName      string
+	RequiredColumns  []string
+}
+
+// FormError captures the last submit/update failure for Form.Error.
+type FormError struct {
+	Message string             `json:"message"`
+	Issues  []ValidationIssue  `json:"issues,omitempty"`
 }
 
 // SessionStore tracks form state per runtime session.
@@ -94,12 +104,21 @@ func cloneState(state *State) *State {
 		DataSource:       state.DataSource,
 		DataSourceKind:   state.DataSourceKind,
 		EntityID:         state.EntityID,
+		TenantID:         state.TenantID,
 		ItemFormula:      state.ItemFormula,
 		GalleryName:      state.GalleryName,
+		RequiredColumns:  append([]string(nil), state.RequiredColumns...),
 		CurrentRecord:    cloneRecord(state.CurrentRecord),
 		OriginalRecord:   cloneRecord(state.OriginalRecord),
 		DirtyFields:      cloneRecord(state.DirtyFields),
+		LastSubmit:       cloneRecord(state.LastSubmit),
 		ValidationErrors: append([]ValidationIssue(nil), state.ValidationErrors...),
+	}
+	if state.LastError != nil {
+		cloned.LastError = &FormError{
+			Message: state.LastError.Message,
+			Issues:  append([]ValidationIssue(nil), state.LastError.Issues...),
+		}
 	}
 	return cloned
 }

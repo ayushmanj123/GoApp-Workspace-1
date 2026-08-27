@@ -20,6 +20,9 @@ type AuthContext struct {
 
 const fiberAuthContextKey = "authContext"
 
+// RolePlatformAdmin is the platform administration role used for mutate / ALM routes.
+const RolePlatformAdmin = "PlatformAdmin"
+
 // WithContext stores AuthContext in a standard context.Context.
 func WithContext(ctx context.Context, ac *AuthContext) context.Context {
 	return context.WithValue(ctx, contextKey{}, ac)

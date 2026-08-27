@@ -28,7 +28,10 @@ type EnvironmentSecretService struct {
 }
 
 func NewEnvironmentSecretService(store repositories.Store) *EnvironmentSecretService {
-	key, _ := secrets.LoadMasterKey(true)
+	key, err := secrets.LoadMasterKeyFromEnv()
+	if err != nil {
+		return &EnvironmentSecretService{store: store, masterKey: nil}
+	}
 	return &EnvironmentSecretService{store: store, masterKey: key}
 }
 

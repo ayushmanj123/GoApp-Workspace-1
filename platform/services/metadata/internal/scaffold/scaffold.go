@@ -312,21 +312,44 @@ func CreateCRUDApp(ctx context.Context, sess repositories.TenantSession, input C
 		if col == "" {
 			continue
 		}
+		cardID := uuid.New()
 		lblID := uuid.New()
 		inputID := uuid.New()
 		fieldName := sanitizeName(col)
+		card := models.Control{
+			TenantID: input.TenantID, ID: cardID, ScreenID: editScreen.ID, ParentControlID: &formID,
+			ControlType: "datacard", Name: "card" + fieldName, X: 16, Y: y, Width: 488, Height: 56, ZIndex: 1,
+		}
 		lbl := models.Control{
-			TenantID: input.TenantID, ID: lblID, ScreenID: editScreen.ID, ParentControlID: &formID,
-			ControlType: "label", Name: "lbl" + fieldName, X: 16, Y: y, Width: 160, Height: 28, ZIndex: 1,
+			TenantID: input.TenantID, ID: lblID, ScreenID: editScreen.ID, ParentControlID: &cardID,
+			ControlType: "label", Name: "lbl" + fieldName, X: 0, Y: 0, Width: 488, Height: 20, ZIndex: 1,
 		}
 		inp := models.Control{
-			TenantID: input.TenantID, ID: inputID, ScreenID: editScreen.ID, ParentControlID: &formID,
-			ControlType: "textinput", Name: "txt" + fieldName, X: 180, Y: y, Width: 320, Height: 32, ZIndex: 2,
+			TenantID: input.TenantID, ID: inputID, ScreenID: editScreen.ID, ParentControlID: &cardID,
+			ControlType: "textinput", Name: "txt" + fieldName, X: 0, Y: 24, Width: 488, Height: 32, ZIndex: 2,
+		}
+		if err := persistControl(ctx, sess, input.UpsertDB, &card); err != nil {
+			return err
 		}
 		if err := persistControl(ctx, sess, input.UpsertDB, &lbl); err != nil {
 			return err
 		}
 		if err := persistControl(ctx, sess, input.UpsertDB, &inp); err != nil {
+			return err
+		}
+		if err := createProperty(ctx, sess, input.UpsertDB, input.TenantID, cardID, "dataField", map[string]string{"value": col}); err != nil {
+			return err
+		}
+		if err := createProperty(ctx, sess, input.UpsertDB, input.TenantID, cardID, "default", map[string]string{"formula": "ThisItem." + col}); err != nil {
+			return err
+		}
+		if err := createProperty(ctx, sess, input.UpsertDB, input.TenantID, cardID, "required", map[string]string{"value": "false"}); err != nil {
+			return err
+		}
+		if err := createProperty(ctx, sess, input.UpsertDB, input.TenantID, cardID, "displayMode", map[string]string{"value": "Edit"}); err != nil {
+			return err
+		}
+		if err := createProperty(ctx, sess, input.UpsertDB, input.TenantID, cardID, "visible", map[string]string{"value": "true"}); err != nil {
 			return err
 		}
 		if err := createProperty(ctx, sess, input.UpsertDB, input.TenantID, lblID, "text", map[string]string{"value": col}); err != nil {
@@ -335,7 +358,7 @@ func CreateCRUDApp(ctx context.Context, sess repositories.TenantSession, input C
 		if err := createProperty(ctx, sess, input.UpsertDB, input.TenantID, inputID, "default", map[string]string{"formula": "ThisItem." + col}); err != nil {
 			return err
 		}
-		y += 44
+		y += 56
 	}
 
 	return nil

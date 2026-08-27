@@ -20,6 +20,7 @@ import (
 	"github.com/goapps-platform/runtime-service/internal/state"
 	"github.com/goapps-platform/shared/auth"
 	"github.com/goapps-platform/shared/health"
+	"github.com/goapps-platform/shared/httpx"
 	"github.com/goapps-platform/shared/logging"
 	"github.com/goapps-platform/shared/metrics"
 	"github.com/goapps-platform/shared/middleware"
@@ -80,11 +81,7 @@ func New(cfg config.Config) (*RuntimeApp, error) {
 		metrics.RegisterMetrics(app)
 	}
 	app.Use(middleware.RequestLogger(logger))
-	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Tenant-Id, X-User-Id, X-User-Email, X-Request-ID",
-		AllowMethods: "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-	}))
+	app.Use(cors.New(httpx.CORSConfig()))
 
 	db, dbErr := database.Open(database.FromServiceConfig(cfg))
 	checkers := []health.Checker{}

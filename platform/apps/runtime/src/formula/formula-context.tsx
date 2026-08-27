@@ -246,7 +246,7 @@ export function useCollectionStore(): RuntimeCollectionStore {
   return useContext(CollectionStoreContext);
 }
 
-/** Scopes formula evaluation to a form item via Parent.Item. */
+/** Scopes formula evaluation to a form item via Parent.Item and ThisItem. */
 export function FormItemProvider({
   item,
   children,
@@ -256,7 +256,11 @@ export function FormItemProvider({
 }) {
   const parentContext = useFormulaEvaluationContext();
   const formContext = useMemo(
-    () => ({ ...parentContext, Parent: { Item: item } }),
+    () => ({
+      ...parentContext,
+      ThisItem: item,
+      Parent: { Item: item },
+    }),
     [parentContext, item],
   );
 

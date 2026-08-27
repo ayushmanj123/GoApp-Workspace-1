@@ -3,25 +3,21 @@ kind: Kustomization
 
 namespace: goapps-platform
 
+# Production deployable surface: edge gateway + core services only.
+# Scaffold stubs (auth/connector/environment/audit/search) remain in-repo under
+# services/*/ but are intentionally excluded from this base kustomization.
 resources:
   - base/namespace.yaml
   - base/configmap.yaml
-  - services/auth/deployment.yaml
-  - services/auth/service.yaml
+  - base/secret.yaml
+  - services/gateway/deployment.yaml
+  - services/gateway/service.yaml
   - services/metadata/deployment.yaml
   - services/metadata/service.yaml
   - services/runtime/deployment.yaml
   - services/runtime/service.yaml
-  - services/connector/deployment.yaml
-  - services/connector/service.yaml
   - services/publish/deployment.yaml
   - services/publish/service.yaml
-  - services/environment/deployment.yaml
-  - services/environment/service.yaml
-  - services/audit/deployment.yaml
-  - services/audit/service.yaml
-  - services/search/deployment.yaml
-  - services/search/service.yaml
 
 commonLabels:
   app.kubernetes.io/part-of: goapps-platform

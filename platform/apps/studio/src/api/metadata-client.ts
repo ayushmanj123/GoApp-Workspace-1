@@ -2,10 +2,20 @@
 // In development, requests go through the Vite proxy (/api → localhost:8090/api (gateway))
 // so no CORS headers are needed. In production, set VITE_API_BASE_URL.
 
-import { activeSession, authHeaders } from "../auth/session";
+import { activeSession, authHeaders, clearSession, authMode } from "../auth/session";
 
 export const BASE_URL =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "/api/v1";
+
+function redirectToLoginOnUnauthorized(): void {
+  clearSession();
+  if (authMode() === "development") return;
+  const loginPath = "/login";
+  if (typeof window !== "undefined" && !window.location.pathname.startsWith(loginPath)) {
+    const returnTo = `${window.location.pathname}${window.location.search}`;
+    window.location.assign(`${loginPath}?returnTo=${encodeURIComponent(returnTo)}`);
+  }
+}
 
 /** Resolves the active tenant for Studio API calls. */
 export function getTenantId(): string {
@@ -61,6 +71,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   };
 
   const res = await fetch(url, { ...init, headers });
+
+  if (res.status === 401) {
+    redirectToLoginOnUnauthorized();
+    throw new ApiError(401, "Session expired");
+  }
 
   if (!res.ok) {
     let msg = res.statusText || "Request failed";

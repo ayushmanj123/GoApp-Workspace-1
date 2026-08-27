@@ -19,18 +19,12 @@ importers:
       '@goapps/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      konva:
-        specifier: ^9.3.16
-        version: 9.3.22
       react:
         specifier: ^18.3.1
         version: 18.3.1
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
-      react-konva:
-        specifier: ^18.2.10
-        version: 18.2.16(@types/react@18.3.31)(konva@9.3.22)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react-router-dom:
         specifier: ^6.14.0
         version: 6.30.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)

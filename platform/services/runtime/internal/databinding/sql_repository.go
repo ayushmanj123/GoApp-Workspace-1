@@ -59,7 +59,7 @@ type PostgresSqlConnectorRepository struct {
 }
 
 func NewPostgresSqlConnectorRepository(db *gorm.DB) *PostgresSqlConnectorRepository {
-	key, err := secrets.LoadMasterKey(true)
+	key, err := secrets.LoadMasterKeyFromEnv()
 	if err != nil {
 		log.Printf("databinding: secrets master key unavailable: %v", err)
 	}

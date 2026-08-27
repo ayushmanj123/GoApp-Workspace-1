@@ -184,9 +184,9 @@ export function ConnectorDetailView() {
         ) {
           try {
             const status = await connectorsApi.getOAuthConnection(connectorId);
-            if (!cancelled) setHasConnection(Boolean(status.connected));
+            setHasConnection(Boolean(status.connected));
           } catch {
-            if (!cancelled) setHasConnection(false);
+            setHasConnection(false);
           }
         }
         const actionPage = await connectorsApi.listActions(connectorId);
@@ -253,6 +253,19 @@ export function ConnectorDetailView() {
       } else if (isGoogleSheets) {
         authentication_type = "oauth_authorization_code";
         base_url = "";
+        if (
+          sheetPreview &&
+          sheetPreview.columns.length > 0 &&
+          keyColumn.trim() &&
+          !sheetPreview.columns.some(
+            (column) =>
+              column.trim().toLowerCase() === keyColumn.trim().toLowerCase(),
+          )
+        ) {
+          setError("Key column must match a preview header column.");
+          setSaving(false);
+          return;
+        }
         auth_config = {
           type: "oauth_authorization_code",
           connection_scope: connectionScope,
@@ -349,6 +362,12 @@ export function ConnectorDetailView() {
     try {
       const preview = await connectorsApi.previewGoogleSheet(connectorId, sheetName);
       setSheetPreview(preview);
+      if (
+        !keyColumn.trim() &&
+        preview.columns.length > 0
+      ) {
+        setKeyColumn(String(preview.columns[0] ?? ""));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to preview sheet");
     }
@@ -580,13 +599,41 @@ export function ConnectorDetailView() {
               <label className={styles.fieldLabel} htmlFor="gs-key-column">
                 Key column
               </label>
-              <input
-                id="gs-key-column"
-                className={styles.fieldInput}
-                value={keyColumn}
-                onChange={(e) => setKeyColumn(e.target.value)}
-                placeholder="Id"
-              />
+              {sheetPreview && sheetPreview.columns.length > 0 ? (
+                <select
+                  id="gs-key-column"
+                  className={styles.fieldSelect}
+                  value={keyColumn}
+                  onChange={(e) => setKeyColumn(e.target.value)}
+                  data-testid="gs-key-column-select"
+                >
+                  <option value="">Select key column…</option>
+                  {sheetPreview.columns.map((column) => (
+                    <option key={column} value={column}>
+                      {column}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id="gs-key-column"
+                  className={styles.fieldInput}
+                  value={keyColumn}
+                  onChange={(e) => setKeyColumn(e.target.value)}
+                  placeholder="Id"
+                />
+              )}
+              {sheetPreview &&
+              keyColumn.trim() &&
+              sheetPreview.columns.length > 0 &&
+              !sheetPreview.columns.some(
+                (column) =>
+                  column.trim().toLowerCase() === keyColumn.trim().toLowerCase(),
+              ) ? (
+                <p className={styles.error} role="alert" style={{ marginTop: 6, fontSize: 12 }}>
+                  Key column must match a preview header.
+                </p>
+              ) : null}
             </div>
             <div>
               <label className={styles.fieldLabel} htmlFor="gs-header-row">
@@ -607,9 +654,59 @@ export function ConnectorDetailView() {
                   Preview columns
                 </Button>
                 {sheetPreview ? (
-                  <p style={{ fontSize: 12, marginTop: 8 }}>
-                    Columns: {sheetPreview.columns.join(", ") || "(none)"}
-                  </p>
+                  <div style={{ marginTop: 8 }} data-testid="gs-sheet-preview">
+                    <p style={{ fontSize: 12, margin: "0 0 8px" }}>
+                      Columns: {sheetPreview.columns.join(", ") || "(none)"}
+                    </p>
+                    {sheetPreview.rows.length > 0 ? (
+                      <div style={{ overflowX: "auto" }}>
+                        <table
+                          style={{
+                            width: "100%",
+                            borderCollapse: "collapse",
+                            fontSize: 11,
+                          }}
+                        >
+                          <thead>
+                            <tr>
+                              {sheetPreview.columns.map((column) => (
+                                <th
+                                  key={column}
+                                  style={{
+                                    textAlign: "left",
+                                    padding: "4px 6px",
+                                    borderBottom: "1px solid #ddd",
+                                    background: "#f5f5f5",
+                                  }}
+                                >
+                                  {column}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sheetPreview.rows.map((row, rowIndex) => (
+                              <tr key={`preview-row-${rowIndex}`}>
+                                {sheetPreview.columns.map((_, colIndex) => (
+                                  <td
+                                    key={`preview-cell-${rowIndex}-${colIndex}`}
+                                    style={{
+                                      padding: "4px 6px",
+                                      borderBottom: "1px solid #eee",
+                                    }}
+                                  >
+                                    {String(row[colIndex] ?? "")}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: 12, color: "#666" }}>No sample rows.</p>
+                    )}
+                  </div>
                 ) : null}
               </div>
             ) : null}

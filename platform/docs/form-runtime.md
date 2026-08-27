@@ -1,70 +1,74 @@
 # Form Runtime
 
-The form runtime package (`services/runtime/internal/form`) connects Form controls to entity records through the existing Runtime Kernel, Record API, Formula Runtime, Reactive Engine, and Gallery runtime.
+The form runtime package (`services/runtime/internal/form`) connects Form controls to entity and connector records through the Runtime Kernel, Formula Runtime, Reactive Engine, and Gallery runtime. **Go Form Service is the source of truth** for Mode, CurrentRecord, DirtyFields, ValidationErrors, LastSubmit, and Error. The React Form is a thin client of the session Form HTTP APIs.
 
 ## Architecture
 
 ```text
-Form metadata (item, mode, dataSource)
+Form metadata (item, mode, dataSource, OnSuccess/OnFailure, Layout)
         ↓
 Runtime Kernel session
         ↓
-Form Service
+Form Service (single source of truth)
         ↓
-Gallery.Selected or explicit item
+Gallery.Selected | First(DS) | LookUp(DS,…) | explicit {…}
         ↓
-CurrentRecord + DirtyFields + Validation
+CurrentRecord + DirtyFields + Validation + LastSubmit + Error
         ↓
-RecordService (Create / Update)
+RecordService / DataSourceRegistry Create|Update
         ↓
-DatasourceChanged → Gallery refresh → Form refresh
+DatasourceChanged → Gallery refresh → Form GET refresh
 ```
+
+Client edits call `POST …/form/{id}/update` (debounced). `SubmitForm` / mode formulas flush pending updates first, then evaluate on the session.
 
 ## Form modes
 
-Each form maintains a per-session mode:
-
 | Mode | Behavior |
 |------|----------|
-| `View` | Read-only display of the current record |
-| `Edit` | Editable record with dirty tracking |
-| `New` | Blank record for create on submit |
+| `View` | Read-only; DataCards cascade to View |
+| `Edit` | Editable with dirty tracking |
+| `New` | Schema-shaped defaults applied; create on submit |
 
-Modes are changed through the mode API or formulas (`NewForm`, `EditForm`, `ViewForm`). The runtime client (`apps/runtime`) renders `View`, `Edit`, and `New` modes; `New` starts with a blank record and editable template children.
+Formulas: `NewForm`, `EditForm`, `ViewForm`. Runtime UI prefers live session `Form.Mode` over the static package `mode` property.
 
-## Studio form designer (Phase 7.26)
+## Field bindings
 
-### Nest controls on drop
+Generate/scaffold emit **`ThisItem.Field`**. The runtime binder accepts both `ThisItem.Field` and `Parent.Item.Field`. Flat Label+input children still work; generated forms wrap fields in **DataCard**.
 
-Dragging a toolbox control onto a Form or Gallery sets `parent_control_id` and local `x`/`y` relative to the container. Double-click a container to enter container-edit mode; drops and selection stay scoped to that container until Escape.
+## DataCard
 
-### Generate fields
+Form → DataCard → Label + input. Card properties: `DataField`, `Default`, `Update`, `Required`, `Visible`, `DisplayMode`. Field-level errors come from `ValidationErrors` matched by `DataField`.
 
-When a Form’s **DataSource** (or entity **Item** binding) resolves to an application entity, the Property panel **Data** tab shows **Generate fields**. This creates flat Label + TextInput children under the Form with `Default = ThisItem.FieldName` for each entity column (no DataCard model).
+## Layout
 
-## Current item
+Form `layout`: `Vertical` (default) | `Horizontal` | `Columns` with `columns` count. Generate/scaffold auto-arrange cards.
 
-The `item` property formula resolves the bound record:
+**Runtime nested layout:** the Form shell remains absolutely positioned on the screen artboard. Inside the Form, DataCards use a **flex column card layout** (Label → input → error) with borders/padding. Absolute `x`/`y` on nested Label/input children are designer/authoring aids; the runtime stacks them for Power Apps–like card UX.
 
-| Item expression | Source |
-|-----------------|--------|
-| `Gallery1.Selected` | Gallery runtime selection |
-| Explicit record object | Used directly when provided |
+## Interaction
 
-When gallery selection changes, forms bound to `{Gallery}.Selected` are updated automatically and publish `FormChanged` refresh instructions.
+- Inputs keep a local draft while focused so typing is not overwritten by formula re-eval.
+- `Form.Mode = View` cascades `isReadOnly` through DataCards to inputs.
+- Runtime applies `runtime-surface.module.css` on the screen artboard (borders, disabled/read-only chrome).
 
-## Form state
+## Capability matrix
 
-Per form control the runtime tracks:
-
-| Field | Description |
-|-------|-------------|
-| `CurrentRecord` | Active record values |
-| `OriginalRecord` | Snapshot used by reset |
-| `DirtyFields` | Fields changed since load or reset |
-| `ValidationErrors` | Structured entity validation failures |
-| `Mode` | `View`, `Edit`, or `New` |
-| `DataSource` | Bound entity datasource name |
+| Capability | Status |
+|------------|--------|
+| New / Edit / View + formulas | Supported |
+| UI follows live mode | Supported |
+| Client edits → server DirtyFields | Supported (POST update) |
+| `Form.Mode` / `Valid` / `Unsaved` / `Item` | Supported |
+| `Form.Updates` / `LastSubmit` / `Error` | Supported |
+| `Defaults(DS)` + NewForm schema defaults | Supported |
+| `Patch(DS, Form.Updates)` | Supported |
+| OnSuccess / OnFailure | Supported (after SubmitForm) |
+| Item: Gallery.Selected / First / LookUp / `{…}` | Supported |
+| DataCard + Generate/scaffold | Supported |
+| Number / choice / boolean / date / lookup Generate | Supported (choice→Dropdown) |
+| Layout Vertical/Horizontal/Columns + responsive | Supported |
+| Attachments / People / Rich text / Image | **N/A** (later) |
 
 ## HTTP APIs
 
@@ -74,55 +78,18 @@ Per form control the runtime tracks:
 GET /api/runtime/session/{sessionId}/form/{controlId}
 ```
 
-### Change mode
+Returns mode, currentRecord, dirtyFields/updates, validationErrors, lastSubmit, error, unsaved, valid.
+
+### Change mode / Update / Submit / Reset
 
 ```http
 POST /api/runtime/session/{sessionId}/form/{controlId}/mode
-
-{ "appId": "…", "mode": "Edit" }
-```
-
-### Update fields
-
-```http
 POST /api/runtime/session/{sessionId}/form/{controlId}/update
-
-{ "appId": "…", "fields": { "Name": "Jane" } }
-```
-
-### Submit
-
-```http
 POST /api/runtime/session/{sessionId}/form/{controlId}/submit
-
-{ "appId": "…" }
-```
-
-- `Edit` mode → `RecordService.Update` (Patch semantics)
-- `New` mode → `RecordService.Create`
-- SQL / REST / Storage connector-bound forms route through `DataSourceRegistry` Create/Update (same path as `Patch()`)
-
-Successful submit publishes `DatasourceChanged` for gallery reload and `FormChanged` for dependent controls.
-
-### Reset
-
-```http
 POST /api/runtime/session/{sessionId}/form/{controlId}/reset
-
-{ "appId": "…" }
 ```
 
-Restores `OriginalRecord` and clears dirty state.
-
-## Validation
-
-Submit and update validate against entity metadata through the record service:
-
-- Required fields
-- Field data types (`text`, `number`, `boolean`, `date`)
-- Unknown fields
-
-Failures return structured `validationErrors` and `VALIDATION_FAILED`.
+Gallery selection sync **does not clobber** Edit/New forms with unsaved DirtyFields.
 
 ## Formula support
 
@@ -130,45 +97,31 @@ Failures return structured `validationErrors` and `VALIDATION_FAILED`.
 
 | Formula | Effect |
 |---------|--------|
-| `SubmitForm(Form1)` | Persist current record |
-| `ResetForm(Form1)` | Restore original values |
-| `NewForm(Form1)` | Switch to `New` mode |
-| `EditForm(Form1)` | Switch to `Edit` mode |
-| `ViewForm(Form1)` | Switch to `View` mode |
+| `SubmitForm(Form1)` | Persist; then run Form OnSuccess (or OnFailure on error) |
+| `ResetForm(Form1)` | Restore OriginalRecord |
+| `NewForm` / `EditForm` / `ViewForm` | Mode change |
+| `Defaults(DataSource)` | Schema-/sample-shaped empty record |
+| `Patch(DS, Form.Updates)` | Patch using dirty field map |
 
 ### Expressions
 
 | Expression | Result |
 |------------|--------|
-| `Form1.Mode` | Current mode string |
-| `Form1.Valid` | `true` when no validation errors |
-| `Form1.Unsaved` | `true` when dirty fields exist |
-| `Form1.Item` | Current record object |
+| `Form1.Mode` | Mode string |
+| `Form1.Valid` | Re-validates against schema on read |
+| `Form1.Unsaved` | Dirty fields present |
+| `Form1.Item` | Current record |
+| `Form1.Updates` | DirtyFields map |
+| `Form1.LastSubmit` | Last successful submit record |
+| `Form1.Error` | `{ message, issues }` or blank |
 
-## Reactive refresh
+## Offline path
 
-Forms register dependencies for:
-
-- `DatasourceChanged` on their entity datasource
-- `FormChanged` on referenced form names
-- `GallerySelectionChanged` indirectly via automatic item sync
-
-Submit flow:
-
-```text
-SubmitForm()
-        ↓
-RecordService Create/Update
-        ↓
-DatasourceChanged
-        ↓
-Gallery reload
-        ↓
-Form refresh
-```
+In-memory `executeSubmitForm` runs **only** when there is no runtime session. Session apps always use Go Form Service.
 
 ## Related docs
 
 - [Gallery Runtime](./gallery-runtime.md)
 - [Runtime Kernel](./runtime-kernel.md)
 - [Entity Record API](./entity-record-api.md)
+- [Google Sheets connectors](./google-sheets-connectors.md)

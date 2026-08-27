@@ -40,6 +40,7 @@ func TestDecryptRejectsTamperedCiphertext(t *testing.T) {
 }
 
 func TestLoadMasterKeyDevDefault(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
 	t.Setenv(envMasterKey, "")
 	key, err := LoadMasterKey(true)
 	if err != nil {
@@ -47,5 +48,16 @@ func TestLoadMasterKeyDevDefault(t *testing.T) {
 	}
 	if !bytes.Equal(key, []byte(devDefaultKey)) {
 		t.Fatalf("unexpected default key")
+	}
+}
+
+func TestLoadMasterKeyRejectsDefaultInProduction(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv(envMasterKey, "")
+	if _, err := LoadMasterKey(true); err == nil {
+		t.Fatal("expected missing master key in production")
+	}
+	if _, err := LoadMasterKeyFromEnv(); err == nil {
+		t.Fatal("expected LoadMasterKeyFromEnv to fail in production without key")
 	}
 }

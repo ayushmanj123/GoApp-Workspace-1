@@ -473,7 +473,7 @@ func (s *ConnectorService) upsertNamedSecret(
 	tenantID, appID uuid.UUID,
 	connectorName, kind, plaintext, existingSecretID string,
 ) (string, error) {
-	key, err := secrets.LoadMasterKey(true)
+	key, err := secrets.LoadMasterKeyFromEnv()
 	if err != nil {
 		return "", fmt.Errorf("load secrets master key: %w", err)
 	}

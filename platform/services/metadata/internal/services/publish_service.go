@@ -90,12 +90,11 @@ func (s *PublishService) Publish(ctx context.Context, tenantID, appID uuid.UUID,
 			return fmt.Errorf("publish: create snapshot: %w", err)
 		}
 
-		// Best-effort: mirror the snapshot into MinIO as a durable artifact and
-		// record its URL/hash on the packages table. snapshot_json above
-		// remains the source of truth — any failure here (MinIO unavailable,
-		// packages write conflict, etc.) is logged and swallowed so publish
-		// still succeeds using the database snapshot alone.
-		s.publishArtifact(ctx, session, tenantID, appID, version.ID, snapshotJSON)
+		// When MinIO is configured, artifact upload must succeed. When unset,
+		// publish remains DB-only (local/dev without docker MinIO).
+		if err := s.publishArtifact(ctx, session, tenantID, appID, version.ID, snapshotJSON); err != nil {
+			return err
+		}
 
 		app.CurrentVersionID = &version.ID
 		app.Status = "published"
@@ -387,7 +386,7 @@ func listEnvironmentsByApplication(ctx context.Context, session repositories.Ten
 
 // gcUnreferencedPublishArtifact deletes the MinIO object and packages row for
 // a version when nothing still references it. snapshot_json is never deleted.
-// All failures are logged and swallowed (matching publishArtifact soft-fail).
+// All failures are logged and swallowed (best-effort GC; Deprecate still succeeds).
 func (s *PublishService) gcUnreferencedPublishArtifact(ctx context.Context, tenantID, appID, versionID uuid.UUID) {
 	session := s.store.WithTenant(ctx, tenantID)
 	referenced, err := versionHasLiveReferences(ctx, session, appID, versionID)
@@ -432,21 +431,19 @@ func (s *PublishService) gcUnreferencedPublishArtifact(ctx context.Context, tena
 }
 
 // publishArtifact uploads the snapshot blob to MinIO and records its
-// URL/hash on the packages table. It never returns an error: any failure
-// (MinIO not configured, upload error, packages write conflict) is logged
-// and swallowed so that Publish still succeeds with snapshot_json as the
-// fallback source of truth for this version.
-func (s *PublishService) publishArtifact(ctx context.Context, session repositories.TenantSession, tenantID, appID, versionID uuid.UUID, snapshotJSON []byte) {
+// URL/hash on the packages table. When MinIO is not configured, it is a no-op.
+// When MinIO is configured, upload or packages-row failures return an error
+// so Publish does not succeed without a durable artifact.
+func (s *PublishService) publishArtifact(ctx context.Context, session repositories.TenantSession, tenantID, appID, versionID uuid.UUID, snapshotJSON []byte) error {
 	uploader := s.resolveArtifactUploader()
 	if uploader == nil {
 		log.Printf("publish: minio artifact store not configured for version %s; snapshot_json remains the source of truth", versionID)
-		return
+		return nil
 	}
 	objectKey := fmt.Sprintf("applications/%s/versions/%s/snapshot.json", appID, versionID)
 	objectURL, sha256Hex, err := uploader.Upload(ctx, objectKey, snapshotJSON, "application/json")
 	if err != nil {
-		log.Printf("publish: minio upload failed for version %s, falling back to snapshot_json: %v", versionID, err)
-		return
+		return fmt.Errorf("publish: minio upload failed for version %s: %w", versionID, err)
 	}
 	pkg := &models.Package{
 		TenantID:             tenantID,
@@ -455,8 +452,9 @@ func (s *PublishService) publishArtifact(ctx context.Context, session repositori
 		PackageHash:          sha256Hex,
 	}
 	if err := session.Packages().Create(ctx, pkg); err != nil {
-		log.Printf("publish: uploaded artifact to minio but failed to persist package metadata for version %s: %v", versionID, err)
+		return fmt.Errorf("publish: persist package metadata for version %s: %w", versionID, err)
 	}
+	return nil
 }
 
 func (s *PublishService) resolveVersionLabel(ctx context.Context, session repositories.TenantSession, appID uuid.UUID, requested *string) (string, error) {

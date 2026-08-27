@@ -3,6 +3,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/caarlos0/env/v11"
 )
@@ -31,4 +33,18 @@ func Load(cfg interface{}) error {
 // Addr returns the listen address for the HTTP server.
 func (b Base) Addr() string {
 	return fmt.Sprintf(":%d", b.Port)
+}
+
+// IsProduction reports whether APP_ENV is production (case-insensitive).
+func IsProduction() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production")
+}
+
+// AppEnvValue returns the trimmed APP_ENV value, defaulting to development when unset.
+func AppEnvValue() string {
+	v := strings.TrimSpace(os.Getenv("APP_ENV"))
+	if v == "" {
+		return "development"
+	}
+	return v
 }

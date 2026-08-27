@@ -135,7 +135,34 @@ function runCommand(command, commandArgs, options = {}) {
 async function startInfrastructure() {
   const composePath = path.join(repoRoot, infraComposeFile);
   info("Starting Docker infrastructure...");
-  await runCommand("docker", ["compose", "-f", composePath, "up", "-d"]);
+  try {
+    await runCommand("docker", ["compose", "-f", composePath, "up", "-d"]);
+  } catch (composeError) {
+    const message =
+      composeError instanceof Error ? composeError.message : String(composeError);
+    // Docker Desktop sometimes returns API 500 while containers are already up.
+    try {
+      await waitForPort(5432, "127.0.0.1", 3_000);
+      warn(
+        `docker compose failed (${message}). PostgreSQL is already reachable on :5432 — continuing.`,
+      );
+      warn(
+        "If services fail next, restart Docker Desktop, then re-run `pnpm dev` (or use `pnpm exec node infrastructure/scripts/dev.mjs --no-infra`).",
+      );
+      for (const endpoint of infraEndpoints) {
+        info(`  ${endpoint.label.padEnd(14)} ${endpoint.url}`);
+      }
+      return;
+    } catch {
+      error(
+        "Docker infrastructure failed to start and PostgreSQL is not reachable on :5432.",
+      );
+      error(
+        "Fix: open Docker Desktop, wait until it is Running, then retry `pnpm dev`.",
+      );
+      throw composeError;
+    }
+  }
   info("Waiting for PostgreSQL on :5432...");
   await waitForPort(5432);
   success("Infrastructure is ready");

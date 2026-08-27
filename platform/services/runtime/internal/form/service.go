@@ -3,6 +3,7 @@ package form
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/goapps-platform/runtime-service/internal/databinding"
@@ -76,7 +77,24 @@ func (s *Service) ClearSession(sessionID uuid.UUID) {
 }
 
 func (s *Service) Reader(sessionID uuid.UUID) *Reader {
-	return NewReader(s.store, sessionID)
+	return NewReaderWithService(s.store, sessionID, s)
+}
+
+// refreshValidation re-runs schema validation and persists errors for Form.Valid.
+func (s *Service) refreshValidation(ctx context.Context, sessionID, tenantID uuid.UUID, formName string) *State {
+	if s == nil || s.store == nil {
+		return nil
+	}
+	state, ok := s.store.Get(sessionID, formName)
+	if !ok || state == nil {
+		return nil
+	}
+	if tenantID != uuid.Nil {
+		state.TenantID = tenantID
+	}
+	state.ValidationErrors = s.validateState(ctx, state.TenantID, state)
+	s.store.Set(sessionID, formName, state)
+	return state
 }
 
 // Load initializes or returns form state for a control.
@@ -117,21 +135,24 @@ func (s *Service) SetMode(ctx context.Context, sessionID, tenantID, appID uuid.U
 	}
 	state.Mode = mode
 	state.ValidationErrors = nil
+	state.TenantID = tenantID
 	switch mode {
 	case ModeNew:
 		state.CurrentRecord = map[string]interface{}{}
 		state.OriginalRecord = map[string]interface{}{}
 		state.DirtyFields = map[string]interface{}{}
+		s.inferBinding(ctx, tenantID, appID, control, state)
+		s.applySchemaDefaults(ctx, tenantID, state)
 	case ModeView, ModeEdit:
-		record, err := s.resolveItemRecord(sessionID, control)
+		record, err := s.resolveItemRecord(ctx, sessionID, tenantID, appID, control)
 		if err != nil {
 			return nil, err
 		}
 		state.CurrentRecord = cloneRecord(record)
 		state.OriginalRecord = cloneRecord(record)
 		state.DirtyFields = map[string]interface{}{}
+		s.inferBinding(ctx, tenantID, appID, control, state)
 	}
-	s.inferBinding(ctx, tenantID, appID, control, state)
 	s.store.Set(sessionID, control.Name, state)
 	return cloneState(state), nil
 }
@@ -155,6 +176,7 @@ func (s *Service) Update(ctx context.Context, sessionID, tenantID, appID uuid.UU
 		state.CurrentRecord[key] = value
 		state.DirtyFields[key] = value
 	}
+	state.TenantID = tenantID
 	state.ValidationErrors = s.validateState(ctx, tenantID, state)
 	s.store.Set(sessionID, control.Name, state)
 	return cloneState(state), nil
@@ -185,10 +207,17 @@ func (s *Service) Submit(ctx context.Context, sessionID, tenantID, userID, appID
 	}
 	state.ValidationErrors = s.validateState(ctx, tenantID, state)
 	if len(state.ValidationErrors) > 0 {
+		state.LastError = &FormError{
+			Message: "validation failed",
+			Issues:  append([]ValidationIssue(nil), state.ValidationErrors...),
+		}
 		s.store.Set(sessionID, control.Name, state)
 		return cloneState(state), "", ErrValidationFailed
 	}
+	state.LastError = nil
 	if state.EntityID == uuid.Nil {
+		state.LastError = &FormError{Message: ErrRecordUnavailable.Error()}
+		s.store.Set(sessionID, control.Name, state)
 		return nil, "", ErrRecordUnavailable
 	}
 
@@ -201,6 +230,8 @@ func (s *Service) Submit(ctx context.Context, sessionID, tenantID, userID, appID
 	if state.DataSourceKind == string(databinding.DataSourceKindSql) {
 		updated, sourceName, err := s.submitSQL(ctx, tenantID, userID, state, payload)
 		if err != nil {
+			state.LastError = &FormError{Message: err.Error()}
+			s.store.Set(sessionID, control.Name, state)
 			return nil, "", err
 		}
 		state.CurrentRecord = updated
@@ -208,12 +239,16 @@ func (s *Service) Submit(ctx context.Context, sessionID, tenantID, userID, appID
 		state.DirtyFields = map[string]interface{}{}
 		state.Mode = ModeView
 		state.ValidationErrors = nil
+		state.LastSubmit = cloneRecord(state.CurrentRecord)
+		state.LastError = nil
 		s.store.Set(sessionID, control.Name, state)
 		return cloneState(state), sourceName, nil
 	}
 	if state.DataSourceKind == string(databinding.DataSourceKindStorage) {
 		updated, sourceName, err := s.submitStorage(ctx, tenantID, userID, state, payload)
 		if err != nil {
+			state.LastError = &FormError{Message: err.Error()}
+			s.store.Set(sessionID, control.Name, state)
 			return nil, "", err
 		}
 		state.CurrentRecord = updated
@@ -221,12 +256,16 @@ func (s *Service) Submit(ctx context.Context, sessionID, tenantID, userID, appID
 		state.DirtyFields = map[string]interface{}{}
 		state.Mode = ModeView
 		state.ValidationErrors = nil
+		state.LastSubmit = cloneRecord(state.CurrentRecord)
+		state.LastError = nil
 		s.store.Set(sessionID, control.Name, state)
 		return cloneState(state), sourceName, nil
 	}
 	if state.DataSourceKind == string(databinding.DataSourceKindRest) {
 		updated, sourceName, err := s.submitREST(ctx, tenantID, userID, state, payload)
 		if err != nil {
+			state.LastError = &FormError{Message: err.Error()}
+			s.store.Set(sessionID, control.Name, state)
 			return nil, "", err
 		}
 		state.CurrentRecord = updated
@@ -234,12 +273,16 @@ func (s *Service) Submit(ctx context.Context, sessionID, tenantID, userID, appID
 		state.DirtyFields = map[string]interface{}{}
 		state.Mode = ModeView
 		state.ValidationErrors = nil
+		state.LastSubmit = cloneRecord(state.CurrentRecord)
+		state.LastError = nil
 		s.store.Set(sessionID, control.Name, state)
 		return cloneState(state), sourceName, nil
 	}
 	if state.DataSourceKind == string(databinding.DataSourceKindGoogleSheets) {
 		updated, sourceName, err := s.submitGoogleSheets(ctx, tenantID, userID, state, payload)
 		if err != nil {
+			state.LastError = &FormError{Message: err.Error()}
+			s.store.Set(sessionID, control.Name, state)
 			return nil, "", err
 		}
 		state.CurrentRecord = updated
@@ -247,6 +290,8 @@ func (s *Service) Submit(ctx context.Context, sessionID, tenantID, userID, appID
 		state.DirtyFields = map[string]interface{}{}
 		state.Mode = ModeView
 		state.ValidationErrors = nil
+		state.LastSubmit = cloneRecord(state.CurrentRecord)
+		state.LastError = nil
 		s.store.Set(sessionID, control.Name, state)
 		return cloneState(state), sourceName, nil
 	}
@@ -255,26 +300,36 @@ func (s *Service) Submit(ctx context.Context, sessionID, tenantID, userID, appID
 	case ModeEdit:
 		recordID, version, err := recordIdentity(state.CurrentRecord)
 		if err != nil {
+			state.LastError = &FormError{Message: err.Error()}
+			s.store.Set(sessionID, control.Name, state)
 			return nil, "", err
 		}
 		updated, err := s.records.Update(ctx, tenantID, userID, state.EntityID, recordID, payload, version)
 		if err != nil {
+			state.LastError = &FormError{Message: err.Error()}
+			s.store.Set(sessionID, control.Name, state)
 			return nil, "", err
 		}
 		state.CurrentRecord = recordToMap(updated)
 		state.OriginalRecord = cloneRecord(state.CurrentRecord)
 		state.DirtyFields = map[string]interface{}{}
 		state.Mode = ModeView
+		state.LastSubmit = cloneRecord(state.CurrentRecord)
+		state.LastError = nil
 		dataSourceName = state.DataSource
 	case ModeNew:
 		created, err := s.records.Create(ctx, tenantID, userID, state.EntityID, payload)
 		if err != nil {
+			state.LastError = &FormError{Message: err.Error()}
+			s.store.Set(sessionID, control.Name, state)
 			return nil, "", err
 		}
 		state.CurrentRecord = recordToMap(created)
 		state.OriginalRecord = cloneRecord(state.CurrentRecord)
 		state.DirtyFields = map[string]interface{}{}
 		state.Mode = ModeView
+		state.LastSubmit = cloneRecord(state.CurrentRecord)
+		state.LastError = nil
 		dataSourceName = state.DataSource
 	default:
 		return nil, "", ErrInvalidMode
@@ -458,12 +513,16 @@ func (s *Service) SyncGallerySelection(sessionID uuid.UUID, galleryName string, 
 		state, ok := s.store.Get(sessionID, control.Name)
 		if !ok {
 			state = &State{
-				Mode:           ReadModeProperty(control.Properties),
-				ItemFormula:    itemFormula,
-				GalleryName:    galleryName,
-				DirtyFields:    map[string]interface{}{},
+				Mode:             ReadModeProperty(control.Properties),
+				ItemFormula:      itemFormula,
+				GalleryName:      galleryName,
+				DirtyFields:      map[string]interface{}{},
 				ValidationErrors: nil,
 			}
+		}
+		// Do not clobber in-progress edits on gallery selection changes.
+		if (state.Mode == ModeEdit || state.Mode == ModeNew) && len(state.DirtyFields) > 0 {
+			continue
 		}
 		state.CurrentRecord = cloneRecord(record)
 		state.OriginalRecord = cloneRecord(record)
@@ -491,11 +550,12 @@ func (s *Service) buildState(ctx context.Context, sessionID, tenantID, appID uui
 		DirtyFields:      map[string]interface{}{},
 		ValidationErrors: nil,
 		DataSource:       ReadDataSource(control.Properties),
+		TenantID:         tenantID,
 	}
 	if galleryName, ok := parseGallerySelectedReference(itemFormula); ok {
 		state.GalleryName = galleryName
 	}
-	record, err := s.resolveItemRecord(sessionID, control)
+	record, err := s.resolveItemRecord(ctx, sessionID, tenantID, appID, control)
 	if err != nil && state.Mode != ModeNew {
 		return nil, err
 	}
@@ -507,10 +567,36 @@ func (s *Service) buildState(ctx context.Context, sessionID, tenantID, appID uui
 		state.OriginalRecord = map[string]interface{}{}
 	}
 	s.inferBinding(ctx, tenantID, appID, control, state)
+	if state.Mode == ModeNew {
+		s.applySchemaDefaults(ctx, tenantID, state)
+	}
 	return state, nil
 }
 
-func (s *Service) resolveItemRecord(sessionID uuid.UUID, control ControlMetadata) (map[string]interface{}, error) {
+func (s *Service) applySchemaDefaults(ctx context.Context, tenantID uuid.UUID, state *State) {
+	if state == nil || state.EntityID == uuid.Nil || s.schema == nil {
+		return
+	}
+	schema, err := s.schema.GetEntitySchema(ctx, tenantID, state.EntityID)
+	if err != nil || schema == nil {
+		return
+	}
+	if state.CurrentRecord == nil {
+		state.CurrentRecord = map[string]interface{}{}
+	}
+	for _, field := range schema.Fields {
+		name := strings.TrimSpace(field.Name)
+		if name == "" {
+			continue
+		}
+		if _, exists := state.CurrentRecord[name]; !exists {
+			state.CurrentRecord[name] = nil
+		}
+	}
+	state.OriginalRecord = cloneRecord(state.CurrentRecord)
+}
+
+func (s *Service) resolveItemRecord(ctx context.Context, sessionID, tenantID, appID uuid.UUID, control ControlMetadata) (map[string]interface{}, error) {
 	itemFormula := ReadItemFormula(control.Formulas, control.Properties)
 	if itemFormula == "" {
 		return nil, ErrRecordUnavailable
@@ -530,6 +616,42 @@ func (s *Service) resolveItemRecord(sessionID uuid.UUID, control ControlMetadata
 		}
 		return cloneRecord(record), nil
 	}
+	// Explicit record object literal: { Name: "x", ... }
+	if record, err := parseExplicitRecordLiteral(itemFormula); err == nil && record != nil {
+		return record, nil
+	}
+	// First(DataSource) — load first row as the form item.
+	if dataSource, ok := parseFirstDataSourceCall(itemFormula); ok && s.resolver != nil && s.sources != nil {
+		binding, query, err := s.resolver.Resolve(ctx, tenantID, appID, dataSource, databinding.QueryOverrides{Limit: 1})
+		if err != nil {
+			return map[string]interface{}{}, nil
+		}
+		source, err := s.sources.ForKind(binding.Kind)
+		if err != nil {
+			return map[string]interface{}{}, nil
+		}
+		result, err := source.Query(ctx, query)
+		if err != nil || result == nil || len(result.Items) == 0 {
+			return map[string]interface{}{}, nil
+		}
+		return dataItemToFormMap(&result.Items[0], binding.EntityID), nil
+	}
+	// LookUp(DataSource, ...) — treat as first matching query row when available.
+	if dataSource, ok := parseLookUpDataSource(itemFormula); ok && s.resolver != nil && s.sources != nil {
+		binding, query, err := s.resolver.Resolve(ctx, tenantID, appID, dataSource, databinding.QueryOverrides{Limit: 1})
+		if err != nil {
+			return map[string]interface{}{}, nil
+		}
+		source, err := s.sources.ForKind(binding.Kind)
+		if err != nil {
+			return map[string]interface{}{}, nil
+		}
+		result, err := source.Query(ctx, query)
+		if err != nil || result == nil || len(result.Items) == 0 {
+			return map[string]interface{}{}, nil
+		}
+		return dataItemToFormMap(&result.Items[0], binding.EntityID), nil
+	}
 	return map[string]interface{}{}, nil
 }
 
@@ -543,6 +665,7 @@ func (s *Service) inferBinding(ctx context.Context, tenantID, appID uuid.UUID, c
 	if state.DataSource == "" {
 		state.DataSource = ReadDataSource(control.Properties)
 	}
+	state.RequiredColumns = ReadRequiredColumns(control.Properties)
 	if state.DataSource == "" || s.resolver == nil {
 		return
 	}
@@ -567,6 +690,17 @@ func (s *Service) validateState(ctx context.Context, tenantID uuid.UUID, state *
 		state.DataSourceKind == string(databinding.DataSourceKindGoogleSheets) {
 		if state.Mode == ModeNew && len(submissionPayload(state)) == 0 {
 			return []ValidationIssue{{Message: "at least one field is required"}}
+		}
+		if len(state.RequiredColumns) > 0 {
+			payload := submissionPayload(state)
+			issues := make([]ValidationIssue, 0)
+			for _, col := range state.RequiredColumns {
+				value, ok := payload[col]
+				if !ok || value == nil || strings.TrimSpace(stringifyAny(value)) == "" {
+					issues = append(issues, ValidationIssue{Field: col, Message: col + " is required"})
+				}
+			}
+			return issues
 		}
 		return nil
 	}
@@ -609,6 +743,16 @@ func submissionPayload(state *State) map[string]interface{} {
 		}
 	}
 	return payload
+}
+
+func stringifyAny(value interface{}) string {
+	if value == nil {
+		return ""
+	}
+	if typed, ok := value.(string); ok {
+		return typed
+	}
+	return fmt.Sprint(value)
 }
 
 func recordIdentity(record map[string]interface{}) (uuid.UUID, int, error) {

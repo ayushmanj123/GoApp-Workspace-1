@@ -125,7 +125,7 @@ func TestPublishUploadsArtifactAndRuntimePrefersIt(t *testing.T) {
 	}
 }
 
-func TestPublishFallsBackWhenMinioUploadFails(t *testing.T) {
+func TestPublishFailsWhenMinioUploadFails(t *testing.T) {
 	store := fakes.NewFakeStore()
 	ctx := context.Background()
 	tenantID := uuid.New()
@@ -137,30 +137,9 @@ func TestPublishFallsBackWhenMinioUploadFails(t *testing.T) {
 	publishSvc := NewPublishService(store)
 	publishSvc.artifacts = blobs
 
-	result, err := publishSvc.Publish(ctx, tenantID, appID, PublishOptions{})
-	if err != nil {
-		t.Fatalf("expected publish to succeed even when minio is unavailable, got: %v", err)
-	}
-
-	packages, err := listPackagesByVersion(ctx, store.WithTenant(ctx, tenantID), result.VersionID)
-	if err != nil {
-		t.Fatalf("list packages: %v", err)
-	}
-	if len(packages) != 0 {
-		t.Fatalf("expected no package row when minio upload fails, got %d", len(packages))
-	}
-
-	runtimeSvc := NewRuntimeService(store)
-	runtimeSvc.artifacts = blobs
-	pkg, err := runtimeSvc.BuildRuntimePackageWithOptions(ctx, tenantID, appID, RuntimePackageOptions{Channel: "published"})
-	if err != nil {
-		t.Fatalf("expected runtime to fall back to snapshot_json, got error: %v", err)
-	}
-	if blobs.downloadCalls != 0 {
-		t.Fatalf("expected runtime to never attempt a minio download without a package row, got %d", blobs.downloadCalls)
-	}
-	if len(pkg.Screens) != 1 || pkg.Screens[0].Name != "Home" {
-		t.Fatalf("unexpected package content sourced from snapshot fallback: %#v", pkg.Screens)
+	_, err := publishSvc.Publish(ctx, tenantID, appID, PublishOptions{})
+	if err == nil {
+		t.Fatal("expected publish to fail when configured minio upload fails")
 	}
 }
 

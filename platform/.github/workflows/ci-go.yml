@@ -57,9 +57,23 @@ jobs:
             (cd "$svc" && go test ./...)
           done
 
+      - name: Validate phase markers (7.1 / 7.2 / 8.0)
+        run: |
+          node infrastructure/scripts/validate-phase-7.1.mjs
+          node infrastructure/scripts/validate-phase-7.2.mjs
+          node infrastructure/scripts/validate-phase-8.0.mjs
+
       - name: Build services
         run: |
-          for svc in services/*/; do
+          for svc in services/gateway/ services/metadata/ services/runtime/ services/publish/; do
             echo "Building $svc"
             (cd "$svc" && go build -o /dev/null ./cmd/server)
           done
+          # Scaffold stubs still must compile
+          for svc in services/auth/ services/connector/ services/environment/ services/audit/ services/search/; do
+            echo "Building $svc"
+            (cd "$svc" && go build -o /dev/null ./cmd/server)
+          done
+
+      - name: Docker build gateway
+        run: docker build -f infrastructure/docker/services/gateway/Dockerfile -t goapps-gateway:ci .

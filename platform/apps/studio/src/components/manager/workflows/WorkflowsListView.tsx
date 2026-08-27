@@ -134,9 +134,9 @@ export function WorkflowsListView() {
         />      </div>
 
       {error ? <div className={styles.error}>{error}</div> : null}
-      {loading ? <div className={styles.loading}>Loading workflows…</div> : null}
-
-      {!loading && filtered.length === 0 ? (
+      {loading || loadingApps ? (
+        <div className={styles.loading}>Loading workflows…</div>
+      ) : filtered.length === 0 ? (
         <div className={styles.empty}>
           No workflows yet. Create one that calls a REST connector action.
         </div>

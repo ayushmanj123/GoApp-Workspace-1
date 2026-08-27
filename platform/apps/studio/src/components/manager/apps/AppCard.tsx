@@ -27,10 +27,15 @@ const STATUS_LABELS: Record<CardStatus, string> = {
 };
 
 function runtimeBaseUrl(): string {
-  return (
-    (import.meta.env.VITE_RUNTIME_APP_URL as string | undefined)?.replace(/\/$/, "") ??
-    "http://localhost:5174"
+  const configured = (import.meta.env.VITE_RUNTIME_APP_URL as string | undefined)?.replace(
+    /\/$/,
+    "",
   );
+  if (configured) return configured;
+  if (import.meta.env.PROD) {
+    throw new Error("VITE_RUNTIME_APP_URL is required in production builds");
+  }
+  return "http://localhost:5174";
 }
 
 function openRuntime(appId: string, environmentId?: string) {

@@ -43,6 +43,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Unit checks
+        run: |
+          pnpm --filter @goapps/studio test
+          pnpm --filter @goapps/runtime test
+
       - name: Lint
         run: pnpm lint
 

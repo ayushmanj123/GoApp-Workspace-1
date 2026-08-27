@@ -1,6 +1,7 @@
 import React from "react";
 import { ScreenPackage } from "./runtime-types";
 import ControlRenderer from "./control-renderer";
+import styles from "./runtime-surface.module.css";
 
 export const ARTBOARD_WIDTH = 1366;
 export const ARTBOARD_HEIGHT = 768;
@@ -12,6 +13,7 @@ export const ScreenRenderer: React.FC<{ screen?: ScreenPackage }> = ({
   return (
     <div
       data-testid={`screen-${screen.id}`}
+      className={styles.surface}
       style={{
         position: "relative",
         width: ARTBOARD_WIDTH,

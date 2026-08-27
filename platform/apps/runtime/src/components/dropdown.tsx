@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
 import { useParentItemDefault } from "../hooks/use-parent-item-default";
 import { useFormEditContext } from "../form-edit-context";
@@ -7,6 +7,7 @@ import { useControlValueStore } from "../formula/formula-context";
 import { useResolvedGalleryRecords } from "../hooks/use-resolved-gallery-items";
 import { firstStringLikeField } from "../utils/gallery-rows";
 import { useRuntimeActionHandler } from "../hooks/use-runtime-action-handler";
+import { useEditableControlValue } from "../hooks/use-editable-control-value";
 
 function readPropertyFormula(property: unknown): string {
   if (property && typeof property === "object" && "formula" in property) {
@@ -34,14 +35,28 @@ function toDropdownOptions(
   });
 }
 
+const selectChrome: React.CSSProperties = {
+  width: "100%",
+  height: "100%",
+  minHeight: 32,
+  boxSizing: "border-box",
+  border: "1px solid #c8c8c8",
+  borderRadius: 4,
+  padding: "4px 8px",
+  font: "inherit",
+  background: "#fff",
+};
+
 export const Dropdown: React.FC<any> = ({
   items,
   default: defaultProperty,
   value,
   disabled = false,
+  readOnly = false,
   onChange,
   controlName,
   name,
+  id,
 }) => {
   const formEdit = useFormEditContext();
   const controlValueStore = useControlValueStore();
@@ -49,26 +64,24 @@ export const Dropdown: React.FC<any> = ({
   const options = useMemo(() => toDropdownOptions(records), [records]);
   const defaultFormula = readPropertyFormula(defaultProperty);
   const bindingField = defaultFormula ? parseParentItemField(defaultFormula) : null;
-  const usesDefaultBinding = Boolean(formEdit && bindingField && defaultProperty);
+  const usesDefaultBinding = Boolean(bindingField && defaultProperty);
   const resolvedDefault = useParentItemDefault(defaultProperty);
   const resolvedValue = useResolvedPropertyText(usesDefaultBinding ? undefined : value);
   const resolvedControlName = controlName ?? name;
   const runOnChange = useRuntimeActionHandler(onChange, resolvedControlName, "OnChange");
+  const externalValue = usesDefaultBinding ? resolvedDefault : resolvedValue;
+  const isLocked = Boolean(disabled || readOnly || formEdit?.isReadOnly);
 
-  const [localValue, setLocalValue] = useState(resolvedDefault);
-
-  useEffect(() => {
-    if (usesDefaultBinding) {
-      setLocalValue(resolvedDefault);
-    }
-  }, [usesDefaultBinding, resolvedDefault]);
-
-  const displayValue = usesDefaultBinding ? localValue : resolvedValue;
+  const { value: localValue, setValue, onFocus, onBlur } =
+    useEditableControlValue(externalValue, {
+      recordKey: formEdit?.recordKey ?? null,
+    });
 
   const handleChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
+    if (isLocked) return;
     const nextValue = event.target.value;
+    setValue(nextValue);
     if (usesDefaultBinding && bindingField) {
-      setLocalValue(nextValue);
       formEdit?.reportUpdate(bindingField, nextValue);
     }
     if (resolvedControlName) {
@@ -79,11 +92,15 @@ export const Dropdown: React.FC<any> = ({
 
   return (
     <select
+      id={id}
       data-testid={resolvedControlName ? `dropdown-${resolvedControlName}` : undefined}
-      value={displayValue}
-      disabled={disabled}
+      value={localValue}
+      disabled={isLocked}
+      aria-readonly={isLocked || undefined}
+      onFocus={onFocus}
+      onBlur={onBlur}
       onChange={handleChange}
-      style={{ width: "100%", height: "100%", boxSizing: "border-box" }}
+      style={selectChrome}
     >
       {options.map((opt) => (
         <option key={opt.value} value={opt.value}>

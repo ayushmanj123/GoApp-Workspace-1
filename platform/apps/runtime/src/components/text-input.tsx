@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
 import { useParentItemDefault } from "../hooks/use-parent-item-default";
 import { useFormEditContext } from "../form-edit-context";
 import { parseParentItemField } from "../utils/parent-item-field";
 import { useControlValueStore } from "../formula/formula-context";
+import { useEditableControlValue } from "../hooks/use-editable-control-value";
 
 function readPropertyFormula(property: unknown): string {
   if (property && typeof property === "object" && "formula" in property) {
@@ -13,6 +14,18 @@ function readPropertyFormula(property: unknown): string {
   return "";
 }
 
+const inputChrome: React.CSSProperties = {
+  width: "100%",
+  height: "100%",
+  minHeight: 32,
+  boxSizing: "border-box",
+  border: "1px solid #c8c8c8",
+  borderRadius: 4,
+  padding: "4px 8px",
+  font: "inherit",
+  background: "#fff",
+};
+
 export const TextInput: React.FC<any> = ({
   value = "",
   default: defaultProperty,
@@ -20,6 +33,7 @@ export const TextInput: React.FC<any> = ({
   disabled = false,
   readOnly = false,
   controlName,
+  id,
   onChange,
 }) => {
   const formEdit = useFormEditContext();
@@ -28,30 +42,26 @@ export const TextInput: React.FC<any> = ({
   const bindingField = defaultFormula
     ? parseParentItemField(defaultFormula)
     : null;
-  const usesDefaultBinding = Boolean(
-    formEdit && bindingField && defaultProperty,
-  );
+  const usesDefaultBinding = Boolean(bindingField && defaultProperty);
 
   const resolvedDefault = useParentItemDefault(defaultProperty);
   const resolvedValue = useResolvedPropertyText(
     usesDefaultBinding ? undefined : value,
   );
   const resolvedPlaceholder = useResolvedPropertyText(placeholder);
+  const externalValue = usesDefaultBinding ? resolvedDefault : resolvedValue;
+  const isLocked = Boolean(disabled || readOnly || formEdit?.isReadOnly);
 
-  const [localValue, setLocalValue] = useState(resolvedDefault);
-
-  useEffect(() => {
-    if (usesDefaultBinding) {
-      setLocalValue(resolvedDefault);
-    }
-  }, [usesDefaultBinding, resolvedDefault]);
-
-  const displayValue = usesDefaultBinding ? localValue : resolvedValue;
+  const { value: localValue, setValue, onFocus, onBlur } =
+    useEditableControlValue(externalValue, {
+      recordKey: formEdit?.recordKey ?? null,
+    });
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (isLocked) return;
     const nextValue = event.target.value;
+    setValue(nextValue);
     if (usesDefaultBinding && bindingField) {
-      setLocalValue(nextValue);
       formEdit?.reportUpdate(bindingField, nextValue);
     }
     if (controlName) {
@@ -62,13 +72,17 @@ export const TextInput: React.FC<any> = ({
 
   return (
     <input
+      id={id}
       data-testid={controlName ? `input-${controlName}` : undefined}
-      value={displayValue}
+      value={localValue}
       placeholder={resolvedPlaceholder}
-      disabled={disabled}
-      readOnly={readOnly}
+      disabled={Boolean(disabled || formEdit?.isReadOnly)}
+      readOnly={Boolean(readOnly || formEdit?.isReadOnly)}
+      aria-readonly={isLocked || undefined}
+      onFocus={onFocus}
+      onBlur={onBlur}
       onChange={handleChange}
-      style={{ width: "100%", height: "100%", boxSizing: "border-box" }}
+      style={inputChrome}
     />
   );
 };

@@ -151,6 +151,18 @@ func (a *kernelFormActions) SetFormMode(formName, mode string) error {
 	return err
 }
 
+func (a *kernelFormActions) FormBehaviorFormula(formName, property string) string {
+	if a == nil || a.session == nil {
+		return ""
+	}
+	control, ok := findFormControl(a.session.Package, formName)
+	if !ok {
+		return ""
+	}
+	meta := toFormControl(a.session, control)
+	return form.ReadBehaviorFormula(meta.Formulas, meta.Properties, property)
+}
+
 func findFormControl(pkg *Package, formName string) (RuntimeControl, bool) {
 	if pkg == nil {
 		return RuntimeControl{}, false

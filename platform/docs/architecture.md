@@ -122,6 +122,12 @@ Local development uses Docker Compose for PostgreSQL, Redis, MinIO, and Keycloak
 | 8.0 Enterprise ALM | Complete |
 | 8.1 MinIO publish artifacts | Complete |
 | 8.2 MinIO artifact GC | Complete |
+| 9.0 Security hardening | Complete |
+| 9.1 Reliability / performance | Complete |
+| 9.2 Frontend hardening | Complete |
+| 9.3 Ops (validators, checklist, deploy surface) | Complete |
+
+Scaffold stub services (`auth`, `connector`, `environment`, `audit`, `search`) remain in-repo under `services/*/` but are **excluded** from the production kustomize base (`infrastructure/kubernetes/kustomization.yaml`). Deployable surface: gateway, metadata, runtime, publish.
 
 ## Deferred
 

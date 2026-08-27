@@ -4,7 +4,7 @@ Cloud-native low-code platform monorepo for building, publishing, and running ma
 
 ## Current status
 
-Phases **1–6.1**, runtime hardening **6.9**, core-loop polish **7.0**, REST connectors **7.1**, Keycloak auth **7.2**, Studio connector designer **7.3**, auth trust-boundary hardening **7.4**, and enterprise ALM **8.0** are complete. Builders can create apps in Studio (via the gateway), configure REST connectors visually, bind galleries/forms to entities or connectors, publish/unpublish/rollback, promote environment versions, and run apps with development or Keycloak identity.
+Phases **1–8.2** and **9.0–9.3** (production hardening) are complete. Builders can create apps in Studio (via the gateway), configure connectors visually, bind galleries/forms to entities or connectors, publish/unpublish/rollback, promote environment versions, and run apps with development or Keycloak identity. See [docs/production-checklist.md](docs/production-checklist.md) for deploy gates.
 
 ## Tech Stack
 

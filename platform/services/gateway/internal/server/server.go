@@ -3,16 +3,20 @@ package server
 
 import (
 	"log/slog"
+	"time"
 
-	"github.com/goapps-platform/shared/auth"
 	"github.com/goapps-platform/gateway-service/internal/config"
 	"github.com/goapps-platform/gateway-service/internal/proxy"
+	"github.com/goapps-platform/shared/auth"
 	"github.com/goapps-platform/shared/health"
+	"github.com/goapps-platform/shared/httpx"
 	"github.com/goapps-platform/shared/logging"
+	"github.com/goapps-platform/shared/metrics"
 	"github.com/goapps-platform/shared/middleware"
 	"github.com/goapps-platform/shared/response"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 )
 
@@ -36,20 +40,26 @@ func New(cfg config.Config) (*fiber.App, error) {
 
 	app.Use(recover.New())
 	app.Use(middleware.RequestID())
+	app.Use(metrics.HTTPMiddleware(cfg.ServiceName))
+	metrics.RegisterMetrics(app)
 	app.Use(middleware.RequestLogger(logger))
-	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Tenant-Id, X-User-Id, X-User-Email, X-Request-ID",
-		AllowMethods: "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-	}))
+	app.Use(cors.New(httpx.CORSConfig()))
 
 	registerPublicRoutes(app, cfg.ServiceName)
 
 	authMiddleware := auth.Middleware(cfg.Auth, validator)
 	proxyHandler := proxy.NewHandler(cfg.MetadataServiceURL, cfg.PublishServiceURL, cfg.RuntimeServiceURL)
 
+	publicLimit := limiter.New(limiter.Config{
+		Max:        60,
+		Expiration: time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string {
+			return c.IP() + ":" + c.Path()
+		},
+	})
+
 	// Public workflow webhooks (no Keycloak) — must be registered before the authed /api group.
-	app.All("/api/v1/public/*", proxyHandler.ForwardPublic)
+	app.All("/api/v1/public/*", publicLimit, proxyHandler.ForwardPublic)
 	// Public connector OAuth callback — Google redirects here without auth headers.
 	app.Get("/api/v1/connectors/oauth/callback", proxyHandler.ForwardPublic)
 

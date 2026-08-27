@@ -11,10 +11,39 @@ export const RuntimeShell: React.FC = () => {
     window.location.reload();
   }, []);
   if (ctx.loading) return <LoadingState />;
-  if (!ctx.pkg) return <ErrorState message="Package not found" />;
+  if (ctx.loadError) {
+    return (
+      <ErrorState
+        message={ctx.loadError}
+        onRetry={reload}
+      />
+    );
+  }
+  if (!ctx.pkg) return <ErrorState message="Package not found" onRetry={reload} />;
   return (
     <div style={{ padding: 12 }}>
       <ConnectorOAuthBanner pkg={ctx.pkg} onConnected={reload} />
+      {ctx.actionError ? (
+        <div
+          role="alert"
+          style={{
+            marginBottom: 12,
+            padding: "8px 12px",
+            background: "#fde8e8",
+            color: "#9b1c1c",
+            borderRadius: 6,
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            alignItems: "center",
+          }}
+        >
+          <span>{ctx.actionError}</span>
+          <button type="button" onClick={() => ctx.clearActionError?.()}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       <RuntimeRenderer />
     </div>
   );

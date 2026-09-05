@@ -254,6 +254,10 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
 
       text: { value: "Button" },
 
+      visible: { value: true },
+
+      displayMode: { value: "Edit" },
+
     },
 
   },
@@ -275,6 +279,14 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
     properties: {
 
       text: { value: "Label" },
+
+      size: { value: 12 },
+
+      weight: { value: "600" },
+
+      align: { value: "left" },
+
+      visible: { value: true },
 
     },
 
@@ -324,6 +336,8 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
 
       pageSize: { value: 10 },
 
+      visible: { value: true },
+
     },
 
   },
@@ -349,6 +363,8 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
       pageSize: { value: 10 },
 
       showRefresh: { value: true },
+
+      visible: { value: true },
 
     },
 
@@ -376,6 +392,8 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
 
       columns: { value: 2 },
 
+      visible: { value: true },
+
     },
 
   },
@@ -397,6 +415,16 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
     properties: {
 
       duration: { value: 1000 },
+
+      autoStart: { value: true },
+
+      start: { value: true },
+
+      repeat: { value: false },
+
+      visible: { value: true },
+
+      displayMode: { value: "Edit" },
 
     },
 
@@ -443,6 +471,8 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
     properties: {
 
       direction: { value: "vertical" },
+
+      visible: { value: true },
 
     },
 
@@ -514,6 +544,8 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
 
       src: { value: "https://via.placeholder.com/160x120" },
 
+      visible: { value: true },
+
     },
 
   },
@@ -537,6 +569,8 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
       icon: { value: "star" },
 
       color: { value: "#333333" },
+
+      visible: { value: true },
 
     },
 

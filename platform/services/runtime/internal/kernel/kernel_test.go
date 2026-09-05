@@ -168,6 +168,58 @@ func TestHandleControlEventOnSelectUpdatesStateAndRefresh(t *testing.T) {
 	}
 }
 
+func TestHandleControlEventOnSelectFromPropertyFormula(t *testing.T) {
+	appID := uuid.New()
+	tenantID := uuid.New()
+	userID := uuid.New()
+	btnID := uuid.New()
+	screenID := uuid.New()
+	onVisible := "Set(varVisible, true)"
+	pkg := &Package{
+		AppID: appID,
+		Screens: []RuntimeScreen{{
+			ID: screenID, Name: "Home", OnVisible: &onVisible,
+		}},
+		Controls: map[string]RuntimeControl{
+			"btnnav": {
+				ID:     btnID,
+				Name:   "btnNav",
+				Screen: "Home",
+				Properties: map[string]interface{}{
+					"onSelect": map[string]interface{}{"formula": "Set(varFromProp, true)"},
+				},
+			},
+		},
+		ScreensByName: map[string]RuntimeScreen{
+			"home": {ID: screenID, Name: "Home", OnVisible: &onVisible},
+		},
+	}
+	kernel := newTestKernel(&fakeMetadataLoader{pkg: pkg})
+
+	start, err := kernel.StartSession(context.Background(), tenantID, userID, StartSessionRequest{
+		AppID:  appID,
+		Screen: "Home",
+	})
+	if err != nil {
+		t.Fatalf("StartSession: %v", err)
+	}
+
+	if _, err := kernel.HandleControlEvent(context.Background(), start.SessionID, ControlEventRequest{
+		AppID:     appID,
+		ControlID: "btnNav",
+		Event:     "OnSelect",
+		Screen:    "Home",
+	}); err != nil {
+		t.Fatalf("HandleControlEvent: %v", err)
+	}
+
+	session, _ := kernel.Session(start.SessionID)
+	value, ok := session.State.GetVariable("varFromProp")
+	if !ok || value != true {
+		t.Fatalf("expected varFromProp=true from property formula, got %#v ok=%v", value, ok)
+	}
+}
+
 func TestMetadataCachedPerSession(t *testing.T) {
 	loader := &fakeMetadataLoader{}
 	kernel := newTestKernel(loader)

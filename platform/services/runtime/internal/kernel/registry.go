@@ -267,6 +267,7 @@ func (l *PostgresMetadataLoader) Load(ctx context.Context, tenantID, appID uuid.
 		runtimeControl := controlByName[strings.ToLower(control.Name)]
 		runtimeControl.Formulas = formulaByControl[id]
 		runtimeControl.Properties = propsByControl[id]
+		runtimeControl.Formulas = promoteKernelActionFormulas(runtimeControl.Properties, runtimeControl.Formulas)
 		controlByName[strings.ToLower(control.Name)] = runtimeControl
 		controlByName[strings.ToLower(id.String())] = runtimeControl
 	}
@@ -304,4 +305,49 @@ func (l *PostgresMetadataLoader) Load(ctx context.Context, tenantID, appID uuid.
 		Controls:      controlByName,
 		ScreensByName: screenByName,
 	}, nil
+}
+
+func promoteKernelActionFormulas(properties map[string]interface{}, existing []RuntimeFormula) []RuntimeFormula {
+	if len(properties) == 0 {
+		return existing
+	}
+	covered := map[string]struct{}{}
+	for _, f := range existing {
+		covered[strings.ToLower(strings.TrimSpace(f.PropertyName))] = struct{}{}
+	}
+	out := append([]RuntimeFormula(nil), existing...)
+	for name, raw := range properties {
+		key := strings.ToLower(strings.TrimSpace(name))
+		switch key {
+		case "onselect", "onchange", "ontimerend", "onsuccess", "onfailure":
+		default:
+			continue
+		}
+		if _, ok := covered[key]; ok {
+			continue
+		}
+		text := propertyFormulaText(raw)
+		if text == "" {
+			continue
+		}
+		out = append(out, RuntimeFormula{
+			PropertyName: name,
+			FormulaText:  text,
+			FormulaType:  "action",
+		})
+		covered[key] = struct{}{}
+	}
+	return out
+}
+
+func propertyFormulaText(raw interface{}) string {
+	switch typed := raw.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case map[string]interface{}:
+		if formula, ok := typed["formula"].(string); ok {
+			return strings.TrimSpace(formula)
+		}
+	}
+	return ""
 }

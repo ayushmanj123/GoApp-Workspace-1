@@ -42,8 +42,10 @@ export const Button: React.FC<any> = ({
   onClick,
   controlName,
   name,
+  tooltip,
 }) => {
   const label = useResolvedPropertyText(text, "Button");
+  const resolvedTooltip = useResolvedPropertyText(tooltip);
   const engine = useFormulaEngine();
   const context = useFormulaEvaluationContext();
   const store = useVariableStore();
@@ -139,7 +141,12 @@ export const Button: React.FC<any> = ({
   ]);
 
   return (
-    <button disabled={disabled} onClick={handleClick} style={{ width: "100%", height: "100%" }}>
+    <button
+      disabled={disabled}
+      title={resolvedTooltip || undefined}
+      onClick={handleClick}
+      style={{ width: "100%", height: "100%" }}
+    >
       {label}
     </button>
   );

@@ -32,11 +32,13 @@ export const Toggle: React.FC<any> = ({
   disabled = false,
   readOnly = false,
   onChange,
+  tooltip,
   controlName,
   name,
   id,
 }) => {
   const label = useResolvedPropertyText(text, "Toggle");
+  const resolvedTooltip = useResolvedPropertyText(tooltip);
   const formEdit = useFormEditContext();
   const controlValueStore = useControlValueStore();
   const defaultFormula = readPropertyFormula(defaultProperty);
@@ -86,6 +88,7 @@ export const Toggle: React.FC<any> = ({
   return (
     <label
       htmlFor={id}
+      title={resolvedTooltip || undefined}
       style={{
         display: "flex",
         alignItems: "center",

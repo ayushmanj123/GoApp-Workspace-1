@@ -209,12 +209,13 @@ func CreateCRUDApp(ctx context.Context, sess repositories.TenantSession, input C
 	galleryY := float64(24)
 	btnNewY := float64(24)
 	btnEditY := float64(72)
-	btnActionY := float64(400)
+	formY := float64(24)
+	formHeight := scaffoldFormHeight(len(input.Columns))
+	btnActionY := formY + formHeight + 16
 	if input.FixedIDs != nil && input.FixedIDs.GalleryID != uuid.Nil {
 		galleryY = 120
 		btnNewY = 64
 		btnEditY = 112
-		btnActionY = 448
 	}
 
 	controls := []models.Control{
@@ -222,7 +223,7 @@ func CreateCRUDApp(ctx context.Context, sess repositories.TenantSession, input C
 		{TenantID: input.TenantID, ID: galleryNameLblID, ScreenID: listScreen.ID, ParentControlID: &galleryID, ControlType: "label", Name: galleryLabel, X: 8, Y: 8, Width: 240, Height: 28, ZIndex: 1},
 		{TenantID: input.TenantID, ID: btnNewID, ScreenID: listScreen.ID, ControlType: "button", Name: btnNewName, X: 560, Y: btnNewY, Width: 120, Height: 40, ZIndex: 4},
 		{TenantID: input.TenantID, ID: btnEditID, ScreenID: listScreen.ID, ControlType: "button", Name: btnEditName, X: 560, Y: btnEditY, Width: 120, Height: 40, ZIndex: 5},
-		{TenantID: input.TenantID, ID: formID, ScreenID: editScreen.ID, ControlType: "form", Name: formName, X: 24, Y: 24, Width: 520, Height: 360, ZIndex: 1},
+		{TenantID: input.TenantID, ID: formID, ScreenID: editScreen.ID, ControlType: "form", Name: formName, X: 24, Y: formY, Width: 520, Height: formHeight, ZIndex: 1},
 		{TenantID: input.TenantID, ID: btnSubmitID, ScreenID: editScreen.ID, ControlType: "button", Name: btnSubmitName, X: 24, Y: btnActionY, Width: 120, Height: 40, ZIndex: 3},
 		{TenantID: input.TenantID, ID: btnResetID, ScreenID: editScreen.ID, ControlType: "button", Name: btnResetName, X: 160, Y: btnActionY, Width: 120, Height: 40, ZIndex: 4},
 		{TenantID: input.TenantID, ID: btnBackID, ScreenID: editScreen.ID, ControlType: "button", Name: btnBackName, X: 432, Y: btnActionY, Width: 120, Height: 40, ZIndex: 6},
@@ -306,16 +307,20 @@ func CreateCRUDApp(ctx context.Context, sess repositories.TenantSession, input C
 		}
 	}
 
+	if err := clearFormDataCards(input.UpsertDB, formID); err != nil {
+		return err
+	}
+
 	y := float64(16)
 	for _, col := range input.Columns {
 		col = strings.TrimSpace(col)
 		if col == "" {
 			continue
 		}
-		cardID := uuid.New()
-		lblID := uuid.New()
-		inputID := uuid.New()
 		fieldName := sanitizeName(col)
+		cardID := deterministicChildID(formID, "card", fieldName)
+		lblID := deterministicChildID(cardID, "lbl", fieldName)
+		inputID := deterministicChildID(cardID, "txt", fieldName)
 		card := models.Control{
 			TenantID: input.TenantID, ID: cardID, ScreenID: editScreen.ID, ParentControlID: &formID,
 			ControlType: "datacard", Name: "card" + fieldName, X: 16, Y: y, Width: 488, Height: 56, ZIndex: 1,
@@ -407,6 +412,61 @@ func upsertEntity(tx *gorm.DB, entity interface{}, updateColumns []string) error
 		DoUpdates: clause.AssignmentColumns(updateColumns),
 	}).Create(entity).Error; err != nil {
 		return fmt.Errorf("scaffold: upsert: %w", err)
+	}
+	return nil
+}
+
+func scaffoldFormHeight(columnCount int) float64 {
+	const (
+		minHeight   = 360.0
+		topPad      = 16.0
+		cardHeight  = 56.0
+		bottomPad   = 16.0
+	)
+	if columnCount <= 0 {
+		return minHeight
+	}
+	needed := topPad + float64(columnCount)*cardHeight + bottomPad
+	if needed < minHeight {
+		return minHeight
+	}
+	return needed
+}
+
+func deterministicChildID(parent uuid.UUID, kind, field string) uuid.UUID {
+	return uuid.NewSHA1(parent, []byte(kind+":"+field))
+}
+
+func clearFormDataCards(upsertDB *gorm.DB, formID uuid.UUID) error {
+	if upsertDB == nil {
+		return nil
+	}
+	var cardIDs []uuid.UUID
+	if err := upsertDB.Model(&models.Control{}).
+		Where("parent_control_id = ? AND control_type = ?", formID, "datacard").
+		Pluck("id", &cardIDs).Error; err != nil {
+		return fmt.Errorf("scaffold: list form datacards: %w", err)
+	}
+	if len(cardIDs) == 0 {
+		return nil
+	}
+	var nestedIDs []uuid.UUID
+	if err := upsertDB.Model(&models.Control{}).
+		Where("parent_control_id IN ?", cardIDs).
+		Pluck("id", &nestedIDs).Error; err != nil {
+		return fmt.Errorf("scaffold: list datacard children: %w", err)
+	}
+	allIDs := append(append([]uuid.UUID{}, cardIDs...), nestedIDs...)
+	if err := upsertDB.Where("control_id IN ?", allIDs).Delete(&models.ControlProperty{}).Error; err != nil {
+		return fmt.Errorf("scaffold: clear datacard properties: %w", err)
+	}
+	if len(nestedIDs) > 0 {
+		if err := upsertDB.Where("id IN ?", nestedIDs).Delete(&models.Control{}).Error; err != nil {
+			return fmt.Errorf("scaffold: clear datacard children: %w", err)
+		}
+	}
+	if err := upsertDB.Where("id IN ?", cardIDs).Delete(&models.Control{}).Error; err != nil {
+		return fmt.Errorf("scaffold: clear datacards: %w", err)
 	}
 	return nil
 }

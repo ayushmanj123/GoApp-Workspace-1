@@ -32,6 +32,15 @@ export function firstStringLikeField(record: Record<string, unknown>): string {
   return "";
 }
 
+/** Stable React key for gallery/datatable rows — avoids remount on field edits. */
+export function galleryRowKey(record: Record<string, unknown>, index: number): string {
+  const id = record.recordId ?? record.RecordId ?? null;
+  if (id != null && String(id).trim() !== "") {
+    return `row-${String(id)}`;
+  }
+  return `row-idx-${index}`;
+}
+
 /** Converts a Power Fx table result into record objects for gallery rows. */
 export function normalizeGalleryRecords(result: unknown): Record<string, unknown>[] {
   if (result === null || result === undefined) return [];

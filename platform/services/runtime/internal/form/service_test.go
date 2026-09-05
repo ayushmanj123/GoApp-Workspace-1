@@ -668,9 +668,119 @@ func TestExplicitItemLiteralAndNewDefaults(t *testing.T) {
 	}
 }
 
+func TestBuildStateReadsWrappedDataSource(t *testing.T) {
+	store := NewSessionStore()
+	connectorID := uuid.New()
+	svc := NewService(
+		store,
+		&fakeRecordService{},
+		&fakeRecordService{},
+		&fakeBindingResolver{
+			entityID: connectorID,
+			name:     "GoSheetsOne",
+			kind:     databinding.DataSourceKindGoogleSheets,
+		},
+		nil,
+		gallery.NewSessionStore(),
+	)
+	control := ControlMetadata{
+		Name:        "Form1",
+		ControlType: "form",
+		Formulas:    []FormulaBinding{{PropertyName: "item", FormulaText: "Defaults(GoSheetsOne)"}},
+		Properties: map[string]interface{}{
+			"dataSource": map[string]interface{}{"value": "GoSheetsOne"},
+			"mode":       map[string]interface{}{"value": "New"},
+		},
+	}
+	state, err := svc.Load(context.Background(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), control)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if state.DataSource != "GoSheetsOne" {
+		t.Fatalf("expected data source GoSheetsOne, got %q", state.DataSource)
+	}
+	if state.DataSourceKind != string(databinding.DataSourceKindGoogleSheets) {
+		t.Fatalf("expected google_sheets kind, got %q", state.DataSourceKind)
+	}
+	if state.Mode != ModeNew {
+		t.Fatalf("expected New mode, got %s", state.Mode)
+	}
+}
+
+func TestSubmitGoogleSheetsInfersWrappedDataSource(t *testing.T) {
+	store := NewSessionStore()
+	connectorID := uuid.New()
+	sheetsDS := &fakeGoogleSheetsFormDataSource{}
+	registry := databinding.NewDataSourceRegistry(nil).SetGoogleSheets(sheetsDS)
+	svc := NewService(
+		store,
+		&fakeRecordService{},
+		&fakeRecordService{},
+		&fakeBindingResolver{
+			entityID: connectorID,
+			name:     "GoSheetsOne",
+			kind:     databinding.DataSourceKindGoogleSheets,
+		},
+		registry,
+		gallery.NewSessionStore(),
+	)
+	sessionID := uuid.New()
+	control := ControlMetadata{
+		Name:        "Form1",
+		ControlType: "form",
+		Formulas:    []FormulaBinding{{PropertyName: "item", FormulaText: "Defaults(GoSheetsOne)"}},
+		Properties: map[string]interface{}{
+			"dataSource": map[string]interface{}{"value": "GoSheetsOne"},
+			"mode":       map[string]interface{}{"value": "New"},
+		},
+	}
+	if _, err := svc.SetMode(context.Background(), sessionID, uuid.New(), uuid.New(), control, ModeNew); err != nil {
+		t.Fatalf("SetMode: %v", err)
+	}
+	if _, err := svc.Update(context.Background(), sessionID, uuid.New(), uuid.New(), control, map[string]interface{}{"Column 1": "A"}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	_, source, err := svc.Submit(context.Background(), sessionID, uuid.New(), uuid.New(), uuid.New(), control)
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if !sheetsDS.created {
+		t.Fatal("expected Google Sheets Create")
+	}
+	if source != "GoSheetsOne" {
+		t.Fatalf("expected GoSheetsOne source, got %q", source)
+	}
+}
+
+type fakeGoogleSheetsFormDataSource struct {
+	created bool
+}
+
+func (f *fakeGoogleSheetsFormDataSource) Kind() databinding.DataSourceKind {
+	return databinding.DataSourceKindGoogleSheets
+}
+func (f *fakeGoogleSheetsFormDataSource) Query(context.Context, databinding.QueryInput) (*databinding.QueryResult, error) {
+	return nil, errors.New("not implemented")
+}
+func (f *fakeGoogleSheetsFormDataSource) Get(context.Context, uuid.UUID, uuid.UUID, databinding.DataSourceKey, uuid.UUID) (*databinding.DataItem, error) {
+	return nil, errors.New("not implemented")
+}
+func (f *fakeGoogleSheetsFormDataSource) Create(_ context.Context, _, _ uuid.UUID, _ databinding.DataSourceKey, data map[string]interface{}) (*databinding.DataItem, error) {
+	f.created = true
+	item := databinding.DataItem{"id": uuid.New().String(), "Column 1": data["Column 1"]}
+	return &item, nil
+}
+func (f *fakeGoogleSheetsFormDataSource) Update(context.Context, uuid.UUID, uuid.UUID, databinding.DataSourceKey, uuid.UUID, map[string]interface{}, int) (*databinding.DataItem, error) {
+	return nil, errors.New("not implemented")
+}
+func (f *fakeGoogleSheetsFormDataSource) Delete(context.Context, uuid.UUID, uuid.UUID, databinding.DataSourceKey, uuid.UUID) error {
+	return errors.New("not implemented")
+}
+
 type fakeBindingResolver struct {
 	entityID uuid.UUID
 	name     string
+	kind     databinding.DataSourceKind
 }
 
 func (f *fakeBindingResolver) Resolve(ctx context.Context, tenantID, appID uuid.UUID, dataSourceName string, overrides databinding.QueryOverrides) (*databinding.ResolvedBinding, databinding.QueryInput, error) {
@@ -678,9 +788,13 @@ func (f *fakeBindingResolver) Resolve(ctx context.Context, tenantID, appID uuid.
 	_ = tenantID
 	_ = appID
 	_ = overrides
+	kind := f.kind
+	if kind == "" {
+		kind = databinding.DataSourceKindEntity
+	}
 	return &databinding.ResolvedBinding{
 		Name:     f.name,
-		Kind:     databinding.DataSourceKindEntity,
+		Kind:     kind,
 		EntityID: f.entityID,
 	}, databinding.QueryInput{}, nil
 }

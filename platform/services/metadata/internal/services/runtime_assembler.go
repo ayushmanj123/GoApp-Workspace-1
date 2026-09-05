@@ -3,10 +3,12 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/goapps-platform/metadata-service/internal/api/contracts"
 	"github.com/goapps-platform/metadata-service/internal/models"
+	"github.com/google/uuid"
 )
 
 // Assemble runtime DTOs from models
@@ -54,8 +56,15 @@ func assembleRuntimeApplication(app *models.Application, screens []models.Screen
 		controlsByScreen[c.ScreenID.String()] = append(controlsByScreen[c.ScreenID.String()], c)
 	}
 
-	// build screens
-	for _, s := range screens {
+	// build screens in display_order so screens[0] is the app start screen
+	sortedScreens := append([]models.Screen(nil), screens...)
+	sort.SliceStable(sortedScreens, func(i, j int) bool {
+		if sortedScreens[i].DisplayOrder != sortedScreens[j].DisplayOrder {
+			return sortedScreens[i].DisplayOrder < sortedScreens[j].DisplayOrder
+		}
+		return sortedScreens[i].Name < sortedScreens[j].Name
+	})
+	for _, s := range sortedScreens {
 		rs := contracts.RuntimeScreen{ID: s.ID, ApplicationID: s.ApplicationID, Name: s.Name, DisplayOrder: s.DisplayOrder, LayoutType: s.LayoutType, OnVisible: s.OnVisible}
 		// build controls for this screen
 		ctrls := controlsByScreen[s.ID.String()]
@@ -72,6 +81,7 @@ func assembleRuntimeApplication(app *models.Application, screens []models.Screen
 			if f, ok := formulaMap[c.ID.String()]; ok {
 				rc.Formulas = f
 			}
+			rc.Formulas = promoteActionFormulasFromProperties(c.ID, rc.Properties, rc.Formulas)
 			runtimeCtrls = append(runtimeCtrls, rc)
 		}
 		expandedCtrls, err := expandComponentInstances(runtimeCtrls, componentDefs)
@@ -135,4 +145,63 @@ func assembleRuntimeConnectors(connectors []models.Connector, actions []models.C
 		out = append(out, rc)
 	}
 	return out
+}
+
+// promoteActionFormulasFromProperties copies action property wrappers
+// ({"formula":"..."}) into Formulas when the formulas table has no row for that property.
+func promoteActionFormulasFromProperties(
+	controlID uuid.UUID,
+	properties map[string]interface{},
+	existing []contracts.RuntimeFormula,
+) []contracts.RuntimeFormula {
+	if len(properties) == 0 {
+		return existing
+	}
+	covered := map[string]struct{}{}
+	for _, f := range existing {
+		covered[strings.ToLower(strings.TrimSpace(f.PropertyName))] = struct{}{}
+	}
+	out := append([]contracts.RuntimeFormula(nil), existing...)
+	for name, raw := range properties {
+		if !isActionFormulaProperty(name) {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(name))
+		if _, ok := covered[key]; ok {
+			continue
+		}
+		text := extractPropertyFormulaText(raw)
+		if text == "" {
+			continue
+		}
+		out = append(out, contracts.RuntimeFormula{
+			ControlID:    controlID,
+			PropertyName: name,
+			FormulaText:  text,
+			FormulaType:  "action",
+		})
+		covered[key] = struct{}{}
+	}
+	return out
+}
+
+func isActionFormulaProperty(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "onselect", "onchange", "ontimerend", "onsuccess", "onfailure":
+		return true
+	default:
+		return false
+	}
+}
+
+func extractPropertyFormulaText(raw interface{}) string {
+	switch typed := raw.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case map[string]interface{}:
+		if formula, ok := typed["formula"].(string); ok {
+			return strings.TrimSpace(formula)
+		}
+	}
+	return ""
 }

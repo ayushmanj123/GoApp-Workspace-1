@@ -32,13 +32,33 @@ function readNumber(
   return fallback;
 }
 
-function readVisible(properties: Record<string, unknown>): boolean {
-  const raw = properties.Visible ?? properties.visible;
+function coerceVisibleValue(raw: unknown): boolean | null {
   if (typeof raw === "boolean") {
     return raw;
   }
   if (typeof raw === "string") {
-    return raw.toLowerCase() !== "false";
+    const trimmed = raw.trim().toLowerCase();
+    if (!trimmed) return null;
+    return trimmed !== "false" && trimmed !== "0";
+  }
+  if (typeof raw === "number") {
+    return raw !== 0;
+  }
+  return null;
+}
+
+/** Exported for unit checks; resolves Studio `{ value }` wrappers and plain booleans. */
+export function readVisible(properties: Record<string, unknown>): boolean {
+  const raw = properties.Visible ?? properties.visible;
+  const direct = coerceVisibleValue(raw);
+  if (direct !== null) {
+    return direct;
+  }
+  if (raw && typeof raw === "object" && "value" in raw) {
+    const wrapped = coerceVisibleValue((raw as { value?: unknown }).value);
+    if (wrapped !== null) {
+      return wrapped;
+    }
   }
   return true;
 }
@@ -111,4 +131,20 @@ export function relativeContainerStyle(): CSSProperties {
     height: "100%",
     boxSizing: "border-box",
   };
+}
+
+/** Normalize Studio direction aliases to CSS flex-direction. */
+export function normalizeFlexDirection(
+  direction: unknown,
+): "row" | "column" {
+  let raw = "";
+  if (typeof direction === "string") {
+    raw = direction.trim().toLowerCase();
+  } else if (direction && typeof direction === "object" && "value" in direction) {
+    raw = String((direction as { value?: unknown }).value ?? "")
+      .trim()
+      .toLowerCase();
+  }
+  if (raw === "horizontal" || raw === "row") return "row";
+  return "column";
 }

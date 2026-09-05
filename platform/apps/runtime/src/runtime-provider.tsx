@@ -348,10 +348,16 @@ export const RuntimeProvider: React.FC<{
           return;
         }
         setPkg(data);
-        if (data.screens?.length > 0) {
-          navigationStoreRef.current.navigate(data.screens[0].id);
+        const orderedScreens = [...(data.screens ?? [])].sort((a, b) => {
+          const ao = a.display_order ?? a.displayOrder ?? 0;
+          const bo = b.display_order ?? b.displayOrder ?? 0;
+          if (ao !== bo) return ao - bo;
+          return String(a.name ?? "").localeCompare(String(b.name ?? ""));
+        });
+        if (orderedScreens.length > 0) {
+          navigationStoreRef.current.navigate(orderedScreens[0].id);
         }
-        const firstScreen = data.screens?.[0];
+        const firstScreen = orderedScreens[0];
         const sessionChannel = environmentId ? "published" : channel;
         const session = await startRuntimeSession(
           appId,

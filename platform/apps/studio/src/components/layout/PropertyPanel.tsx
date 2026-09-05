@@ -339,6 +339,144 @@ function MetadataPropRow({
   );
 }
 
+function splitColumnsCsv(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function DataTableColumnsPicker({
+  selectedControl,
+  itemsFormula,
+  entities,
+  entityFieldsByEntityId,
+  connectors,
+  sheetColumnsByConnectorId,
+  loadSheetColumns,
+  onWriteColumns,
+}: {
+  selectedControl: Control;
+  itemsFormula: string;
+  entities: Array<{ id: string; name: string }>;
+  entityFieldsByEntityId: Record<string, Array<{ name: string }>>;
+  connectors: Array<{ id: string; name: string; connector_type?: string }>;
+  sheetColumnsByConnectorId: Record<string, string[]>;
+  loadSheetColumns: (connectorId: string, force?: boolean) => Promise<string[]>;
+  onWriteColumns: (csv: string) => void;
+}) {
+  const columnsValue = String(
+    readPropertyValue("text", selectedControl.properties?.columns) ?? "",
+  ).trim();
+  const selectedNames = splitColumnsCsv(columnsValue);
+
+  const sheetsConnector = connectors.find(
+    (c) => c.name === itemsFormula && isGoogleSheetsConnector(c),
+  );
+  const entity = entities.find((e) => e.name === itemsFormula);
+
+  useEffect(() => {
+    if (!sheetsConnector) return;
+    void loadSheetColumns(sheetsConnector.id);
+  }, [sheetsConnector, loadSheetColumns]);
+
+  const availableFromSource = sheetsConnector
+    ? (sheetColumnsByConnectorId[sheetsConnector.id] ?? [])
+    : entity
+      ? (entityFieldsByEntityId[entity.id] ?? []).map((f) => f.name)
+      : [];
+  const availableNames =
+    availableFromSource.length > 0
+      ? availableFromSource
+      : selectedNames.length > 0
+        ? selectedNames
+        : [];
+
+  const toggleColumn = (name: string, checked: boolean) => {
+    const next = checked
+      ? [...selectedNames.filter((n) => n !== name), name]
+      : selectedNames.filter((n) => n !== name);
+    onWriteColumns(next.join(", "));
+  };
+
+  const moveColumn = (name: string, direction: -1 | 1) => {
+    const index = selectedNames.indexOf(name);
+    if (index < 0) return;
+    const swap = index + direction;
+    if (swap < 0 || swap >= selectedNames.length) return;
+    const next = [...selectedNames];
+    [next[index], next[swap]] = [next[swap], next[index]];
+    onWriteColumns(next.join(", "));
+  };
+
+  return (
+    <div className={styles.propBlock} data-testid="datatable-columns-picker">
+      <label className={styles.propLabel} htmlFor="datatable-columns-text">
+        Columns
+      </label>
+      {availableNames.length > 0 ? (
+        <ul
+          className={styles.columnPickerList}
+          data-testid="datatable-columns-checklist"
+        >
+          {availableNames.map((name) => {
+            const checked = selectedNames.includes(name);
+            return (
+              <li key={name} className={styles.columnPickerRow}>
+                <label className={styles.columnPickerLabel}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) =>
+                      toggleColumn(name, event.currentTarget.checked)
+                    }
+                  />
+                  <span>{name}</span>
+                </label>
+                {checked ? (
+                  <span className={styles.columnPickerReorder}>
+                    <button
+                      type="button"
+                      aria-label={`Move ${name} up`}
+                      onClick={() => moveColumn(name, -1)}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Move ${name} down`}
+                      onClick={() => moveColumn(name, 1)}
+                    >
+                      ↓
+                    </button>
+                  </span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className={styles.stubHint}>
+          Bind Items to an entity or Google Sheets connector (or type column names
+          below) to pick visible columns.
+        </p>
+      )}
+      <input
+        id="datatable-columns-text"
+        className={styles.datasourceSelect}
+        data-testid="datatable-columns-text"
+        value={columnsValue}
+        placeholder="Name, Status, Amount"
+        onChange={(event) => onWriteColumns(event.currentTarget.value)}
+      />
+      <p className={styles.stubHint}>
+        Comma-separated field names written to the <code>columns</code> property.
+        Leave empty to infer from loaded rows.
+      </p>
+    </div>
+  );
+}
+
 export function PropertyPanel() {
   const { applicationId: routeAppId } = useParams<{ applicationId?: string }>();
   const collapsed = useStudioStore((s) => s.propertiesCollapsed);
@@ -581,13 +719,16 @@ export function PropertyPanel() {
                       readPropertyValue("text", selectedControl.properties?.dataSource) ||
                         readPropertyFormula(selectedControl.properties?.dataSource),
                     ).trim();
-                    const galleryNames = controls
-                      .filter(
-                        (c) =>
-                          c.screen_id === selectedScreenId &&
-                          c.control_type.toLowerCase() === "gallery",
-                      )
+                    const selectionSourceNames = controls
+                      .filter((c) => {
+                        if (c.screen_id !== selectedScreenId) return false;
+                        const type = c.control_type.toLowerCase();
+                        return type === "gallery" || type === "datatable";
+                      })
                       .map((c) => c.name);
+                    const selectionFormulas = selectionSourceNames.map(
+                      (n) => `${n}.Selected`,
+                    );
                     const datasourceNames = [
                       ...entities.map((e) => e.name),
                       ...connectors.map((c) => c.name),
@@ -781,9 +922,7 @@ export function PropertyPanel() {
                               className={styles.datasourceSelect}
                               data-testid="item-datasource-picker"
                               value={
-                                galleryNames
-                                  .map((n) => `${n}.Selected`)
-                                  .includes(itemFormula) ||
+                                selectionFormulas.includes(itemFormula) ||
                                 datasourceNames.includes(itemFormula)
                                   ? itemFormula
                                   : ""
@@ -799,16 +938,14 @@ export function PropertyPanel() {
                             >
                               <option value="">
                                 {itemFormula &&
-                                !galleryNames
-                                  .map((n) => `${n}.Selected`)
-                                  .includes(itemFormula) &&
+                                !selectionFormulas.includes(itemFormula) &&
                                 !datasourceNames.includes(itemFormula)
                                   ? `Custom: ${itemFormula}`
-                                  : "Choose gallery selection or datasource…"}
+                                  : "Choose gallery/table selection or datasource…"}
                               </option>
-                              {galleryNames.length > 0 ? (
-                                <optgroup label="Gallery selection">
-                                  {galleryNames.map((name) => (
+                              {selectionSourceNames.length > 0 ? (
+                                <optgroup label="List selection">
+                                  {selectionSourceNames.map((name) => (
                                     <option key={name} value={`${name}.Selected`}>
                                       {name}.Selected
                                     </option>
@@ -835,8 +972,10 @@ export function PropertyPanel() {
                               ) : null}
                             </select>
                             <p className={styles.stubHint}>
-                              Typically <code>Gallery.Selected</code> so the form edits
-                              the selected gallery row.
+                              Typically <code>Gallery.Selected</code> or{" "}
+                              <code>DataTable.Selected</code> so the form edits the
+                              selected row. Dirty Edit/New forms keep unsaved values
+                              until Reset or Submit.
                             </p>
                           </div>
                         ) : null}
@@ -845,6 +984,13 @@ export function PropertyPanel() {
                             if (hasItems && definition.name === "items") return false;
                             if (hasItem && definition.name === "item") return false;
                             if (hasDataSource && definition.name === "dataSource") return false;
+                            if (
+                              normalizeControlType(selectedControl.control_type) ===
+                                "datatable" &&
+                              definition.name === "columns"
+                            ) {
+                              return false;
+                            }
                             return true;
                           })
                           .map((definition) => (
@@ -858,6 +1004,28 @@ export function PropertyPanel() {
                             }
                           />
                         ))}
+                        {normalizeControlType(selectedControl.control_type) ===
+                        "datatable" ? (
+                          <DataTableColumnsPicker
+                            selectedControl={selectedControl}
+                            itemsFormula={itemsFormula}
+                            entities={entities}
+                            entityFieldsByEntityId={entityFieldsByEntityId}
+                            connectors={connectors}
+                            sheetColumnsByConnectorId={sheetColumnsByConnectorId}
+                            loadSheetColumns={loadSheetColumns}
+                            onWriteColumns={(csv) =>
+                              updateMetadataProperty(
+                                {
+                                  name: "columns",
+                                  label: "Columns",
+                                  type: "text",
+                                },
+                                writePropertyValue("text", csv),
+                              )
+                            }
+                          />
+                        ) : null}
                         {normalizeControlType(selectedControl.control_type) === "form" &&
                         canGenerateFormFields ? (
                           <div className={styles.propBlock}>

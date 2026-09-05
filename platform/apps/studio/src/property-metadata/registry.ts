@@ -64,6 +64,12 @@ const BUTTON_PROPERTIES: PropertyFieldDefinition[] = [
 
   { name: "disabled", label: "Disabled", type: "boolean" },
 
+  { name: "visible", label: "Visible", type: "boolean" },
+
+  { name: "displayMode", label: "DisplayMode", type: "text" },
+
+  { name: "tooltip", label: "Tooltip", type: "text" },
+
   { name: "onSelect", label: "OnSelect", type: "formula" },
 
 ];
@@ -75,6 +81,14 @@ const LABEL_PROPERTIES: PropertyFieldDefinition[] = [
   { name: "text", label: "Text", type: "text" },
 
   { name: "color", label: "Color", type: "color" },
+
+  { name: "size", label: "Size", type: "number" },
+
+  { name: "weight", label: "Weight", type: "text" },
+
+  { name: "align", label: "Align", type: "text" },
+
+  { name: "visible", label: "Visible", type: "boolean" },
 
 ];
 
@@ -98,6 +112,10 @@ const TEXT_INPUT_PROPERTIES: PropertyFieldDefinition[] = [
 
   { name: "required", label: "Required", type: "boolean" },
 
+  { name: "tooltip", label: "Tooltip", type: "text" },
+
+  { name: "onChange", label: "OnChange", type: "formula" },
+
 ];
 
 
@@ -115,6 +133,8 @@ const GALLERY_PROPERTIES: PropertyFieldDefinition[] = [
   { name: "pageSize", label: "PageSize", type: "number" },
 
   { name: "offset", label: "Offset", type: "number" },
+
+  { name: "visible", label: "Visible", type: "boolean" },
 
 ];
 
@@ -142,6 +162,8 @@ const DATATABLE_PROPERTIES: PropertyFieldDefinition[] = [
     type: "boolean",
   },
 
+  { name: "visible", label: "Visible", type: "boolean" },
+
 ];
 
 
@@ -157,6 +179,8 @@ const FORM_PROPERTIES: PropertyFieldDefinition[] = [
   { name: "layout", label: "Layout", type: "text" },
 
   { name: "columns", label: "Columns", type: "number" },
+
+  { name: "visible", label: "Visible", type: "boolean" },
 
   { name: "onSuccess", label: "OnSuccess", type: "formula" },
 
@@ -188,6 +212,16 @@ const TIMER_PROPERTIES: PropertyFieldDefinition[] = [
 
   { name: "duration", label: "Duration", type: "number" },
 
+  { name: "autoStart", label: "AutoStart", type: "boolean" },
+
+  { name: "start", label: "Start", type: "boolean" },
+
+  { name: "repeat", label: "Repeat", type: "boolean" },
+
+  { name: "visible", label: "Visible", type: "boolean" },
+
+  { name: "displayMode", label: "DisplayMode", type: "text" },
+
   { name: "onTimerEnd", label: "OnTimerEnd", type: "formula" },
 
 ];
@@ -202,6 +236,10 @@ const DROPDOWN_PROPERTIES: PropertyFieldDefinition[] = [
 
   { name: "value", label: "Value", type: "text" },
 
+  { name: "displayField", label: "DisplayField", type: "text" },
+
+  { name: "valueField", label: "ValueField", type: "text" },
+
   { name: "disabled", label: "Disabled", type: "boolean" },
 
   { name: "visible", label: "Visible", type: "boolean" },
@@ -209,6 +247,8 @@ const DROPDOWN_PROPERTIES: PropertyFieldDefinition[] = [
   { name: "displayMode", label: "DisplayMode", type: "text" },
 
   { name: "required", label: "Required", type: "boolean" },
+
+  { name: "tooltip", label: "Tooltip", type: "text" },
 
   { name: "onChange", label: "OnChange", type: "formula" },
 
@@ -219,6 +259,8 @@ const DROPDOWN_PROPERTIES: PropertyFieldDefinition[] = [
 const CONTAINER_PROPERTIES: PropertyFieldDefinition[] = [
 
   { name: "direction", label: "Direction", type: "text" },
+
+  { name: "visible", label: "Visible", type: "boolean" },
 
 ];
 
@@ -239,6 +281,8 @@ const CHECKBOX_PROPERTIES: PropertyFieldDefinition[] = [
   { name: "displayMode", label: "DisplayMode", type: "text" },
 
   { name: "required", label: "Required", type: "boolean" },
+
+  { name: "tooltip", label: "Tooltip", type: "text" },
 
   { name: "onChange", label: "OnChange", type: "formula" },
 
@@ -262,6 +306,8 @@ const TOGGLE_PROPERTIES: PropertyFieldDefinition[] = [
 
   { name: "required", label: "Required", type: "boolean" },
 
+  { name: "tooltip", label: "Tooltip", type: "text" },
+
   { name: "onChange", label: "OnChange", type: "formula" },
 
 ];
@@ -274,6 +320,10 @@ const IMAGE_PROPERTIES: PropertyFieldDefinition[] = [
 
   { name: "alt", label: "Alt", type: "text" },
 
+  { name: "visible", label: "Visible", type: "boolean" },
+
+  { name: "onSelect", label: "OnSelect", type: "formula" },
+
 ];
 
 
@@ -283,6 +333,10 @@ const ICON_PROPERTIES: PropertyFieldDefinition[] = [
   { name: "icon", label: "Icon", type: "text" },
 
   { name: "color", label: "Color", type: "color" },
+
+  { name: "visible", label: "Visible", type: "boolean" },
+
+  { name: "onSelect", label: "OnSelect", type: "formula" },
 
 ];
 
@@ -301,6 +355,8 @@ const DATEPICKER_PROPERTIES: PropertyFieldDefinition[] = [
   { name: "displayMode", label: "DisplayMode", type: "text" },
 
   { name: "required", label: "Required", type: "boolean" },
+
+  { name: "tooltip", label: "Tooltip", type: "text" },
 
   { name: "onChange", label: "OnChange", type: "formula" },
 

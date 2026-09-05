@@ -38,13 +38,27 @@ export function DesignerButton({
 export function DesignerLabel({
   text = "Label",
   color,
+  size,
+  weight,
+  align,
 }: {
   text?: unknown;
   color?: unknown;
+  size?: unknown;
+  weight?: unknown;
+  align?: unknown;
   selected?: boolean;
 }) {
   const label = readDesignerDisplay(text, "Label");
   const colorValue = readDesignerDisplay(color, "");
+  const sizeText = readDesignerDisplay(size, "13");
+  const sizeNum = Number(sizeText);
+  const weightText = readDesignerDisplay(weight, "600");
+  const alignText = readDesignerDisplay(align, "left").toLowerCase();
+  const textAlign =
+    alignText === "center" || alignText === "right" || alignText === "justify"
+      ? alignText
+      : "left";
   return (
     <span
       className="fillControl"
@@ -52,8 +66,12 @@ export function DesignerLabel({
         ...baseStyle,
         display: "flex",
         alignItems: "center",
+        justifyContent:
+          textAlign === "center" ? "center" : textAlign === "right" ? "flex-end" : "flex-start",
         color: colorValue.startsWith("[") ? undefined : colorValue || "#222",
-        fontSize: 13,
+        fontSize: Number.isFinite(sizeNum) && sizeNum > 0 ? sizeNum : 13,
+        fontWeight: weightText || 600,
+        textAlign,
       }}
     >
       {label}

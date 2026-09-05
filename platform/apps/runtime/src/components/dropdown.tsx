@@ -17,16 +17,35 @@ function readPropertyFormula(property: unknown): string {
   return "";
 }
 
+function fieldString(
+  record: Record<string, unknown>,
+  fieldName: string,
+): string | null {
+  const trimmed = fieldName.trim();
+  if (!trimmed) return null;
+  const raw = record[trimmed];
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "string") return raw;
+  if (typeof raw === "number" || typeof raw === "boolean") return String(raw);
+  return null;
+}
+
 function toDropdownOptions(
   records: Record<string, unknown>[],
+  displayField = "",
+  valueField = "",
 ): Array<{ value: string; label: string }> {
   return records.map((record, index) => {
+    const mappedValue = fieldString(record, valueField);
     const value =
+      mappedValue ||
       (typeof record.Value === "string" && record.Value) ||
       (typeof record.value === "string" && record.value) ||
       firstStringLikeField(record) ||
       String(index);
+    const mappedLabel = fieldString(record, displayField);
     const label =
+      mappedLabel ||
       (typeof record.Label === "string" && record.Label) ||
       (typeof record.label === "string" && record.label) ||
       firstStringLikeField(record) ||
@@ -51,9 +70,12 @@ export const Dropdown: React.FC<any> = ({
   items,
   default: defaultProperty,
   value,
+  displayField,
+  valueField,
   disabled = false,
   readOnly = false,
   onChange,
+  tooltip,
   controlName,
   name,
   id,
@@ -61,12 +83,18 @@ export const Dropdown: React.FC<any> = ({
   const formEdit = useFormEditContext();
   const controlValueStore = useControlValueStore();
   const records = useResolvedGalleryRecords(items);
-  const options = useMemo(() => toDropdownOptions(records), [records]);
+  const resolvedDisplayField = useResolvedPropertyText(displayField);
+  const resolvedValueField = useResolvedPropertyText(valueField);
+  const options = useMemo(
+    () => toDropdownOptions(records, resolvedDisplayField, resolvedValueField),
+    [records, resolvedDisplayField, resolvedValueField],
+  );
   const defaultFormula = readPropertyFormula(defaultProperty);
   const bindingField = defaultFormula ? parseParentItemField(defaultFormula) : null;
   const usesDefaultBinding = Boolean(bindingField && defaultProperty);
   const resolvedDefault = useParentItemDefault(defaultProperty);
   const resolvedValue = useResolvedPropertyText(usesDefaultBinding ? undefined : value);
+  const resolvedTooltip = useResolvedPropertyText(tooltip);
   const resolvedControlName = controlName ?? name;
   const runOnChange = useRuntimeActionHandler(onChange, resolvedControlName, "OnChange");
   const externalValue = usesDefaultBinding ? resolvedDefault : resolvedValue;
@@ -95,6 +123,7 @@ export const Dropdown: React.FC<any> = ({
       id={id}
       data-testid={resolvedControlName ? `dropdown-${resolvedControlName}` : undefined}
       value={localValue}
+      title={resolvedTooltip || undefined}
       disabled={isLocked}
       aria-readonly={isLocked || undefined}
       onFocus={onFocus}

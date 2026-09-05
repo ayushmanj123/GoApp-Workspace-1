@@ -19,6 +19,7 @@ const (
 	OpLTE        CompareOp = "<="
 	OpContains   CompareOp = "contains"
 	OpStartsWith CompareOp = "startswith"
+	OpEndsWith   CompareOp = "endswith"
 )
 
 // FilterCombinator joins leaf comparisons (shallow And/Or of leaves only).
@@ -76,9 +77,9 @@ var comparisonFilterPattern = regexp.MustCompile(
 	`^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(<>|>=|<=|=|>|<)\s*(?:['"]([^'"]*)['"]|([0-9]+(?:\.[0-9]+)?))\s*$`,
 )
 
-// containsStartsWithPattern matches Contains(Field,'value') or StartsWith(Field,"value").
+// containsStartsWithPattern matches Contains/StartsWith/EndsWith(Field,'value').
 var containsStartsWithPattern = regexp.MustCompile(
-	`(?i)^\s*(Contains|StartsWith)\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*(?:['"]([^'"]*)['"])\s*\)\s*$`,
+	`(?i)^\s*(Contains|StartsWith|EndsWith)\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*(?:['"]([^'"]*)['"])\s*\)\s*$`,
 )
 
 // ParseFilterExpr parses gallery / LookUp / Filter predicates.
@@ -88,6 +89,7 @@ var containsStartsWithPattern = regexp.MustCompile(
 //   - Status<>'X'
 //   - Contains(Name,'acme')
 //   - StartsWith(Name,'A')
+//   - EndsWith(Name,'Inc')
 //   - Status='Active' And Region='West'
 //   - And(Status='Active', Region='West')
 //   - Status='A' Or Status='B'
@@ -179,6 +181,8 @@ func parseComparisonLeaf(expression string) (ComparisonFilter, error) {
 		op := OpContains
 		if strings.EqualFold(matches[1], "StartsWith") {
 			op = OpStartsWith
+		} else if strings.EqualFold(matches[1], "EndsWith") {
+			op = OpEndsWith
 		}
 		return ComparisonFilter{
 			Field: matches[2],
@@ -238,6 +242,8 @@ func matchComparison(data map[string]interface{}, leaf ComparisonFilter) bool {
 		return strings.Contains(strings.ToLower(fmt.Sprintf("%v", value)), strings.ToLower(leaf.Value))
 	case OpStartsWith:
 		return strings.HasPrefix(strings.ToLower(fmt.Sprintf("%v", value)), strings.ToLower(leaf.Value))
+	case OpEndsWith:
+		return strings.HasSuffix(strings.ToLower(fmt.Sprintf("%v", value)), strings.ToLower(leaf.Value))
 	default:
 		return false
 	}
@@ -472,6 +478,8 @@ func sqlOperator(op CompareOp) (string, error) {
 		return "ILIKE", nil
 	case OpStartsWith:
 		return "ILIKE", nil
+	case OpEndsWith:
+		return "ILIKE", nil
 	default:
 		return "", fmt.Errorf("%w: unsupported op %q", ErrInvalidFilter, op)
 	}
@@ -483,6 +491,8 @@ func sqlFilterValue(leaf ComparisonFilter) string {
 		return "%" + leaf.Value + "%"
 	case OpStartsWith:
 		return leaf.Value + "%"
+	case OpEndsWith:
+		return "%" + leaf.Value
 	default:
 		return leaf.Value
 	}

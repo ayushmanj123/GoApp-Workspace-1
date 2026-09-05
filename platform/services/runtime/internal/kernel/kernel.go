@@ -339,6 +339,17 @@ func (k *RuntimeKernel) lookupControlFormula(session *RuntimeSession, controlID,
 			return item.FormulaText, nil
 		}
 	}
+	if text := propertyFormulaText(control.Properties[propertyName]); text != "" {
+		return text, nil
+	}
+	// Case-insensitive property key fallback.
+	for key, raw := range control.Properties {
+		if strings.EqualFold(key, propertyName) {
+			if text := propertyFormulaText(raw); text != "" {
+				return text, nil
+			}
+		}
+	}
 	return "", ErrFormulaNotFound
 }
 

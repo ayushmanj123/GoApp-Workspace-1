@@ -135,6 +135,7 @@ func (s *Service) SetMode(ctx context.Context, sessionID, tenantID, appID uuid.U
 	}
 	state.Mode = mode
 	state.ValidationErrors = nil
+	state.LastError = nil
 	state.TenantID = tenantID
 	switch mode {
 	case ModeNew:
@@ -177,7 +178,9 @@ func (s *Service) Update(ctx context.Context, sessionID, tenantID, appID uuid.UU
 		state.DirtyFields[key] = value
 	}
 	state.TenantID = tenantID
-	state.ValidationErrors = s.validateState(ctx, tenantID, state)
+	// Defer schema validation to Submit so typing does not mark fields invalid / steal focus.
+	state.ValidationErrors = nil
+	state.LastError = nil
 	s.store.Set(sessionID, control.Name, state)
 	return cloneState(state), nil
 }
@@ -191,6 +194,7 @@ func (s *Service) Reset(ctx context.Context, sessionID, tenantID, appID uuid.UUI
 	state.CurrentRecord = cloneRecord(state.OriginalRecord)
 	state.DirtyFields = map[string]interface{}{}
 	state.ValidationErrors = nil
+	state.LastError = nil
 	s.store.Set(sessionID, control.Name, state)
 	return cloneState(state), nil
 }
@@ -215,14 +219,17 @@ func (s *Service) Submit(ctx context.Context, sessionID, tenantID, userID, appID
 		return cloneState(state), "", ErrValidationFailed
 	}
 	state.LastError = nil
-	if state.EntityID == uuid.Nil {
-		state.LastError = &FormError{Message: ErrRecordUnavailable.Error()}
-		s.store.Set(sessionID, control.Name, state)
-		return nil, "", ErrRecordUnavailable
+	if state.DataSource == "" {
+		state.DataSource = ReadDataSource(control.Properties)
+	}
+	if state.DataSourceKind == "" && state.DataSource != "" {
+		s.inferBinding(ctx, tenantID, appID, control, state)
 	}
 
 	payload := submissionPayload(state)
 	if len(payload) == 0 && state.Mode == ModeNew {
+		state.LastError = &FormError{Message: ErrRecordUnavailable.Error()}
+		s.store.Set(sessionID, control.Name, state)
 		return nil, "", ErrRecordUnavailable
 	}
 
@@ -294,6 +301,12 @@ func (s *Service) Submit(ctx context.Context, sessionID, tenantID, userID, appID
 		state.LastError = nil
 		s.store.Set(sessionID, control.Name, state)
 		return cloneState(state), sourceName, nil
+	}
+
+	if state.EntityID == uuid.Nil {
+		state.LastError = &FormError{Message: ErrRecordUnavailable.Error()}
+		s.store.Set(sessionID, control.Name, state)
+		return nil, "", ErrRecordUnavailable
 	}
 
 	switch state.Mode {
@@ -528,6 +541,7 @@ func (s *Service) SyncGallerySelection(sessionID uuid.UUID, galleryName string, 
 		state.OriginalRecord = cloneRecord(record)
 		state.DirtyFields = map[string]interface{}{}
 		state.ValidationErrors = nil
+		state.LastError = nil
 		state.GalleryName = galleryName
 		s.store.Set(sessionID, control.Name, state)
 		updated = append(updated, control.Name)

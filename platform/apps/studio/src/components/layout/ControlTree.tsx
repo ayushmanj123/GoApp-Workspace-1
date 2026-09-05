@@ -39,7 +39,8 @@ function ControlTreeNodeRow({
         data-testid={`explorer-control-${node.id}`}
         data-selected={isSelected ? "true" : "false"}
         data-depth={depth}
-        style={{ paddingLeft: `${basePadding + depth * 14}px` }}
+        style={{ paddingLeft: `${basePadding + depth * 18}px` }}
+        data-indent-depth={depth}
       >
         {hasChildren ? (
           <button

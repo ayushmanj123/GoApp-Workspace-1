@@ -36,6 +36,7 @@ export const DatePicker: React.FC<any> = ({
   disabled = false,
   readOnly = false,
   onChange,
+  tooltip,
   controlName,
   name,
   id,
@@ -47,6 +48,7 @@ export const DatePicker: React.FC<any> = ({
   const usesDefaultBinding = Boolean(bindingField && defaultProperty);
   const resolvedDefault = useParentItemDefault(defaultProperty);
   const resolvedValue = useResolvedPropertyText(usesDefaultBinding ? undefined : value);
+  const resolvedTooltip = useResolvedPropertyText(tooltip);
   const resolvedControlName = controlName ?? name;
   const runOnChange = useRuntimeActionHandler(onChange, resolvedControlName, "OnChange");
   const externalValue = normalizeDateInputValue(
@@ -78,6 +80,7 @@ export const DatePicker: React.FC<any> = ({
       type="date"
       data-testid={resolvedControlName ? `datepicker-${resolvedControlName}` : undefined}
       value={localValue}
+      title={resolvedTooltip || undefined}
       disabled={isLocked}
       readOnly={Boolean(readOnly || formEdit?.isReadOnly)}
       aria-readonly={isLocked || undefined}

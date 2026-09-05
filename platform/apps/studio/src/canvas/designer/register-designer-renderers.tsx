@@ -61,7 +61,14 @@ function getDesignerRenderer(type: string): DesignerRenderer {
       );
     case "Label":
       return (p) => (
-        <DesignerLabel text={p.text} color={p.color} selected={p.selected as boolean} />
+        <DesignerLabel
+          text={p.text}
+          color={p.color}
+          size={p.size}
+          weight={p.weight}
+          align={p.align}
+          selected={p.selected as boolean}
+        />
       );
     case "TextInput":
       return (p) => (

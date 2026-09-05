@@ -83,10 +83,20 @@ func parseRecordObject(objectLiteral string) (map[string]interface{}, error) {
 			index += len(match[0])
 			continue
 		}
+		// Identifier / dotted reference (resolved later by Patch and similar).
+		if match := regexp.MustCompile(`^\s*([A-Za-z][A-Za-z0-9]*)\s*:\s*([A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)*)\s*(?:,\s*)?`).FindStringSubmatch(rest); len(match) == 3 {
+			record[match[1]] = deferredExpr(match[2])
+			index += len(match[0])
+			continue
+		}
 		return nil, newFormulaError("INVALID_FORMULA", "unsupported record field syntax", intPtr(index))
 	}
 	return record, nil
 }
+
+// deferredExpr is a record-literal field whose value is a formula reference
+// resolved at execution time (e.g. Name: formLead.Item.Company).
+type deferredExpr string
 
 func parseSetFormula(formula string) (varName string, valueExpr string, ok bool) {
 	name, content, ok := parseCallContent(formula)
@@ -120,6 +130,30 @@ func parseTwoArgCall(formula, expectedName string) (first string, second string,
 		return "", "", false
 	}
 	return first, second, true
+}
+
+// parseThreeArgCall splits Name(a, b, c) where a is an identifier.
+func parseThreeArgCall(formula, expectedName string) (first, second, third string, ok bool) {
+	name, content, ok := parseCallContent(formula)
+	if !ok || !strings.EqualFold(name, expectedName) {
+		return "", "", "", false
+	}
+	comma := findFirstTopLevelComma(content)
+	if comma == -1 {
+		return "", "", "", false
+	}
+	first = strings.TrimSpace(content[:comma])
+	rest := strings.TrimSpace(content[comma+1:])
+	comma2 := findFirstTopLevelComma(rest)
+	if comma2 == -1 {
+		return "", "", "", false
+	}
+	second = strings.TrimSpace(rest[:comma2])
+	third = strings.TrimSpace(rest[comma2+1:])
+	if !identifierPattern.MatchString(first) || second == "" || third == "" {
+		return "", "", "", false
+	}
+	return first, second, third, true
 }
 
 func parseSingleIdentifierCall(formula, expectedName string) (arg string, ok bool) {

@@ -65,8 +65,23 @@ assert.match(formEdit, /recordKey/, "FormEditContext must expose recordKey for r
 const screen = readFileSync(path.join(root, "src/screen-renderer.tsx"), "utf8");
 assert.match(screen, /runtime-surface\.module\.css/, "runtime must apply surface CSS");
 
-assert.match(form, /isReadOnly/, "Form must publish isReadOnly to children");
+assert.match(form, /form-offline-hint|Runtime service unavailable|No runtime session/, "Form must surface offline/unavailable hint");
 assert.match(form, /flexDirection:\s*[\"']column[\"']|flex-direction/, "Form Vertical uses flex column");
+assert.match(
+  form,
+  /submitFailed|validation.*Submit|Only steal focus after Submit/i,
+  "Form must not autofocus invalid fields on every Update",
+);
+assert.match(
+  form,
+  /record\.recordId \?\? record\.RecordId/,
+  "Form recordKey must prefer platform recordId",
+);
+assert.doesNotMatch(
+  form,
+  /record\.id \?\? record\.Id/,
+  "Form recordKey must not use generic id business fields",
+);
 
 const submitOffline = readFileSync(
   path.join(root, "src/formula/execute-submit-form.ts"),
@@ -98,7 +113,20 @@ assert.match(galleryHook, /fetchRuntimeGallery/, "session gallery hook must fetc
 
 const galleryRows = readFileSync(path.join(root, "src/utils/gallery-rows.ts"), "utf8");
 assert.match(galleryRows, /coalesceItemsProp|Items/, "items casing normalize helper required");
-
+assert.match(galleryRows, /galleryRowKey/, "gallery rows must export stable row keys");
+const gallerySrc = readFileSync(path.join(root, "src/components/gallery.tsx"), "utf8");
+assert.match(gallerySrc, /galleryRowKey/, "Gallery must use stable row keys");
+assert.doesNotMatch(
+  gallerySrc,
+  /key=\{`\$\{index\}-\$\{JSON\.stringify\(record\)\}`\}/,
+  "Gallery must not remount rows via JSON.stringify keys",
+);
+assert.match(datatable, /galleryRowKey/, "DataTable must use stable row keys");
+assert.doesNotMatch(
+  datatable,
+  /key=\{`\$\{index\}-\$\{JSON\.stringify\(record\)\}`\}/,
+  "DataTable must not remount rows via JSON.stringify keys",
+);
 const controlRenderer = readFileSync(path.join(root, "src/control-renderer.tsx"), "utf8");
 assert.match(controlRenderer, /props\.items = props\.items \?\? props\.Items/, "renderer must normalize Items");
 assert.match(controlRenderer, /controlId/, "DataTable/Gallery must receive controlId");
@@ -111,5 +139,123 @@ const executeAction = readFileSync(
   "utf8",
 );
 assert.match(executeAction, /bumpGalleryRefresh|Refresh/, "actions must bump gallery after Refresh/datasource");
+
+const controlLayout = readFileSync(path.join(root, "src/utils/control-layout.ts"), "utf8");
+assert.match(
+  controlLayout,
+  /export function readVisible/,
+  "control-layout must export readVisible for chrome checks",
+);
+assert.match(
+  controlLayout,
+  /"value" in raw/,
+  "readVisible must unwrap Studio { value } wrappers",
+);
+
+const button = readFileSync(path.join(root, "src/components/button.tsx"), "utf8");
+assert.match(
+  button,
+  /disabled=\{disabled\}/,
+  "Button must honor disabled from ControlRenderer DisplayMode cascade",
+);
+assert.match(
+  button,
+  /title=\{resolvedTooltip/,
+  "Button must apply Tooltip as title",
+);
+assert.match(
+  controlRenderer,
+  /layout\.visible/,
+  "ControlRenderer must gate on layout.visible",
+);
+assert.match(
+  controlRenderer,
+  /displayMode === "Disabled"|layout\.disabled/,
+  "ControlRenderer must apply DisplayMode Disabled",
+);
+
+assert.match(
+  textInput,
+  /useRuntimeActionHandler/,
+  "TextInput must run OnChange via useRuntimeActionHandler",
+);
+
+const dropdown = readFileSync(path.join(root, "src/components/dropdown.tsx"), "utf8");
+assert.match(
+  dropdown,
+  /toDropdownOptions\(records,\s*resolvedDisplayField,\s*resolvedValueField\)/,
+  "Dropdown must map DisplayField/ValueField into options",
+);
+assert.match(
+  dropdown,
+  /title=\{resolvedTooltip/,
+  "Dropdown must apply Tooltip as title",
+);
+
+const datatableSrc = readFileSync(path.join(root, "src/components/datatable.tsx"), "utf8");
+assert.match(
+  datatableSrc,
+  /resolveColumns|columns.*columnHints/,
+  "DataTable must keep columns then columnHints resolve order",
+);
+
+assert.match(
+  controlLayout,
+  /normalizeFlexDirection/,
+  "control-layout must export normalizeFlexDirection",
+);
+
+const containerSrc = readFileSync(path.join(root, "src/components/container.tsx"), "utf8");
+assert.match(
+  containerSrc,
+  /normalizeFlexDirection/,
+  "Container must read direction via normalizeFlexDirection",
+);
+assert.match(
+  containerSrc,
+  /display:\s*[\"']flex[\"']|display:\s*\"flex\"/,
+  "Container must flex-pack nested children",
+);
+
+const imageSrc = readFileSync(path.join(root, "src/components/image.tsx"), "utf8");
+assert.match(
+  imageSrc,
+  /useRuntimeActionHandler/,
+  "Image must run OnSelect via useRuntimeActionHandler",
+);
+assert.match(
+  imageSrc,
+  /"OnSelect"/,
+  "Image must pass OnSelect event name",
+);
+
+const iconSrc = readFileSync(path.join(root, "src/components/icon.tsx"), "utf8");
+assert.match(
+  iconSrc,
+  /useRuntimeActionHandler/,
+  "Icon must run OnSelect via useRuntimeActionHandler",
+);
+assert.match(
+  iconSrc,
+  /"OnSelect"/,
+  "Icon must pass OnSelect event name",
+);
+
+const timerSrc = readFileSync(path.join(root, "src/components/timer.tsx"), "utf8");
+assert.match(
+  timerSrc,
+  /autoStart/,
+  "Timer must read autoStart",
+);
+assert.match(
+  timerSrc,
+  /repeat/,
+  "Timer must read repeat",
+);
+assert.match(
+  timerSrc,
+  /startEnabled|readBoolean\(start/,
+  "Timer must gate on start",
+);
 
 console.log("runtime unit-check: PASS");

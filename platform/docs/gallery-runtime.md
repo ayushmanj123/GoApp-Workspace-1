@@ -111,6 +111,7 @@ Gallery controls may set a `filter` formula/property. Runtime parses predicates 
 | `Or(Status='A', Status='B')` | Same, function form |
 | `Contains(Name,'acme')` | Case-insensitive substring match (Phase 7.28) |
 | `StartsWith(Name,'A')` | Case-insensitive prefix match (Phase 7.28) |
+| `EndsWith(Name,'Inc')` | Case-insensitive suffix match (Wave 3) |
 
 Collection galleries apply the same predicate in-memory (Phase 7.19). Entity datasources push `FilterExpr` into Postgres JSONB `WHERE` (Phase 7.20) so filtered paging and totals stay correct for large lists. REST forwards equals-`And` as query params; richer predicates filter in-memory after fetch. Table-bound SQL connectors push And/Or + comparisons into `WHERE` (7.18/7.19). Named SQL `list` queries do not rewrite free-form SELECT text. Mixed infix `And`/`Or` in one expression is rejected (use `And()` / `Or()` of leaves only).
 
@@ -124,7 +125,7 @@ DataTable (and Gallery) read rows from `GET …/gallery/:controlId` when a runti
 
 Columns are resolved in order:
 
-1. Optional `columns` text property (comma-separated field names)
+1. Optional `columns` text property (comma-separated field names) — Studio Data tab offers a checkbox/reorder picker that writes this string
 2. Designer `columnHints` when present (Sheets)
 3. Inferred keys from loaded records (excluding `recordId` / `entityId` / `version` noise)
 

@@ -158,7 +158,10 @@ func Run(ctx context.Context, db *gorm.DB) error {
 				return err
 			}
 
-			return SeedCustomerApp(ctx, scopedTx)
+			if err := SeedCustomerApp(ctx, scopedTx); err != nil {
+				return err
+			}
+			return SeedSalesApp(ctx, scopedTx)
 		})
 	})
 }
@@ -171,4 +174,14 @@ func upsert[T any](tx *gorm.DB, entity *T, updateColumns []string) error {
 		return fmt.Errorf("seed: upsert: %w", err)
 	}
 	return nil
+}
+
+// upsertProperty replaces any existing (control_id, property_name) row so re-seed
+// stays idempotent under control_properties_control_name_unique.
+func upsertProperty(tx *gorm.DB, property *models.ControlProperty) error {
+	if err := tx.Where("control_id = ? AND property_name = ?", property.ControlID, property.PropertyName).
+		Delete(&models.ControlProperty{}).Error; err != nil {
+		return fmt.Errorf("seed: clear property: %w", err)
+	}
+	return upsert(tx, property, []string{"property_name", "property_value", "modified_on"})
 }

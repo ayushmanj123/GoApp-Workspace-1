@@ -170,6 +170,8 @@ func SeedCustomerApp(ctx context.Context, tx *gorm.DB) error {
 
 			FormDefaultFormula: "Defaults(Customer)",
 
+			Columns:            []string{"Name", "Email", "Phone", "Status"},
+
 			ListOnVisible:      &listVisible,
 
 			UpsertDB:           scopedTx,
@@ -280,7 +282,7 @@ func SeedCustomerApp(ctx context.Context, tx *gorm.DB) error {
 
 		for _, property := range properties {
 
-			if err := upsert(scopedTx, &property, []string{"property_name", "property_value", "modified_on"}); err != nil {
+			if err := upsertProperty(scopedTx, &property); err != nil {
 
 				return err
 

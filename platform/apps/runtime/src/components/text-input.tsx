@@ -5,6 +5,7 @@ import { useFormEditContext } from "../form-edit-context";
 import { parseParentItemField } from "../utils/parent-item-field";
 import { useControlValueStore } from "../formula/formula-context";
 import { useEditableControlValue } from "../hooks/use-editable-control-value";
+import { useRuntimeActionHandler } from "../hooks/use-runtime-action-handler";
 
 function readPropertyFormula(property: unknown): string {
   if (property && typeof property === "object" && "formula" in property) {
@@ -33,8 +34,10 @@ export const TextInput: React.FC<any> = ({
   disabled = false,
   readOnly = false,
   controlName,
+  name,
   id,
   onChange,
+  tooltip,
 }) => {
   const formEdit = useFormEditContext();
   const controlValueStore = useControlValueStore();
@@ -49,6 +52,13 @@ export const TextInput: React.FC<any> = ({
     usesDefaultBinding ? undefined : value,
   );
   const resolvedPlaceholder = useResolvedPropertyText(placeholder);
+  const resolvedTooltip = useResolvedPropertyText(tooltip);
+  const resolvedControlName = controlName ?? name;
+  const runOnChange = useRuntimeActionHandler(
+    onChange,
+    resolvedControlName,
+    "OnChange",
+  );
   const externalValue = usesDefaultBinding ? resolvedDefault : resolvedValue;
   const isLocked = Boolean(disabled || readOnly || formEdit?.isReadOnly);
 
@@ -57,25 +67,26 @@ export const TextInput: React.FC<any> = ({
       recordKey: formEdit?.recordKey ?? null,
     });
 
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (isLocked) return;
     const nextValue = event.target.value;
     setValue(nextValue);
     if (usesDefaultBinding && bindingField) {
       formEdit?.reportUpdate(bindingField, nextValue);
     }
-    if (controlName) {
-      controlValueStore.set(controlName, "Value", nextValue);
+    if (resolvedControlName) {
+      controlValueStore.set(resolvedControlName, "Value", nextValue);
     }
-    onChange?.(nextValue);
+    await runOnChange();
   };
 
   return (
     <input
       id={id}
-      data-testid={controlName ? `input-${controlName}` : undefined}
+      data-testid={resolvedControlName ? `input-${resolvedControlName}` : undefined}
       value={localValue}
       placeholder={resolvedPlaceholder}
+      title={resolvedTooltip || undefined}
       disabled={Boolean(disabled || formEdit?.isReadOnly)}
       readOnly={Boolean(readOnly || formEdit?.isReadOnly)}
       aria-readonly={isLocked || undefined}

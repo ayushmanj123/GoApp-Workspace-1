@@ -3,6 +3,7 @@ package formula
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/goapps-platform/runtime-service/internal/databinding"
@@ -197,6 +198,204 @@ func TestPatchAndDefaults(t *testing.T) {
 	}
 	if patched.(databinding.DataItem)["Name"] != "Created" {
 		t.Fatalf("unexpected patch result: %#v", patched)
+	}
+}
+
+type capturingDataSource struct {
+	fakeDataSource
+	lastUpdateID      uuid.UUID
+	lastUpdatePatch   map[string]interface{}
+	lastUpdateVersion int
+}
+
+func (c *capturingDataSource) Update(_ context.Context, _, _ uuid.UUID, _ databinding.DataSourceKey, id uuid.UUID, patch map[string]interface{}, version int) (*databinding.DataItem, error) {
+	c.lastUpdateID = id
+	c.lastUpdatePatch = patch
+	c.lastUpdateVersion = version
+	item := databinding.DataItem{"Name": patch["Name"], "Status": patch["Status"], "recordId": id.String()}
+	return &item, nil
+}
+
+type fakeGalleryReader struct {
+	selected map[string]any
+}
+
+func (f *fakeGalleryReader) ResolveReference(reference string) (any, bool) {
+	if f == nil {
+		return nil, false
+	}
+	parts := strings.SplitN(reference, ".", 2)
+	if len(parts) != 2 || parts[1] != "Selected" {
+		return nil, false
+	}
+	value, ok := f.selected[parts[0]]
+	if !ok {
+		return nil, false
+	}
+	return value, true
+}
+
+func (f *fakeGalleryReader) GetItems(string) []any { return nil }
+
+func (f *fakeGalleryReader) GetSelected(galleryName string) (any, bool) {
+	value, ok := f.selected[galleryName]
+	return value, ok
+}
+
+type fakeFormReader struct {
+	refs map[string]any
+}
+
+func (f *fakeFormReader) ResolveReference(reference string) (any, bool) {
+	if f == nil {
+		return nil, false
+	}
+	value, ok := f.refs[reference]
+	return value, ok
+}
+
+func TestPatchThreeArgSelectedMerge(t *testing.T) {
+	evaluator := NewEvaluator()
+	rtCtx := testRuntimeContext(t)
+	recordID := uuid.MustParse("00000000-0000-4000-8000-0000000000aa")
+	ds := &capturingDataSource{}
+	rtCtx.DataSources = databinding.NewDataSourceRegistry(ds)
+	rtCtx.Gallery = &fakeGalleryReader{selected: map[string]any{
+		"galleryCustomers": map[string]interface{}{
+			"recordId": recordID.String(),
+			"version":  3,
+			"Name":     "Alice",
+			"Status":   "Open",
+		},
+	}}
+
+	result, err := evaluator.Evaluate(rtCtx, `Patch(Customers, galleryCustomers.Selected, { Status: "Qualified" })`)
+	if err != nil {
+		t.Fatalf("three-arg Patch: %v", err)
+	}
+	if ds.lastUpdateID != recordID {
+		t.Fatalf("expected update id %s, got %s", recordID, ds.lastUpdateID)
+	}
+	if ds.lastUpdateVersion != 3 {
+		t.Fatalf("expected version 3, got %d", ds.lastUpdateVersion)
+	}
+	if ds.lastUpdatePatch["Status"] != "Qualified" {
+		t.Fatalf("unexpected patch: %#v", ds.lastUpdatePatch)
+	}
+	if result.(databinding.DataItem)["Status"] != "Qualified" {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+}
+
+func TestPatchThreeArgFormItemMerge(t *testing.T) {
+	evaluator := NewEvaluator()
+	rtCtx := testRuntimeContext(t)
+	recordID := uuid.MustParse("00000000-0000-4000-8000-0000000000bb")
+	ds := &capturingDataSource{}
+	rtCtx.DataSources = databinding.NewDataSourceRegistry(ds)
+	rtCtx.Forms = &fakeFormReader{refs: map[string]any{
+		"formLead.Item": map[string]interface{}{
+			"recordId": recordID.String(),
+			"version":  1,
+			"Name":     "Lead",
+			"Status":   "Open",
+		},
+	}}
+
+	_, err := evaluator.Evaluate(rtCtx, `Patch(Customers, formLead.Item, { Status: "Qualified" })`)
+	if err != nil {
+		t.Fatalf("Patch Form.Item: %v", err)
+	}
+	if ds.lastUpdateID != recordID || ds.lastUpdatePatch["Status"] != "Qualified" {
+		t.Fatalf("unexpected update: id=%s patch=%#v", ds.lastUpdateID, ds.lastUpdatePatch)
+	}
+}
+
+func TestPatchThreeArgLiteralBase(t *testing.T) {
+	evaluator := NewEvaluator()
+	rtCtx := testRuntimeContext(t)
+	recordID := uuid.MustParse("00000000-0000-4000-8000-0000000000cc")
+	ds := &capturingDataSource{}
+	rtCtx.DataSources = databinding.NewDataSourceRegistry(ds)
+
+	_, err := evaluator.Evaluate(rtCtx, `Patch(Customers, { recordId: "00000000-0000-4000-8000-0000000000cc", version: 2 }, { Name: "Patched" })`)
+	if err != nil {
+		t.Fatalf("Patch literal base: %v", err)
+	}
+	if ds.lastUpdateID != recordID || ds.lastUpdateVersion != 2 || ds.lastUpdatePatch["Name"] != "Patched" {
+		t.Fatalf("unexpected update: id=%s ver=%d patch=%#v", ds.lastUpdateID, ds.lastUpdateVersion, ds.lastUpdatePatch)
+	}
+}
+
+func TestPatchCreateWithDeferredFieldRef(t *testing.T) {
+	evaluator := NewEvaluator()
+	rtCtx := testRuntimeContext(t)
+	capturing := &createCapturingDS{}
+	rtCtx.DataSources = databinding.NewDataSourceRegistry(capturing)
+	rtCtx.Forms = &fakeFormReader{refs: map[string]any{
+		"formLead.Item": map[string]interface{}{
+			"Company": "Contoso",
+			"Name":    "Lead",
+		},
+	}}
+
+	_, err := evaluator.Evaluate(rtCtx, `Patch(Customers, { Name: formLead.Item.Company })`)
+	if err != nil {
+		t.Fatalf("Patch deferred field: %v", err)
+	}
+	if capturing.lastCreate["Name"] != "Contoso" {
+		t.Fatalf("expected Name Contoso, got %#v", capturing.lastCreate)
+	}
+}
+
+type createCapturingDS struct {
+	fakeDataSource
+	lastCreate map[string]interface{}
+}
+
+func (c *createCapturingDS) Create(_ context.Context, _, _ uuid.UUID, _ databinding.DataSourceKey, data map[string]interface{}) (*databinding.DataItem, error) {
+	c.lastCreate = data
+	item := databinding.DataItem{"Name": data["Name"]}
+	return &item, nil
+}
+
+func TestPatchThreeArgInvalidArity(t *testing.T) {
+	evaluator := NewEvaluator()
+	rtCtx := testRuntimeContext(t)
+	_, err := evaluator.Evaluate(rtCtx, `Patch(Customers)`)
+	if err == nil {
+		t.Fatal("expected invalid Patch arity error")
+	}
+}
+
+func TestPatchThreeArgThenNavigate(t *testing.T) {
+	evaluator := NewEvaluator()
+	rtCtx := testRuntimeContext(t)
+	recordID := uuid.MustParse("00000000-0000-4000-8000-0000000000dd")
+	ds := &capturingDataSource{}
+	rtCtx.DataSources = databinding.NewDataSourceRegistry(ds)
+	rtCtx.Gallery = &fakeGalleryReader{selected: map[string]any{
+		"galleryCustomers": map[string]interface{}{
+			"recordId": recordID.String(),
+			"version":  1,
+			"Status":   "Open",
+		},
+	}}
+	engine := reactive.NewEngine()
+	nav := &reactive.NavigationService{
+		Publisher: engine.Notifier,
+		SessionID: rtCtx.Session.SessionID,
+		AppID:     rtCtx.App.AppID,
+	}
+	nav.OnNavigate = rtCtx.RecordRefresh
+	rtCtx.Navigation = nav
+
+	_, err := evaluator.Evaluate(rtCtx, `Patch(Customers, galleryCustomers.Selected, { Status: "Qualified" }); Navigate(AccountList)`)
+	if err != nil {
+		t.Fatalf("Patch; Navigate: %v", err)
+	}
+	if ds.lastUpdatePatch["Status"] != "Qualified" {
+		t.Fatalf("patch did not run: %#v", ds.lastUpdatePatch)
 	}
 }
 

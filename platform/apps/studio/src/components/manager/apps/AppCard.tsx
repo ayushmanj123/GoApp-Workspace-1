@@ -38,9 +38,13 @@ function runtimeBaseUrl(): string {
   return "http://localhost:5174";
 }
 
-function openRuntime(appId: string, environmentId?: string) {
-  const path = environmentId
-    ? `${runtimeBaseUrl()}/apps/${appId}?environmentId=${encodeURIComponent(environmentId)}`
+function openRuntime(appId: string, environmentId?: string, draft = false) {
+  const qs = new URLSearchParams();
+  if (environmentId) qs.set("environmentId", environmentId);
+  if (draft && !environmentId) qs.set("channel", "draft");
+  const query = qs.toString();
+  const path = query
+    ? `${runtimeBaseUrl()}/apps/${appId}?${query}`
     : `${runtimeBaseUrl()}/apps/${appId}`;
   window.open(path, "_blank", "noopener,noreferrer");
 }
@@ -230,10 +234,10 @@ export function AppCard({ app, onPublishComplete }: AppCardProps) {
                   role="menuitem"
                   onClick={() => {
                     setMenuOpen(false);
-                    openRuntime(app.id);
+                    openRuntime(app.id, undefined, app.status !== "published");
                   }}
                 >
-                  Published (global)
+                  {app.status === "published" ? "Published (global)" : "Draft preview"}
                 </button>
                 {promotedEnvs.map((env) => (
                   <button

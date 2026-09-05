@@ -764,6 +764,8 @@ No AI features yet.
 
 No Marketplace yet.
 
+Agent skill for additive canvas control work (Power Apps–inspired properties/events; no refactors): `.cursor/skills/canvas-component-capabilities/`.
+
 Next focus:
 
 Post–Phase 9.x: optional Redis-backed runtime sessions for multi-replica; workflow entity-change / record triggers (new feature — only after hardening is accepted).

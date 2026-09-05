@@ -83,4 +83,132 @@ assert.match(
   "DataPanel must render sheet columns under connectors",
 );
 
+const registrySrc = readFileSync(
+  path.join(root, "src/property-metadata/registry.ts"),
+  "utf8",
+);
+assert.match(
+  registrySrc,
+  /BUTTON_PROPERTIES[\s\S]*name:\s*"visible"/,
+  "Button registry must expose Visible",
+);
+assert.match(
+  registrySrc,
+  /LABEL_PROPERTIES[\s\S]*name:\s*"visible"/,
+  "Label registry must expose Visible",
+);
+assert.match(
+  registrySrc,
+  /LABEL_PROPERTIES[\s\S]*name:\s*"size"/,
+  "Label registry must expose Size",
+);
+assert.match(
+  registrySrc,
+  /LABEL_PROPERTIES[\s\S]*name:\s*"weight"/,
+  "Label registry must expose Weight",
+);
+assert.match(
+  registrySrc,
+  /LABEL_PROPERTIES[\s\S]*name:\s*"align"/,
+  "Label registry must expose Align",
+);
+assert.match(
+  registrySrc,
+  /GALLERY_PROPERTIES[\s\S]*name:\s*"visible"/,
+  "Gallery registry must expose Visible",
+);
+assert.match(
+  registrySrc,
+  /FORM_PROPERTIES[\s\S]*name:\s*"visible"/,
+  "Form registry must expose Visible",
+);
+assert.match(
+  registrySrc,
+  /BUTTON_PROPERTIES[\s\S]*name:\s*"displayMode"/,
+  "Button registry must expose DisplayMode",
+);
+assert.match(
+  registrySrc,
+  /TEXT_INPUT_PROPERTIES[\s\S]*name:\s*"onChange"/,
+  "TextInput registry must expose OnChange",
+);
+assert.match(
+  registrySrc,
+  /DROPDOWN_PROPERTIES[\s\S]*name:\s*"displayField"/,
+  "Dropdown registry must expose DisplayField",
+);
+assert.match(
+  registrySrc,
+  /DROPDOWN_PROPERTIES[\s\S]*name:\s*"valueField"/,
+  "Dropdown registry must expose ValueField",
+);
+assert.match(
+  registrySrc,
+  /BUTTON_PROPERTIES[\s\S]*name:\s*"tooltip"/,
+  "Button registry must expose Tooltip",
+);
+assert.match(
+  registrySrc,
+  /IMAGE_PROPERTIES[\s\S]*name:\s*"onSelect"/,
+  "Image registry must expose OnSelect",
+);
+assert.match(
+  registrySrc,
+  /ICON_PROPERTIES[\s\S]*name:\s*"onSelect"/,
+  "Icon registry must expose OnSelect",
+);
+assert.match(
+  registrySrc,
+  /TIMER_PROPERTIES[\s\S]*name:\s*"autoStart"/,
+  "Timer registry must expose AutoStart",
+);
+assert.match(
+  registrySrc,
+  /TIMER_PROPERTIES[\s\S]*name:\s*"start"/,
+  "Timer registry must expose Start",
+);
+assert.match(
+  registrySrc,
+  /TIMER_PROPERTIES[\s\S]*name:\s*"repeat"/,
+  "Timer registry must expose Repeat",
+);
+assert.match(
+  registrySrc,
+  /CONTAINER_PROPERTIES[\s\S]*name:\s*"direction"/,
+  "Container registry must expose direction",
+);
+
+assert.match(
+  propertyPanelSrc,
+  /type === "gallery" \|\| type === "datatable"/,
+  "Form Item picker must include DataTable selection sources",
+);
+assert.match(
+  propertyPanelSrc,
+  /datatable-columns-picker|DataTableColumnsPicker/,
+  "PropertyPanel must expose DataTable columns picker",
+);
+
+const defaultsSrc = readFileSync(path.join(root, "src/control-defaults.ts"), "utf8");
+assert.match(
+  defaultsSrc,
+  /button:[\s\S]*visible:\s*\{\s*value:\s*true\s*\}/,
+  "Button defaults must set visible true",
+);
+assert.match(
+  defaultsSrc,
+  /timer:[\s\S]*autoStart:\s*\{\s*value:\s*true\s*\}/,
+  "Timer defaults must set autoStart true",
+);
+assert.match(
+  defaultsSrc,
+  /timer:[\s\S]*start:\s*\{\s*value:\s*true\s*\}/,
+  "Timer defaults must set start true",
+);
+assert.match(
+  defaultsSrc,
+  /timer:[\s\S]*repeat:\s*\{\s*value:\s*false\s*\}/,
+  "Timer defaults must set repeat false",
+);
+
 console.log("studio unit-check: PASS");

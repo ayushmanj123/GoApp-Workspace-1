@@ -55,14 +55,27 @@ func ReadItemFormula(formulas []FormulaBinding, properties map[string]interface{
 	return ""
 }
 
-func ReadDataSource(properties map[string]interface{}) string {
+func ReadPropertyString(properties map[string]interface{}, propertyName string) string {
 	if properties == nil {
 		return ""
 	}
-	if value, ok := properties["dataSource"].(string); ok {
-		return strings.TrimSpace(value)
+	raw, ok := properties[propertyName]
+	if !ok {
+		return ""
+	}
+	switch typed := raw.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case map[string]interface{}:
+		if value, ok := typed["value"].(string); ok {
+			return strings.TrimSpace(value)
+		}
 	}
 	return ""
+}
+
+func ReadDataSource(properties map[string]interface{}) string {
+	return ReadPropertyString(properties, "dataSource")
 }
 
 // ReadRequiredColumns reads optional connector/form required column names
@@ -129,12 +142,24 @@ func ReadModeProperty(properties map[string]interface{}) Mode {
 }
 
 func parseMode(value string) Mode {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "edit":
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
+	case "edit", "edit mode":
 		return ModeEdit
-	case "new":
+	case "new", "new mode":
 		return ModeNew
+	case "view", "view mode":
+		return ModeView
 	default:
+		if strings.HasPrefix(normalized, "edit") {
+			return ModeEdit
+		}
+		if strings.HasPrefix(normalized, "new") {
+			return ModeNew
+		}
+		if strings.HasPrefix(normalized, "view") {
+			return ModeView
+		}
 		return ModeView
 	}
 }

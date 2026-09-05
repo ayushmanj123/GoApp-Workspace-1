@@ -40,6 +40,11 @@ func TestBuildRuntimePackage(t *testing.T) {
 
 	cp := &models.ControlProperty{ID: uuid.New(), TenantID: tenantID, ControlID: childLow.ID, PropertyName: "text", PropertyValue: datatypes.JSON([]byte(`"Hello"`))}
 	store.ControlPropsRepo().Create(context.Background(), cp)
+	onSelectProp := &models.ControlProperty{
+		ID: uuid.New(), TenantID: tenantID, ControlID: childHigh.ID, PropertyName: "onSelect",
+		PropertyValue: datatypes.JSON([]byte(`{"formula":"Navigate(Screen1)"}`)),
+	}
+	store.ControlPropsRepo().Create(context.Background(), onSelectProp)
 	otherProp := &models.ControlProperty{ID: uuid.New(), TenantID: tenantID, ControlID: otherControl.ID, PropertyName: "text", PropertyValue: datatypes.JSON([]byte(`"Ignore"`))}
 	store.ControlPropsRepo().Create(context.Background(), otherProp)
 
@@ -74,6 +79,13 @@ func TestBuildRuntimePackage(t *testing.T) {
 	}
 	if len(container.Children[0].Formulas) != 1 {
 		t.Fatalf("expected 1 formula")
+	}
+	high := container.Children[1]
+	if len(high.Formulas) != 1 {
+		t.Fatalf("expected onSelect promoted into Formulas, got %d", len(high.Formulas))
+	}
+	if high.Formulas[0].PropertyName != "onSelect" || high.Formulas[0].FormulaText != "Navigate(Screen1)" {
+		t.Fatalf("unexpected promoted formula: %#v", high.Formulas[0])
 	}
 }
 

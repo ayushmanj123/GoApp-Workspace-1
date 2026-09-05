@@ -35,6 +35,29 @@ function readDuration(property: unknown): number {
   return 0;
 }
 
+function readBoolean(property: unknown, fallback: boolean): boolean {
+  if (typeof property === "boolean") {
+    return property;
+  }
+  if (property && typeof property === "object" && "value" in property) {
+    const wrapped = (property as { value: unknown }).value;
+    if (typeof wrapped === "boolean") {
+      return wrapped;
+    }
+    if (typeof wrapped === "string") {
+      const trimmed = wrapped.trim().toLowerCase();
+      if (trimmed === "true" || trimmed === "1") return true;
+      if (trimmed === "false" || trimmed === "0") return false;
+    }
+  }
+  if (typeof property === "string") {
+    const trimmed = property.trim().toLowerCase();
+    if (trimmed === "true" || trimmed === "1") return true;
+    if (trimmed === "false" || trimmed === "0") return false;
+  }
+  return fallback;
+}
+
 const noopNavigationStore: RuntimeNavigationStore = {
   getCurrentScreenId: () => undefined,
   navigate: () => {},
@@ -44,8 +67,12 @@ const noopNavigationStore: RuntimeNavigationStore = {
 export const Timer: React.FC<any> = ({
   duration,
   onTimerEnd,
+  autoStart,
+  start,
+  repeat,
   controlName,
   name,
+  disabled = false,
 }) => {
   const engine = useFormulaEngine();
   const context = useFormulaEvaluationContext();
@@ -75,19 +102,32 @@ export const Timer: React.FC<any> = ({
 
   const durationMs = readDuration(duration);
   const formula = readActionFormula(onTimerEnd);
-  const firedRef = useRef(false);
+  const autoStartEnabled = readBoolean(autoStart, true);
+  const startEnabled = readBoolean(start, true);
+  const repeatEnabled = readBoolean(repeat, false);
+  const isRunning =
+    !disabled &&
+    startEnabled &&
+    (autoStartEnabled || startEnabled) &&
+    durationMs > 0 &&
+    Boolean(formula);
+
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!formula || durationMs <= 0 || firedRef.current) {
+    const clearScheduled = () => {
+      if (timeoutRef.current != null) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+
+    if (!isRunning || !formula) {
+      clearScheduled();
       return;
     }
 
-    const timeoutId = setTimeout(() => {
-      if (firedRef.current) {
-        return;
-      }
-      firedRef.current = true;
-
+    const runTimerEnd = () => {
       const actionServices = {
         store,
         screenContextStore,
@@ -126,14 +166,31 @@ export const Timer: React.FC<any> = ({
       void run.catch((err) => {
         console.error("[Timer Error]", err);
       });
-    }, durationMs);
+    };
+
+    const schedule = () => {
+      clearScheduled();
+      timeoutRef.current = setTimeout(() => {
+        timeoutRef.current = null;
+        runTimerEnd();
+        if (repeatEnabled && startEnabled && !disabled) {
+          schedule();
+        }
+      }, durationMs);
+    };
+
+    schedule();
 
     return () => {
-      clearTimeout(timeoutId);
+      clearScheduled();
     };
   }, [
+    isRunning,
     formula,
     durationMs,
+    repeatEnabled,
+    startEnabled,
+    disabled,
     store,
     screenContextStore,
     collectionStore,
@@ -155,7 +212,7 @@ export const Timer: React.FC<any> = ({
     bumpGalleryRefresh,
   ]);
 
-  return <span>[Timer]</span>;
+  return <span data-testid="timer-control">[Timer]</span>;
 };
 
 export default Timer;

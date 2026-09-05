@@ -4,7 +4,7 @@ import {
 } from "../formula/formula-context";
 import { useSessionGalleryItems } from "../hooks/use-session-gallery-items";
 import { usePagedRecords } from "../hooks/use-paged-records";
-import { readItemsFormula } from "../utils/gallery-rows";
+import { galleryRowKey, readItemsFormula } from "../utils/gallery-rows";
 import { useIsDesignSurface } from "../design-mode-context";
 import { fillParentStyle } from "../utils/control-layout";
 import { useRuntime } from "../runtime-hooks";
@@ -103,7 +103,7 @@ export const DataTable: React.FC<{
   );
   const selectionStore = useGallerySelectionStore();
   const isStudioCanvas = useIsDesignSurface();
-  const { appId, sessionId, runtimeUnavailable } = useRuntime();
+  const { appId, sessionId, runtimeUnavailable, bumpFormRefresh } = useRuntime();
   const hasFormula = Boolean(readItemsFormula(itemsProp));
   const tableName = name?.trim() ?? "";
   const canSelect = Boolean(tableName) && !isStudioCanvas && !disabled;
@@ -135,7 +135,11 @@ export const DataTable: React.FC<{
           sessionId,
           galleryName: controlId ?? tableName,
           index,
-        }).catch((err) => console.error(err));
+        })
+          .then(() => {
+            bumpFormRefresh?.();
+          })
+          .catch((err) => console.error(err));
       }
     },
     [
@@ -146,6 +150,7 @@ export const DataTable: React.FC<{
       sessionId,
       appId,
       runtimeUnavailable,
+      bumpFormRefresh,
     ],
   );
 
@@ -227,7 +232,7 @@ export const DataTable: React.FC<{
             ) : null}
             {visibleRecords.map((record, index) => (
               <tr
-                key={`${index}-${JSON.stringify(record)}`}
+                key={galleryRowKey(record, index)}
                 role={canSelect ? "row" : undefined}
                 tabIndex={canSelect ? 0 : undefined}
                 aria-selected={canSelect ? isRowSelected(record) : undefined}

@@ -26,25 +26,30 @@ function readItemFormula(property: unknown): string {
   return "";
 }
 
-function readModeValue(mode: unknown): "View" | "Edit" | "New" {
-  if (mode == null) return "Edit";
-  if (typeof mode === "string") {
-    const normalized = mode.trim().toLowerCase();
-    if (!normalized) return "Edit";
-    if (normalized === "edit") return "Edit";
-    if (normalized === "new") return "New";
-    if (normalized === "view") return "View";
-    return "Edit";
-  }
+function normalizeFormModeInput(mode: unknown): string {
+  if (mode == null) return "";
+  if (typeof mode === "string") return mode.trim();
   if (mode && typeof mode === "object" && "value" in mode) {
-    const value = String((mode as { value?: unknown }).value ?? "").trim();
-    const normalized = value.toLowerCase();
-    if (!normalized) return "Edit";
-    if (normalized === "edit") return "Edit";
-    if (normalized === "new") return "New";
-    if (normalized === "view") return "View";
+    return String((mode as { value?: unknown }).value ?? "").trim();
   }
-  return "Edit";
+  return "";
+}
+
+function normalizeFormMode(mode: unknown, fallback: "View" | "Edit" | "New" = "View"): "View" | "Edit" | "New" {
+  const normalized = normalizeFormModeInput(mode).toLowerCase();
+  if (!normalized) return fallback;
+  if (normalized === "edit" || normalized.startsWith("edit")) return "Edit";
+  if (normalized === "new" || normalized.startsWith("new")) return "New";
+  if (normalized === "view" || normalized.startsWith("view")) return "View";
+  return fallback;
+}
+
+function readModeValue(mode: unknown): "View" | "Edit" | "New" {
+  return normalizeFormMode(mode, "Edit");
+}
+
+function normalizeMode(mode: string | undefined): "View" | "Edit" | "New" {
+  return normalizeFormMode(mode, "View");
 }
 
 function stringifyFieldValue(value: unknown): string {
@@ -58,25 +63,13 @@ function stringifyFieldValue(value: unknown): string {
   }
 }
 
-function normalizeMode(mode: string | undefined): "View" | "Edit" | "New" {
-  const normalized = String(mode ?? "").trim().toLowerCase();
-  if (normalized === "edit") return "Edit";
-  if (normalized === "new") return "New";
-  if (normalized === "view") return "View";
-  return "View";
-}
-
 function recordIdentityKey(
   record: Record<string, unknown> | null,
   formMode: string,
 ): string | null {
   if (!record) return null;
-  const id =
-    record.recordId ??
-    record.RecordId ??
-    record.id ??
-    record.Id ??
-    null;
+  // Prefer platform identity only — avoid generic `id`/`Id` business fields.
+  const id = record.recordId ?? record.RecordId ?? null;
   if (id != null && String(id).trim() !== "") {
     return `${formMode}:${String(id)}`;
   }
@@ -140,9 +133,7 @@ export const Form: React.FC<{
         state.currentRecord && typeof state.currentRecord === "object"
           ? { ...state.currentRecord }
           : {};
-      setRecord(
-        nextMode === "New" && Object.keys(nextRecord).length === 0 ? {} : nextRecord,
-      );
+      setRecord(nextMode === "New" ? nextRecord : nextRecord);
       if (formName) {
         formUpdatesStore.set(formName, { ...(state.dirtyFields ?? nextRecord) });
       }
@@ -266,13 +257,21 @@ export const Form: React.FC<{
   }, [controlId, flushPendingUpdates, formName]);
 
   useEffect(() => {
+    // Only steal focus after Submit validation failure — never on debounced field Updates.
+    const submitFailed =
+      sessionState?.error &&
+      typeof sessionState.error === "object" &&
+      String((sessionState.error as { message?: unknown }).message ?? "")
+        .toLowerCase()
+        .includes("validation");
+    if (!submitFailed) return;
     const errors = sessionState?.validationErrors ?? [];
     if (errors.length === 0) return;
     const target = document.querySelector<HTMLElement>(
       '[aria-invalid="true"], [data-required="true"][aria-invalid="true"]',
     );
     target?.focus?.();
-  }, [sessionState?.validationErrors]);
+  }, [sessionState?.error, sessionState?.validationErrors]);
 
   const inputIdForField = useCallback(
     (fieldName: string) =>
@@ -322,11 +321,13 @@ export const Form: React.FC<{
     return <div>{formMode === "Edit" ? "Edit Form" : "Display Form"}</div>;
   }
 
-  if (loading && !record) {
+  if (loading && record === null) {
     return <div data-testid="form-loading">Loading form…</div>;
   }
 
-  if (!record || (formMode !== "New" && Object.keys(record).length === 0)) {
+  const resolvedRecord = record ?? {};
+  const recordIsEmpty = Object.keys(resolvedRecord).length === 0;
+  if (formMode === "View" && recordIsEmpty) {
     return <div data-testid="form-empty">No Record</div>;
   }
 
@@ -338,9 +339,9 @@ export const Form: React.FC<{
     ...relativeContainerStyle(),
     display: "flex",
     flexDirection: "column",
-    gap: 8,
+    gap: 12,
     overflow: "auto",
-    padding: 4,
+    padding: 8,
   };
 
   const containerStyle: React.CSSProperties = useColumns
@@ -348,9 +349,9 @@ export const Form: React.FC<{
         ...relativeContainerStyle(),
         display: "grid",
         gridTemplateColumns: `repeat(${columnsValue}, minmax(0, 1fr))`,
-        gap: 8,
+        gap: 12,
         overflow: "auto",
-        padding: 4,
+        padding: 8,
         containerType: "inline-size",
       } as React.CSSProperties)
     : layoutValue.toLowerCase() === "horizontal"
@@ -359,9 +360,9 @@ export const Form: React.FC<{
           display: "flex",
           flexDirection: "row",
           flexWrap: "wrap",
-          gap: 8,
+          gap: 12,
           overflow: "auto",
-          padding: 4,
+          padding: 8,
         }
       : verticalStyle;
 
@@ -369,6 +370,15 @@ export const Form: React.FC<{
     sessionState?.error && typeof sessionState.error === "object"
       ? String((sessionState.error as { message?: unknown }).message ?? "")
       : "";
+
+  const offlineHint =
+    !hasSession && !isStudioCanvas
+      ? runtimeUnavailable
+        ? "Runtime service unavailable — edits stay local and will not persist to the database."
+        : !sessionId
+          ? "No runtime session — form Submit uses offline memory only until a session is connected."
+          : null
+      : null;
 
   const formBody = (
     <div
@@ -388,7 +398,30 @@ export const Form: React.FC<{
               grid-template-columns: 1fr !important;
             }
           }
+          @container (max-width: 720px) and (min-width: 521px) {
+            [data-testid="form-edit"][data-layout="Columns"],
+            [data-testid="form-view"][data-layout="Columns"] {
+              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+          }
         `}</style>
+      ) : null}
+      {offlineHint ? (
+        <div
+          role="status"
+          data-testid="form-offline-hint"
+          style={{
+            color: "#92400e",
+            background: "#fffbeb",
+            border: "1px solid #fcd34d",
+            borderRadius: 4,
+            fontSize: 12,
+            padding: "6px 8px",
+            marginBottom: 6,
+          }}
+        >
+          {offlineHint}
+        </div>
       ) : null}
       {formErrorMessage ? (
         <div role="alert" style={{ color: "#b91c1c", fontSize: 12, marginBottom: 4 }}>
@@ -408,7 +441,7 @@ export const Form: React.FC<{
 
   return (
     <FormEditContext.Provider value={editContextValue}>
-      <FormItemProvider item={record}>
+      <FormItemProvider item={resolvedRecord}>
         <div style={{ ...fillParentStyle(), overflow: "auto" }}>{formBody}</div>
       </FormItemProvider>
     </FormEditContext.Provider>

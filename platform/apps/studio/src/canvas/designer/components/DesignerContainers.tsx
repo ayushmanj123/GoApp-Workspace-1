@@ -361,32 +361,50 @@ export function DesignerContainer({
   selected?: boolean;
   renderChild?: (control: Control) => ReactNode;
 }) {
-  const dir = typeof direction === "string" ? direction : "vertical";
+  const flexDirection = (() => {
+    let raw = "";
+    if (typeof direction === "string") {
+      raw = direction.trim().toLowerCase();
+    } else if (direction && typeof direction === "object" && "value" in direction) {
+      raw = String((direction as { value?: unknown }).value ?? "")
+        .trim()
+        .toLowerCase();
+    }
+    if (raw === "horizontal" || raw === "row") return "row" as const;
+    return "column" as const;
+  })();
+
   return (
     <div
       style={{
         ...boxStyle,
         display: "flex",
-        flexDirection: dir === "horizontal" ? "row" : "column",
-        gap: 4,
+        flexDirection,
+        flexWrap: "nowrap",
+        gap: 8,
         position: "relative",
+        alignItems: "stretch",
       }}
+      data-testid="designer-container-pack"
+      data-direction={flexDirection}
     >
       {templateControls.length > 0 ? (
-        templateControls.map((control) => (
-          <div
-            key={control.id}
-            style={{
-              position: "absolute",
-              left: control.x,
-              top: control.y,
-              width: control.width,
-              height: control.height,
-            }}
-          >
-            {renderChild ? renderChild(control as Control) : null}
-          </div>
-        ))
+        [...templateControls]
+          .sort((a, b) => (a.z_index ?? 0) - (b.z_index ?? 0))
+          .map((control) => (
+            <div
+              key={control.id}
+              style={{
+                position: "relative",
+                width: control.width > 0 ? control.width : undefined,
+                height: control.height > 0 ? control.height : undefined,
+                flexShrink: 0,
+                boxSizing: "border-box",
+              }}
+            >
+              {renderChild ? renderChild(control as Control) : null}
+            </div>
+          ))
       ) : (
         <span style={{ fontSize: 11, color: "#888" }}>Container</span>
       )}

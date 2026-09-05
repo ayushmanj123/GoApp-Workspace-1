@@ -14,10 +14,17 @@ export const ApplicationPage: React.FC = () => {
   const { applicationId } = useParams();
   const [params] = useSearchParams();
   const environmentId = params.get("environmentId") ?? undefined;
+  const channelParam = (params.get("channel") ?? "").trim().toLowerCase();
+  const channel: "draft" | "published" =
+    channelParam === "draft" ? "draft" : "published";
   if (!applicationId) return <ErrorState message="application id missing" />;
 
   return (
-    <RuntimeProvider appId={applicationId} environmentId={environmentId}>
+    <RuntimeProvider
+      appId={applicationId}
+      environmentId={environmentId}
+      channel={channel}
+    >
       <InnerApp />
     </RuntimeProvider>
   );

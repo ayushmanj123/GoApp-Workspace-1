@@ -63,6 +63,7 @@ Form `layout`: `Vertical` (default) | `Horizontal` | `Columns` with `columns` co
 | `Form.Updates` / `LastSubmit` / `Error` | Supported |
 | `Defaults(DS)` + NewForm schema defaults | Supported |
 | `Patch(DS, Form.Updates)` | Supported |
+| `Patch(DS, Form.Item \| Gallery.Selected, {fields})` | Supported (Wave 5) |
 | OnSuccess / OnFailure | Supported (after SubmitForm) |
 | Item: Gallery.Selected / First / LookUp / `{…}` | Supported |
 | DataCard + Generate/scaffold | Supported |
@@ -91,6 +92,8 @@ POST /api/runtime/session/{sessionId}/form/{controlId}/reset
 
 Gallery selection sync **does not clobber** Edit/New forms with unsaved DirtyFields.
 
+Form **Item** may be `Gallery.Selected` or `DataTable.Selected` (any items-control name ending in `.Selected`). Studio’s Item source picker lists both Gallery and DataTable controls on the same screen. Changing the selected list row while the form is dirty keeps the in-progress record until `ResetForm` or `SubmitForm`.
+
 ## Formula support
 
 ### Actions
@@ -102,6 +105,8 @@ Gallery selection sync **does not clobber** Edit/New forms with unsaved DirtyFie
 | `NewForm` / `EditForm` / `ViewForm` | Mode change |
 | `Defaults(DataSource)` | Schema-/sample-shaped empty record |
 | `Patch(DS, Form.Updates)` | Patch using dirty field map |
+| `Patch(DS, Form.Item, {…})` | Three-arg merge: identity from Item + field overrides (Wave 5) |
+| `Patch(DS, Gallery.Selected, {…})` | Three-arg merge from gallery/DataTable selection (Wave 5) |
 
 ### Expressions
 
@@ -118,6 +123,43 @@ Gallery selection sync **does not clobber** Edit/New forms with unsaved DirtyFie
 ## Offline path
 
 In-memory `executeSubmitForm` runs **only** when there is no runtime session. Session apps always use Go Form Service.
+
+The React Form shows a **status banner** when `runtimeUnavailable` or when there is no `sessionId`, so Submit cannot be mistaken for Postgres persistence.
+
+## Focus and validation (Canvas Form foundation)
+
+**Root cause of focus loss while typing:** the Form client autofocused the first `[aria-invalid]` control whenever `validationErrors` changed after each debounced `Update`. Go `Update` also revalidated on every keystroke flush.
+
+**Fixes:**
+
+- Autofocus runs only after **Submit** validation failure (`error.message` contains validation).
+- Go `Update` clears `ValidationErrors` / `LastError`; schema validation runs on **Submit** (and on `Form.Valid` read via `refreshValidation`).
+- `recordKey` uses platform `recordId` / `RecordId` only (not business `id`).
+- Gallery/DataTable row React keys use stable `galleryRowKey(recordId)` instead of `JSON.stringify(record)`.
+
+## Scaffold layout
+
+`CreateCRUDApp` sizes Form height from column count (`16 + N×56 + 16`, min 360) and places action buttons below the form. DataCard / label / input IDs are **deterministic** (`uuid.NewSHA1` from parent + field) and prior form datacards are cleared on upsert so re-seed does not duplicate cards. Customer Management seed now passes `Columns: Name, Email, Phone, Status`.
+
+## Layout / responsive
+
+- Form interior: flex column (Vertical), wrap row (Horizontal), CSS grid + `@container` (Columns) collapsing to 1 column under 520px and 2 columns for mid widths when authored with more columns.
+- DataCard: padded card chrome, consistent label/input gap, errors under the field.
+- Form **shell** remains absolute on the artboard (Studio canvas model); nested cards ignore designer X/Y at runtime.
+
+## Remaining gaps vs Power Apps Canvas Form
+
+- Attachments / People / Rich text / Image DataCards
+- First-class DataCard **Update** formula evaluation (client uses Default + `reportUpdate`)
+- Full responsive canvas containers (beyond Form interior)
+- Collection-native `SubmitForm` without EntityID/kind
+- Deeper LookUp/Filter Item formulas
+
+## Recommended next steps
+
+1. Align scaffold field controls with Studio Generate typed fields (number, lookup, choice→Dropdown).
+2. Optional seed sample entity rows so galleries are non-empty after seed.
+3. Card-level Update property evaluation when product needs Patch-from-card parity.
 
 ## Related docs
 

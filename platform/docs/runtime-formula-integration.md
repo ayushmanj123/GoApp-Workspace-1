@@ -104,8 +104,19 @@ Create a session first via `POST /api/runtime/state/sessions`.
 | `Defaults` | `Defaults(Customers)` | Resolver + empty record template |
 | `Patch` | `Patch(Customers, { Name: "Alice" })` | `DataSource.Create` |
 | `Patch` (update) | `Patch(Customers, { recordId: "…", version: 1, Name: "Updated" })` | `DataSource.Update` via record service |
+| `Patch` (3-arg) | `Patch(Customers, gallery.Selected, { Status: "Qualified" })` | Merge base identity + fields → `Update` (or `Create` if no `recordId`) |
 
 `Patch` resolves the datasource name, selects the entity `DataSource`, and calls create/update on the record service. No SQL or repository access from the formula package.
+
+**Wave 5 (narrow):** three-arg `Patch(DS, base, {fields})` merges `base` with the field literal. Base may be:
+
+- `galleryName.Selected` / DataTable `.Selected` (via `GalleryReader`)
+- `formName.Item` / `formName.Updates` (via `FormReader`)
+- a record object literal containing `recordId` / `version`
+
+Field values in `{…}` literals may be string/number/boolean **or** a dotted reference (e.g. `Name: formLead.Item.Company`), resolved at execution time.
+
+Two-arg `Patch(DS, {…})` and `Patch(DS, Form.Updates)` remain unchanged. Statement chaining with `;` (e.g. `Patch(...); Navigate(...)`) is supported.
 
 ### Navigation
 

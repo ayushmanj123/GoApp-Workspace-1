@@ -142,6 +142,9 @@ func (d *Dispatcher) execCollect(rtCtx *RuntimeFormulaContext, formula string) (
 	if err != nil {
 		return nil, err
 	}
+	if err := d.resolveDeferredRecordFields(rtCtx, item); err != nil {
+		return nil, err
+	}
 	rtCtx.State.Collect(collection, item)
 	if rtCtx.Events != nil {
 		rtCtx.RecordRefresh(rtCtx.Events.CollectionChanged(rtCtx.Session.SessionID, rtCtx.App.AppID, collection))
@@ -156,6 +159,9 @@ func (d *Dispatcher) execClearCollect(rtCtx *RuntimeFormulaContext, formula stri
 	}
 	item, err := parseRecordObject(objectLiteral)
 	if err != nil {
+		return nil, err
+	}
+	if err := d.resolveDeferredRecordFields(rtCtx, item); err != nil {
 		return nil, err
 	}
 	rtCtx.State.ClearCollect(collection, []any{item})
@@ -287,25 +293,43 @@ func (d *Dispatcher) execDefaults(rtCtx *RuntimeFormulaContext, formula string) 
 }
 
 func (d *Dispatcher) execPatch(rtCtx *RuntimeFormulaContext, formula string) (any, error) {
-	dataSource, objectLiteral, ok := parseTwoArgCall(formula, "Patch")
-	if !ok {
-		return nil, newFormulaError("INVALID_FORMULA", "invalid Patch() formula", nil)
-	}
-	record, err := parseRecordObject(objectLiteral)
-	if err != nil {
-		// Support Patch(DS, Form.Updates) / Patch(DS, Form.Item).
-		if rtCtx.Forms != nil {
-			if value, resolved := rtCtx.Forms.ResolveReference(strings.TrimSpace(objectLiteral)); resolved {
-				if asMap, isMap := value.(map[string]interface{}); isMap {
-					record = asMap
-					err = nil
-				}
-			}
-		}
+	var dataSource string
+	var record map[string]interface{}
+
+	if ds, baseExpr, fieldsLit, ok := parseThreeArgCall(formula, "Patch"); ok {
+		dataSource = ds
+		fields, err := parseRecordObject(fieldsLit)
 		if err != nil {
 			return nil, err
 		}
+		if err := d.resolveDeferredRecordFields(rtCtx, fields); err != nil {
+			return nil, err
+		}
+		base, err := resolvePatchBaseRecord(rtCtx, baseExpr)
+		if err != nil {
+			return nil, err
+		}
+		record = mergePatchRecords(base, fields)
+	} else if ds, objectLiteral, ok := parseTwoArgCall(formula, "Patch"); ok {
+		dataSource = ds
+		parsed, err := parseRecordObject(objectLiteral)
+		if err != nil {
+			// Support Patch(DS, Form.Updates) / Patch(DS, Form.Item).
+			resolved, resolveErr := resolvePatchBaseRecord(rtCtx, strings.TrimSpace(objectLiteral))
+			if resolveErr != nil {
+				return nil, err
+			}
+			record = resolved
+		} else {
+			if err := d.resolveDeferredRecordFields(rtCtx, parsed); err != nil {
+				return nil, err
+			}
+			record = parsed
+		}
+	} else {
+		return nil, newFormulaError("INVALID_FORMULA", "invalid Patch() formula", nil)
 	}
+
 	if rtCtx.Resolver == nil || rtCtx.DataSources == nil {
 		return nil, newFormulaError("RUNTIME_ERROR", "data services are unavailable", nil)
 	}
@@ -327,7 +351,7 @@ func (d *Dispatcher) execPatch(rtCtx *RuntimeFormulaContext, formula string) (an
 	patch := map[string]interface{}{}
 	for field, value := range record {
 		switch field {
-		case "recordId", "version":
+		case "recordId", "version", "entityId":
 			continue
 		default:
 			patch[field] = value
@@ -372,6 +396,81 @@ func (d *Dispatcher) execPatch(rtCtx *RuntimeFormulaContext, formula string) (an
 		rtCtx.RecordRefresh(rtCtx.Events.DatasourceChanged(rtCtx.Session.SessionID, rtCtx.App.AppID, dataSource))
 	}
 	return result, nil
+}
+
+func resolvePatchBaseRecord(rtCtx *RuntimeFormulaContext, expr string) (map[string]interface{}, error) {
+	trimmed := strings.TrimSpace(expr)
+	if trimmed == "" {
+		return nil, newFormulaError("INVALID_FORMULA", "Patch() base record is empty", nil)
+	}
+	if strings.HasPrefix(trimmed, "{") {
+		return parseRecordObject(trimmed)
+	}
+	if rtCtx.Forms != nil {
+		if value, resolved := rtCtx.Forms.ResolveReference(trimmed); resolved {
+			if asMap, ok := asStringMap(value); ok {
+				return asMap, nil
+			}
+			return nil, newFormulaError("INVALID_FORMULA", "Patch() base is not a record", nil)
+		}
+	}
+	if rtCtx.Gallery != nil {
+		if value, resolved := rtCtx.Gallery.ResolveReference(trimmed); resolved {
+			if value == nil {
+				return nil, newFormulaError("INVALID_FORMULA", "Patch() base Selected is blank", nil)
+			}
+			if asMap, ok := asStringMap(value); ok {
+				return asMap, nil
+			}
+			return nil, newFormulaError("INVALID_FORMULA", "Patch() base is not a record", nil)
+		}
+	}
+	return nil, newFormulaError("INVALID_FORMULA", "unable to resolve Patch() base record", nil)
+}
+
+func (d *Dispatcher) resolveDeferredRecordFields(rtCtx *RuntimeFormulaContext, record map[string]interface{}) error {
+	if d == nil || d.evaluator == nil || record == nil {
+		return nil
+	}
+	for key, value := range record {
+		expr, ok := value.(deferredExpr)
+		if !ok {
+			continue
+		}
+		resolved, err := d.evaluator.evaluate(rtCtx, string(expr))
+		if err != nil {
+			return err
+		}
+		record[key] = resolved
+	}
+	return nil
+}
+
+func mergePatchRecords(base, fields map[string]interface{}) map[string]interface{} {
+	merged := map[string]interface{}{}
+	for k, v := range base {
+		merged[k] = v
+	}
+	for k, v := range fields {
+		merged[k] = v
+	}
+	return merged
+}
+
+func asStringMap(value any) (map[string]interface{}, bool) {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		return typed, true
+	case databinding.DataItem:
+		return map[string]interface{}(typed), true
+	case *databinding.DataItem:
+		if typed == nil {
+			return nil, false
+		}
+		return map[string]interface{}(*typed), true
+	default:
+		return nil, false
+	}
 }
 
 func (d *Dispatcher) execRemove(rtCtx *RuntimeFormulaContext, formula string) (any, error) {

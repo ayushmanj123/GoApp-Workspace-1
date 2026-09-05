@@ -354,6 +354,13 @@ func TestParseFilterExprContainsStartsWith(t *testing.T) {
 	if expr.Leaves[0].Op != OpStartsWith || expr.Leaves[0].Value != "A" {
 		t.Fatalf("unexpected StartsWith expr: %#v", expr)
 	}
+	expr, err = ParseFilterExpr(`EndsWith(Name,'Inc')`)
+	if err != nil {
+		t.Fatalf("EndsWith: %v", err)
+	}
+	if expr.Leaves[0].Op != OpEndsWith || expr.Leaves[0].Field != "Name" || expr.Leaves[0].Value != "Inc" {
+		t.Fatalf("unexpected EndsWith expr: %#v", expr)
+	}
 	row := map[string]interface{}{"Name": "Acme Corp"}
 	if !MatchFilterExpr(row, FilterExpr{Leaves: []ComparisonFilter{{Field: "Name", Op: OpContains, Value: "acme"}}}) {
 		t.Fatal("expected contains match")
@@ -363,6 +370,12 @@ func TestParseFilterExprContainsStartsWith(t *testing.T) {
 	}
 	if MatchFilterExpr(row, FilterExpr{Leaves: []ComparisonFilter{{Field: "Name", Op: OpStartsWith, Value: "zz"}}}) {
 		t.Fatal("expected startswith miss")
+	}
+	if !MatchFilterExpr(row, FilterExpr{Leaves: []ComparisonFilter{{Field: "Name", Op: OpEndsWith, Value: "orp"}}}) {
+		t.Fatal("expected endswith match")
+	}
+	if MatchFilterExpr(row, FilterExpr{Leaves: []ComparisonFilter{{Field: "Name", Op: OpEndsWith, Value: "zz"}}}) {
+		t.Fatal("expected endswith miss")
 	}
 }
 

@@ -8,6 +8,7 @@ import { useSessionGalleryItems } from "../hooks/use-session-gallery-items";
 import { usePagedRecords } from "../hooks/use-paged-records";
 import {
   firstStringLikeField,
+  galleryRowKey,
   readItemsFormula,
 } from "../utils/gallery-rows";
 import { useIsDesignSurface } from "../design-mode-context";
@@ -43,7 +44,7 @@ export const Gallery: React.FC<{
   );
   const selectionStore = useGallerySelectionStore();
   const isStudioCanvas = useIsDesignSurface();
-  const { appId, sessionId, runtimeUnavailable } = useRuntime();
+  const { appId, sessionId, runtimeUnavailable, bumpFormRefresh } = useRuntime();
   const hasFormula = Boolean(readItemsFormula(itemsProp));
   const galleryName = name?.trim() ?? "";
   const canSelect = Boolean(galleryName) && !isStudioCanvas && !disabled;
@@ -72,7 +73,11 @@ export const Gallery: React.FC<{
           sessionId,
           galleryName: controlId ?? galleryName,
           index,
-        }).catch((err) => console.error(err));
+        })
+          .then(() => {
+            bumpFormRefresh?.();
+          })
+          .catch((err) => console.error(err));
       }
     },
     [
@@ -83,6 +88,7 @@ export const Gallery: React.FC<{
       sessionId,
       appId,
       runtimeUnavailable,
+      bumpFormRefresh,
     ],
   );
 
@@ -124,7 +130,7 @@ export const Gallery: React.FC<{
         ) : null}
         {visibleRecords.map((record, index) => (
           <div
-            key={`${index}-${JSON.stringify(record)}`}
+            key={galleryRowKey(record, index)}
             role={canSelect ? "option" : undefined}
             aria-selected={canSelect ? isRowSelected(record) : undefined}
             tabIndex={canSelect ? 0 : undefined}

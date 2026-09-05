@@ -80,7 +80,7 @@ Property Panel and Formula Bar accept typing while focused. Canvas designer cont
 | Reparent via drag existing control into/out of container | Done (pointer drag → `updateControl` parent + local x/y) |
 | Context Insert / Nest into Container | Done (right-click menu) |
 | Explorer tree nest/un-nest / Indent commands | **Next** |
-| Auto-layout packing (`direction` horizontal/vertical) | Deferred |
+| Auto-layout packing (`direction` horizontal/vertical) | Done (flex pack by `z_index`; Runtime Preview + designer) |
 
 **Drop highlight:** while dragging from the toolbox or moving a control, the target Container/Form/Gallery shows a filled primary ring (`drop-target-outline`).
 
@@ -110,9 +110,45 @@ Shared shape properties: `fill`, `stroke`, `strokeWidth`, `opacity`. `shape_imag
 - Designer Konva shapes: `apps/studio/src/canvas/designer/DesignerShapeLayer.tsx`
 - Registry bridge: `apps/runtime/src/registry-bridge.tsx`
 
+### Common chrome (Wave 1)
+
+- **Visible** is authored in the property panel for Button, Label, Image, Icon, Timer, Gallery, DataTable, Form, Container (and the inputs that already had it). Runtime hides the control when Visible is false, including Studio `{ value: false }` wrappers (`readVisible` in `apps/runtime/src/utils/control-layout.ts`).
+- **DisplayMode** (Edit / View / Disabled) is on Button and Timer (plus existing inputs/DataCard). `ControlRenderer` injects `disabled` when DisplayMode is Disabled.
+
+### Input parity (Wave 2)
+
+- **TextInput OnChange** runs action formulas via `useRuntimeActionHandler` (same path as Dropdown/Checkbox), after Form dirty updates.
+- **Dropdown DisplayField / ValueField** map Items record fields for option label/value; falls back to `Value`/`Label` heuristics when unset.
+- **Tooltip** is a text property on Button, TextInput, Dropdown, Checkbox, Toggle, and DatePicker; Runtime applies it as the native HTML `title` attribute.
+
+### Data controls (Wave 3)
+
+- Form **Item** source picker lists Gallery and DataTable as `Name.Selected`.
+- Gallery/DataTable `filter` supports `EndsWith(Field,'…')` alongside Contains/StartsWith.
+- DataTable **Columns** picker (checkboxes + reorder + CSV text) writes the existing `columns` property.
+
+### Layout & media (Wave 4)
+
+- **Container** packs nested children with flex from `direction` (`vertical`/`column` → column; `horizontal`/`row` → row). Child order is `z_index` ascending; authored x/y on the wire are unchanged (presentation only). Nest/drop/reparent APIs unchanged.
+- **Image** and **Icon** expose **OnSelect** formulas; Runtime runs them via `useRuntimeActionHandler` on click (pointer + Enter/Space when a formula is set).
+- **Timer** adds **AutoStart** (default true), **Start** (default true; set false to stop), and **Repeat** (default false) around existing Duration / OnTimerEnd.
+
+### Formula surface (Wave 5)
+
+- **`Patch(DS, base, {fields})`** merges identity from `gallery.Selected` / `form.Item` / `form.Updates` / a record literal with field overrides, then updates (or creates when `recordId` is absent). Two-arg `Patch` unchanged. See [runtime-formula-integration.md](./runtime-formula-integration.md).
+
+### Form foundation (focus + scaffold)
+
+- Form no longer autofocuses invalid fields on every Update; validation focus is Submit-only. See [form-runtime.md](./form-runtime.md).
+- Scaffold sizes Form height from column count and uses deterministic DataCard IDs (re-seed safe).
+- Offline / no-session Form shows a persistence warning banner.
+
+### Label typography
+
+- Label supports **Size** (px), **Weight** (number or normal/bold/semibold/light), and **Align** (left/center/right/justify) in the property panel; Runtime applies them as CSS `fontSize` / `fontWeight` / `textAlign`.
+- Explorer control tree indents nested children by depth (`paddingLeft` scales with parent/container nesting).
+
 ## Out of scope
 
-- Full Power Fx `Items` table field mapping (DisplayField / ValueField) beyond lookup Dropdown
-- Horizontal/Vertical auto-layout packing inside Container (`direction` reserved)
 - Animated shape transitions
 - Vector icon font packs beyond named glyphs + emoji

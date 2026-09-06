@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useApplicationStore } from "../../store/applicationStore";
-import type { EntityFieldType } from "../../api/entities-api";
+import { ENTITY_FIELD_TYPES, type EntityFieldType } from "../../api/entities-api";
 import shellStyles from "../preview/RuntimePreviewModal.module.css";
 import styles from "./InsertComponentModal.module.css";
 
-const FIELD_TYPES: EntityFieldType[] = ["text", "number", "boolean", "date"];
+const FIELD_TYPES = ENTITY_FIELD_TYPES;
 
 interface AddFieldModalProps {
   open: boolean;

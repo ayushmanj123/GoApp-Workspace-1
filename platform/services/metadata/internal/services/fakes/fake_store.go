@@ -484,6 +484,8 @@ type fakeTenantSession struct {
 	componentDefinitions *fakeGenericRepo[models.ComponentDefinition]
 	entities             *fakeGenericRepo[models.Entity]
 	entityFields         *fakeGenericRepo[models.EntityField]
+	entityKeys           *fakeGenericRepo[models.EntityKey]
+	entityRelationships  *fakeGenericRepo[models.EntityRelationship]
 	solutionPackages     *fakeGenericRepo[models.SolutionPackage]
 	solutionPackageComponents *fakeGenericRepo[models.SolutionPackageComponent]
 	connectors           *fakeGenericRepo[models.Connector]
@@ -530,6 +532,10 @@ func (s *fakeTenantSession) ComponentDefinitions() repositories.ComponentDefinit
 }
 func (s *fakeTenantSession) Entities() repositories.EntityRepository         { return s.entities }
 func (s *fakeTenantSession) EntityFields() repositories.EntityFieldRepository { return s.entityFields }
+func (s *fakeTenantSession) EntityKeys() repositories.EntityKeyRepository     { return s.entityKeys }
+func (s *fakeTenantSession) EntityRelationships() repositories.EntityRelationshipRepository {
+	return s.entityRelationships
+}
 func (s *fakeTenantSession) SolutionPackages() repositories.SolutionPackageRepository {
 	return s.solutionPackages
 }
@@ -554,6 +560,8 @@ type FakeStore struct {
 	componentDefinitions *fakeGenericRepo[models.ComponentDefinition]
 	entities             *fakeGenericRepo[models.Entity]
 	entityFields         *fakeGenericRepo[models.EntityField]
+	entityKeys           *fakeGenericRepo[models.EntityKey]
+	entityRelationships  *fakeGenericRepo[models.EntityRelationship]
 	solutionPackages     *fakeGenericRepo[models.SolutionPackage]
 	solutionPackageComponents *fakeGenericRepo[models.SolutionPackageComponent]
 	connectors           *fakeGenericRepo[models.Connector]
@@ -575,6 +583,8 @@ func NewFakeStore() *FakeStore {
 		componentDefinitions: newFakeGenericRepo[models.ComponentDefinition](),
 		entities:             newFakeGenericRepo[models.Entity](),
 		entityFields:         newFakeGenericRepo[models.EntityField](),
+		entityKeys:           newFakeGenericRepo[models.EntityKey](),
+		entityRelationships:  newFakeGenericRepo[models.EntityRelationship](),
 		solutionPackages:     newFakeGenericRepo[models.SolutionPackage](),
 		solutionPackageComponents: newFakeGenericRepo[models.SolutionPackageComponent](),
 		connectors:           newFakeGenericRepo[models.Connector](),
@@ -615,6 +625,8 @@ func (s *FakeStore) WithTenant(ctx context.Context, tenantID uuid.UUID) reposito
 		componentDefinitions: s.componentDefinitions,
 		entities:             s.entities,
 		entityFields:         s.entityFields,
+		entityKeys:           s.entityKeys,
+		entityRelationships:  s.entityRelationships,
 		solutionPackages:     s.solutionPackages,
 		solutionPackageComponents: s.solutionPackageComponents,
 		connectors:           s.connectors,

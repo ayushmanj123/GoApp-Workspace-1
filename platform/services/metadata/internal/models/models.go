@@ -339,12 +339,15 @@ type ComponentDefinition struct {
 func (ComponentDefinition) TableName() string { return "component_definitions" }
 
 type Entity struct {
-	ID            uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
-	TenantID      uuid.UUID      `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
-	ApplicationID uuid.UUID      `gorm:"column:application_id;type:uuid;not null;index" json:"application_id"`
-	Name          string         `gorm:"column:name;not null" json:"name"`
-	DisplayName   string         `gorm:"column:display_name;not null" json:"display_name"`
-	DeletedAt     gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
+	ID                uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	TenantID          uuid.UUID      `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
+	ApplicationID     uuid.UUID      `gorm:"column:application_id;type:uuid;not null;index" json:"application_id"`
+	Name              string         `gorm:"column:name;not null" json:"name"`
+	DisplayName       string         `gorm:"column:display_name;not null" json:"display_name"`
+	PluralDisplayName string         `gorm:"column:plural_display_name;not null;default:''" json:"plural_display_name"`
+	Description       string         `gorm:"column:description;not null;default:''" json:"description"`
+	PrimaryFieldID    *uuid.UUID     `gorm:"column:primary_field_id;type:uuid" json:"primary_field_id,omitempty"`
+	DeletedAt         gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
 	AuditFields
 }
 
@@ -358,12 +361,43 @@ type EntityField struct {
 	DisplayName     string         `gorm:"column:display_name;not null" json:"display_name"`
 	FieldType       string         `gorm:"column:field_type;not null" json:"field_type"`
 	IsRequired      bool           `gorm:"column:is_required;not null;default:false" json:"is_required"`
+	IsUnique        bool           `gorm:"column:is_unique;not null;default:false" json:"is_unique"`
 	RelatedEntityID *uuid.UUID     `gorm:"column:related_entity_id;type:uuid" json:"related_entity_id,omitempty"`
+	OptionsJSON     datatypes.JSON `gorm:"column:options_json;type:jsonb" json:"options_json,omitempty"`
+	ConfigJSON      datatypes.JSON `gorm:"column:config_json;type:jsonb" json:"config_json,omitempty"`
+	DeleteBehavior  string         `gorm:"column:delete_behavior;not null;default:restrict" json:"delete_behavior"`
 	DeletedAt       gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
 	AuditFields
 }
 
 func (EntityField) TableName() string { return "entity_fields" }
+
+// EntityKey is an alternate unique key over one or more entity fields.
+type EntityKey struct {
+	ID        uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	TenantID  uuid.UUID      `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
+	EntityID  uuid.UUID      `gorm:"column:entity_id;type:uuid;not null;index" json:"entity_id"`
+	Name      string         `gorm:"column:name;not null" json:"name"`
+	FieldIDs  datatypes.JSON `gorm:"column:field_ids;type:jsonb;not null" json:"field_ids"`
+	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
+	AuditFields
+}
+
+func (EntityKey) TableName() string { return "entity_keys" }
+
+// EntityRelationship describes a many-to-many link between two entities.
+type EntityRelationship struct {
+	ID               uuid.UUID      `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
+	TenantID         uuid.UUID      `gorm:"column:tenant_id;type:uuid;not null;index" json:"tenant_id"`
+	Name             string         `gorm:"column:name;not null" json:"name"`
+	RelationshipType string         `gorm:"column:relationship_type;not null;default:nn" json:"relationship_type"`
+	LeftEntityID     uuid.UUID      `gorm:"column:left_entity_id;type:uuid;not null;index" json:"left_entity_id"`
+	RightEntityID    uuid.UUID      `gorm:"column:right_entity_id;type:uuid;not null;index" json:"right_entity_id"`
+	DeletedAt        gorm.DeletedAt `gorm:"column:deleted_at;index" json:"deleted_at"`
+	AuditFields
+}
+
+func (EntityRelationship) TableName() string { return "entity_relationships" }
 
 // SolutionPackage is an ALM package that references environment components.
 // Distinct from Package (publish artifact URL/hash).

@@ -1,24 +1,89 @@
-.toolbar {
+.tablesToolbar {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  margin-bottom: var(--space-6);
-  padding: var(--space-3) var(--space-4);
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.tablesSearch {
+  flex: 1;
+  min-width: 220px;
+}
+
+.tablesFilterWrap {
+  position: relative;
+}
+
+.tablesFilterBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  transition:
+    background var(--transition),
+    border-color var(--transition);
+}
+
+.tablesFilterBtn:hover {
+  background: var(--color-bg-hover);
+}
+
+.tablesFilterBtnActive {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.tablesFilterDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.tablesFilterMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  padding: 6px;
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.tabLabel {
-  font-size: 14px;
+.tablesFilterOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  text-align: left;
+}
+
+.tablesFilterOption:hover {
+  background: var(--color-bg-hover);
+}
+
+.tablesFilterOptionActive {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
   font-weight: 600;
-  color: var(--color-text-primary);
-  white-space: nowrap;
-}
-
-.searchWrap {
-  flex: 1;
-  min-width: 160px;
 }
 
 .list {
@@ -27,40 +92,97 @@
   gap: var(--space-3);
 }
 
-.tableCard {
-  border: 1px dashed var(--color-border);
+.tableListCard {
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-surface);
   overflow: hidden;
+  box-shadow: var(--shadow-card);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition);
 }
 
-.tableCardExpanded {
+.tableListCardExpanded {
   border-color: var(--color-primary);
-  border-style: solid;
+  box-shadow: var(--shadow-soft);
 }
 
-.tableRow {
+.tableListRow {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4);
+  padding: 14px 16px;
+  cursor: pointer;
 }
 
-.tableInfo {
+.tableListIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.tableListInfo {
   flex: 1;
   min-width: 0;
 }
 
-.tableName {
+.tableListTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tableListName {
   font-size: 15px;
   font-weight: 600;
   color: var(--color-text-primary);
 }
 
-.tableMeta {
+.tableSlug {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--color-bg-muted);
+  color: var(--color-text-muted);
+}
+
+.tableModulePill {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+}
+
+.tableMetaLine {
+  margin-top: 4px;
   font-size: 12px;
   color: var(--color-text-muted);
-  margin-top: 2px;
+}
+
+.tableListRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tableUpdated {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  margin-right: 4px;
 }
 
 .iconBtn {
@@ -81,37 +203,50 @@
   color: var(--color-primary);
 }
 
-.subList {
-  border-top: 1px dashed var(--color-border);
-  padding: var(--space-2) var(--space-4) var(--space-3);
-}
-
-.subItem {
+.tableExpandFooter {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-6);
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  text-align: left;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-app);
+}
+
+.tableActionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
   border-radius: var(--radius-sm);
-  transition: background var(--transition);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    color var(--transition);
 }
 
-.subItem:hover:not(:disabled) {
+.tableActionBtn:hover {
   background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.tableActionBtnPrimary {
+  margin-left: auto;
+  border-color: transparent;
+  background: transparent;
   color: var(--color-primary);
+  font-weight: 600;
 }
 
-.subItem:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.subChevron {
-  font-size: 10px;
-  color: var(--color-text-muted);
+.tableActionBtnPrimary:hover {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
 }
 
 .loading,
@@ -288,3 +423,1247 @@
   font-size: 13px;
   color: var(--color-text-muted);
 }
+
+.headerActions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.propLabel {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.propLabel input,
+.propLabel textarea,
+.propLabel select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+}
+
+.propsMsg {
+  margin-left: 12px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.nnBlock {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px dashed var(--color-border);
+}
+
+.nnForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 12px;
+  align-items: flex-start;
+}
+
+.nnForm input,
+.nnForm select {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.simpleList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.simpleList li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.columnToggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 12px;
+}
+
+.columnToggle {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+/* ── Diagram: shell + toolbar ─────────────────────────────────── */
+.diagramShell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.diagramToolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.diagramToolbarRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.diagramBreadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.diagramBreadcrumbIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+}
+
+.diagramCrumbText {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.diagramCrumbSep {
+  color: var(--color-border);
+}
+
+.diagramCrumbActive {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.diagramTitleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: 2px;
+}
+
+.diagramTitle {
+  font-family: var(--font-headline);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+}
+
+.diagramVersionBadge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-muted);
+  color: var(--color-text-muted);
+}
+
+.diagramControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.diagramCluster {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--color-bg-muted);
+  border-radius: var(--radius-sm);
+}
+
+.diagramClusterBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  transition:
+    background var(--transition),
+    color var(--transition);
+}
+
+.diagramClusterBtn:hover {
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+}
+
+.diagramClusterBtnActive {
+  background: var(--color-bg-surface);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-card);
+}
+
+.diagramZoomLabel {
+  min-width: 42px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.diagramClusterDivider {
+  width: 1px;
+  height: 16px;
+  background: var(--color-border);
+  margin: 0 2px;
+}
+
+.diagramPrimaryActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.diagramFilters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 2px;
+  overflow-x: auto;
+}
+
+.diagramFilterPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: var(--color-bg-muted);
+  border: 1px solid transparent;
+  transition:
+    background var(--transition),
+    color var(--transition);
+  white-space: nowrap;
+}
+
+.diagramFilterPill:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.diagramFilterPillActive {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.diagramFilterDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.diagramFilterCount {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.diagramFilterCountActive {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0 5px;
+  border-radius: 999px;
+  opacity: 1;
+}
+
+.diagramFilterDivider {
+  width: 1px;
+  height: 14px;
+  background: var(--color-border);
+  margin: 0 4px;
+}
+
+.diagramStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.diagramStatusOk {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-success);
+}
+
+/* ── Diagram: body (canvas + inspector) ─────────────────────── */
+.diagramBody {
+  display: flex;
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+.diagramStage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: calc(100vh - 260px);
+  min-height: 460px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-app);
+  cursor: grab;
+  user-select: none;
+}
+
+.diagramStage:active {
+  cursor: grabbing;
+}
+
+.diagramPlane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px);
+  background-size: 24px 24px;
+}
+
+.diagramEdgeLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.diagramEdgeGroup {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.diagramEmptyState {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+/* ── Diagram: table node ────────────────────────────────────── */
+.diagramNode {
+  position: absolute;
+  width: 220px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  transition:
+    box-shadow var(--transition),
+    border-color var(--transition),
+    opacity var(--transition);
+}
+
+.diagramNode:hover {
+  box-shadow: var(--shadow-soft);
+}
+
+.diagramNodeSelected {
+  border-color: var(--color-primary);
+  box-shadow:
+    0 0 0 1px var(--color-primary),
+    var(--shadow-soft);
+}
+
+.diagramNodeDimmed {
+  opacity: 0.3;
+}
+
+.diagramNodeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  cursor: grab;
+}
+
+.diagramNodeHeader:active {
+  cursor: grabbing;
+}
+
+.diagramNodeHeadLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.diagramNodeIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.diagramNodeName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.diagramNodeDomain {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  line-height: 1.1;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.diagramNodeHeadRight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.diagramFieldCount {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--color-bg-muted);
+  color: var(--color-text-muted);
+}
+
+.diagramMoreBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: var(--color-text-muted);
+}
+
+.diagramMoreBtn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.diagramFieldList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px;
+}
+
+.diagramFieldRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: background var(--transition);
+}
+
+.diagramFieldRow:hover {
+  background: var(--color-bg-muted);
+}
+
+.diagramFieldRowFk {
+  background: var(--color-primary-subtle);
+}
+
+.diagramFieldLeft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.diagramTypeBadge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.badgeText {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+.badgeNum {
+  background: #dcfce7;
+  color: #15803d;
+}
+.badgeBool {
+  background: #fef3c7;
+  color: #b45309;
+}
+.badgeDate {
+  background: #fae8ff;
+  color: #a21caf;
+}
+.badgeLookup {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+.badgeChoice {
+  background: #ffe4e6;
+  color: #be123c;
+}
+.badgePk {
+  background: #fef9c3;
+  color: #a16207;
+}
+
+.diagramFieldName {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.diagramFieldNamePk {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.diagramFieldRight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.diagramFieldTypeLabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.diagramFkBadge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--color-primary);
+  letter-spacing: 0.04em;
+}
+
+/* ── Diagram: minimap ───────────────────────────────────────── */
+.diagramMinimap {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  width: 168px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 5;
+}
+
+.diagramMinimapHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.diagramMinimapAuto {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-primary);
+}
+
+.diagramMinimapBox {
+  position: relative;
+  width: 100%;
+  height: 80px;
+  background: var(--color-bg-muted);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.diagramMinimapBlock {
+  position: absolute;
+  border-radius: 2px;
+  opacity: 0.8;
+}
+
+.diagramMinimapViewport {
+  position: absolute;
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary-subtle);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.diagramMinimapFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.diagramMinimapReset {
+  color: var(--color-primary);
+}
+
+.diagramMinimapReset:hover {
+  text-decoration: underline;
+}
+
+/* ── Diagram: inspector ─────────────────────────────────────── */
+.diagramInspector {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  max-height: calc(100vh - 260px);
+}
+
+.diagramInspectorHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.diagramInspectorHeadLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diagramInspectorTitle {
+  font-family: var(--font-headline);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.diagramInspectorClose {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+}
+
+.diagramInspectorClose:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.diagramInspectorBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.diagramInspectorBanner {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.diagramInspectorBannerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.diagramInspectorLiveDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-success);
+}
+
+.diagramInspectorBannerTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  word-break: break-word;
+}
+
+.diagramInspectorBannerDesc {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.diagramInspectorSectionLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.diagramStatRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.diagramStatRowLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.diagramStatLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.diagramStatValue {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.diagramStatTag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.tagPrimary {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+}
+
+.tagAmber {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.tagDanger {
+  background: rgba(255, 59, 48, 0.12);
+  color: var(--color-danger);
+}
+
+.tagMuted {
+  background: var(--color-bg-muted);
+  color: var(--color-text-muted);
+}
+
+.diagramRuleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-muted);
+}
+
+.diagramRuleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.diagramRuleDesc {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.diagramInspectorFooter {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+  display: flex;
+  gap: var(--space-2);
+}
+
+.diagramInspectorFooterBtn {
+  flex: 1;
+}
+
+.diagramInspectorEmpty {
+  padding: var(--space-8);
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.diagramMsg {
+  margin-left: 12px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* ── Table detail hero + tabs ─────────────────────────────────── */
+.tableDetailTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.tableDetailBreadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.tableDetailBreadcrumbSep {
+  color: var(--color-border);
+}
+
+.tableDetailBreadcrumbActive {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.tableDetailModified {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.tableDetailHero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.tableDetailHeroLeft {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.tableDetailIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.tableDetailTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tableDetailTitle {
+  font-family: var(--font-headline);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.15;
+}
+
+.tableDetailSlug {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--color-bg-muted);
+  color: var(--color-text-muted);
+}
+
+.tableDetailDesc {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.tableDetailHeroActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.recordCountBadge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.moreMenuWrap {
+  position: relative;
+}
+
+.moreMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 160px;
+  padding: 6px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+  z-index: 20;
+}
+
+.moreMenuItem {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  text-align: left;
+  color: var(--color-danger);
+}
+
+.moreMenuItem:hover {
+  background: rgba(255, 59, 48, 0.08);
+}
+
+.schemaTabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.schemaTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  transition:
+    background var(--transition),
+    color var(--transition);
+}
+
+.schemaTab:hover {
+  background: var(--color-bg-hover);
+}
+
+.schemaTabActive {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.schemaTabBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+}
+
+.schemaTabActive .schemaTabBadge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.schemaPanel {
+  background: var(--color-bg-app);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.fieldsToolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.fieldsToolbarSearch {
+  flex: 1;
+  min-width: 200px;
+}
+
+.fieldsTypeSelect {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.schemaGridWrap {
+  overflow-x: auto;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.schemaGrid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.schemaGrid th {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-muted);
+  white-space: nowrap;
+}
+
+.schemaGrid td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  vertical-align: middle;
+}
+
+.schemaGrid tr:last-child td {
+  border-bottom: none;
+}
+
+.schemaGrid tr:hover td {
+  background: var(--color-bg-hover);
+}
+
+.fieldNameCell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.fieldPkStar {
+  color: var(--color-warning);
+  font-size: 12px;
+}
+
+.fieldTypePill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pillDecimal {
+  background: #dcfce7;
+  color: #15803d;
+}
+.pillLookup {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+.pillChoice {
+  background: #ffe4e6;
+  color: #be123c;
+}
+.pillText {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+.pillNum {
+  background: #dcfce7;
+  color: #15803d;
+}
+.pillBool {
+  background: #fef3c7;
+  color: #b45309;
+}
+.pillDate {
+  background: #fae8ff;
+  color: #a21caf;
+}
+.pillDefault {
+  background: var(--color-bg-muted);
+  color: var(--color-text-muted);
+}
+
+.constraintPill {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+}
+
+.relPill {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #ede9fe;
+  color: #6d28d9;
+  font-family: var(--font-mono);
+}
+
+.fieldsFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.fieldsFooterBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.fieldsFooterBtn:hover {
+  background: var(--color-primary-subtle);
+}
+
+.fieldsFooterStatus {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.detailPanelTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.detailPanelActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-3);
+}
+

@@ -53,6 +53,15 @@ type FieldSchema struct {
 	Name       string
 	FieldType  string
 	IsRequired bool
+	IsUnique   bool
+	Options    []string
+	Config     map[string]interface{}
+}
+
+// EntityKeySchema describes an alternate unique key.
+type EntityKeySchema struct {
+	Name       string
+	FieldNames []string
 }
 
 // EntitySchema is the metadata snapshot used for record validation.
@@ -61,6 +70,7 @@ type EntitySchema struct {
 	TenantID uuid.UUID
 	Name     string
 	Fields   []FieldSchema
+	Keys     []EntityKeySchema
 }
 
 // ListOptions controls pagination, ordering, and optional filter pushdown.

@@ -397,6 +397,8 @@ type gormTenantSession struct {
 	componentDefinitions ComponentDefinitionRepository
 	entities             EntityRepository
 	entityFields         EntityFieldRepository
+	entityKeys           EntityKeyRepository
+	entityRelationships  EntityRelationshipRepository
 	solutionPackages     SolutionPackageRepository
 	solutionPackageComponents SolutionPackageComponentRepository
 }
@@ -433,6 +435,8 @@ func newGormTenantSession(db *gorm.DB, tenantID uuid.UUID, inTx bool) *gormTenan
 		session.componentDefinitions = newTenantTxGormRepository[models.ComponentDefinition](db, tenantID)
 		session.entities = newTenantTxGormRepository[models.Entity](db, tenantID)
 		session.entityFields = newTenantTxGormRepository[models.EntityField](db, tenantID)
+		session.entityKeys = newTenantTxGormRepository[models.EntityKey](db, tenantID)
+		session.entityRelationships = newTenantTxGormRepository[models.EntityRelationship](db, tenantID)
 		session.solutionPackages = newTenantTxGormRepository[models.SolutionPackage](db, tenantID)
 		session.solutionPackageComponents = newTenantTxGormRepository[models.SolutionPackageComponent](db, tenantID)
 		return session
@@ -462,6 +466,8 @@ func newGormTenantSession(db *gorm.DB, tenantID uuid.UUID, inTx bool) *gormTenan
 	session.componentDefinitions = NewTenantGormRepository[models.ComponentDefinition](db, tenantID)
 	session.entities = NewTenantGormRepository[models.Entity](db, tenantID)
 	session.entityFields = NewTenantGormRepository[models.EntityField](db, tenantID)
+	session.entityKeys = NewTenantGormRepository[models.EntityKey](db, tenantID)
+	session.entityRelationships = NewTenantGormRepository[models.EntityRelationship](db, tenantID)
 	session.solutionPackages = NewTenantGormRepository[models.SolutionPackage](db, tenantID)
 	session.solutionPackageComponents = NewTenantGormRepository[models.SolutionPackageComponent](db, tenantID)
 	return session
@@ -504,6 +510,10 @@ func (s *gormTenantSession) ComponentDefinitions() ComponentDefinitionRepository
 }
 func (s *gormTenantSession) Entities() EntityRepository             { return s.entities }
 func (s *gormTenantSession) EntityFields() EntityFieldRepository     { return s.entityFields }
+func (s *gormTenantSession) EntityKeys() EntityKeyRepository         { return s.entityKeys }
+func (s *gormTenantSession) EntityRelationships() EntityRelationshipRepository {
+	return s.entityRelationships
+}
 func (s *gormTenantSession) SolutionPackages() SolutionPackageRepository {
 	return s.solutionPackages
 }

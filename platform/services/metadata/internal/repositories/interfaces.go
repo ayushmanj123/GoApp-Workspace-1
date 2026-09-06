@@ -54,6 +54,10 @@ type ApplicationSnapshotRepository interface{ TenantRepositoryContract[models.Ap
 type ComponentDefinitionRepository interface{ TenantRepositoryContract[models.ComponentDefinition] }
 type EntityRepository interface{ TenantRepositoryContract[models.Entity] }
 type EntityFieldRepository interface{ TenantRepositoryContract[models.EntityField] }
+type EntityKeyRepository interface{ TenantRepositoryContract[models.EntityKey] }
+type EntityRelationshipRepository interface {
+	TenantRepositoryContract[models.EntityRelationship]
+}
 type SolutionPackageRepository interface {
 	TenantRepositoryContract[models.SolutionPackage]
 }
@@ -88,6 +92,8 @@ type TenantSession interface {
 	ComponentDefinitions() ComponentDefinitionRepository
 	Entities() EntityRepository
 	EntityFields() EntityFieldRepository
+	EntityKeys() EntityKeyRepository
+	EntityRelationships() EntityRelationshipRepository
 	SolutionPackages() SolutionPackageRepository
 	SolutionPackageComponents() SolutionPackageComponentRepository
 	Transaction(ctx context.Context, fn func(session TenantSession) error) error

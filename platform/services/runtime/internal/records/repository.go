@@ -57,13 +57,42 @@ func (entityRow) TableName() string {
 }
 
 type entityFieldRow struct {
-	Name       string `gorm:"column:name"`
-	FieldType  string `gorm:"column:field_type"`
-	IsRequired bool   `gorm:"column:is_required"`
+	ID         uuid.UUID      `gorm:"column:id;primaryKey"`
+	Name       string         `gorm:"column:name"`
+	FieldType  string         `gorm:"column:field_type"`
+	IsRequired bool           `gorm:"column:is_required"`
+	IsUnique   bool           `gorm:"column:is_unique"`
+	OptionsJSON datatypes.JSON `gorm:"column:options_json;type:jsonb"`
+	ConfigJSON  datatypes.JSON `gorm:"column:config_json;type:jsonb"`
 }
 
 func (entityFieldRow) TableName() string {
 	return "entity_fields"
+}
+
+type entityKeyRow struct {
+	Name     string         `gorm:"column:name"`
+	FieldIDs datatypes.JSON `gorm:"column:field_ids;type:jsonb"`
+}
+
+func (entityKeyRow) TableName() string {
+	return "entity_keys"
+}
+
+type recordLinkRow struct {
+	ID             uuid.UUID  `gorm:"column:id;primaryKey"`
+	TenantID       uuid.UUID  `gorm:"column:tenant_id"`
+	RelationshipID uuid.UUID  `gorm:"column:relationship_id"`
+	LeftRecordID   uuid.UUID  `gorm:"column:left_record_id"`
+	RightRecordID  uuid.UUID  `gorm:"column:right_record_id"`
+	CreatedOn      time.Time  `gorm:"column:created_on"`
+	CreatedBy      *uuid.UUID `gorm:"column:created_by"`
+	DeletedOn      *time.Time `gorm:"column:deleted_on"`
+	DeletedBy      *uuid.UUID `gorm:"column:deleted_by"`
+}
+
+func (recordLinkRow) TableName() string {
+	return "entity_record_links"
 }
 
 // PostgresRepository stores records in PostgreSQL.
@@ -198,6 +227,7 @@ func (r *PostgresRepository) SoftDelete(ctx context.Context, tenantID, entityID,
 func (r *PostgresRepository) GetEntitySchema(ctx context.Context, tenantID, entityID uuid.UUID) (*EntitySchema, error) {
 	var entity entityRow
 	err := r.db.WithContext(ctx).
+		Select("id, tenant_id, name").
 		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", entityID, tenantID).
 		First(&entity).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -210,20 +240,55 @@ func (r *PostgresRepository) GetEntitySchema(ctx context.Context, tenantID, enti
 	var fieldRows []entityFieldRow
 	if err := r.db.WithContext(ctx).
 		Model(&entityFieldRow{}).
-		Select("name, field_type, is_required").
+		Select("id, name, field_type, is_required, is_unique, options_json, config_json").
 		Where("tenant_id = ? AND entity_id = ? AND deleted_at IS NULL", tenantID, entityID).
 		Order("name ASC").
 		Find(&fieldRows).Error; err != nil {
 		return nil, fmt.Errorf("records: load entity fields: %w", err)
 	}
 
+	fieldIDToName := make(map[uuid.UUID]string, len(fieldRows))
 	fields := make([]FieldSchema, 0, len(fieldRows))
 	for _, row := range fieldRows {
+		fieldIDToName[row.ID] = row.Name
+		var options []string
+		if len(row.OptionsJSON) > 0 {
+			_ = json.Unmarshal(row.OptionsJSON, &options)
+		}
+		var config map[string]interface{}
+		if len(row.ConfigJSON) > 0 {
+			_ = json.Unmarshal(row.ConfigJSON, &config)
+		}
 		fields = append(fields, FieldSchema{
 			Name:       row.Name,
 			FieldType:  row.FieldType,
 			IsRequired: row.IsRequired,
+			IsUnique:   row.IsUnique,
+			Options:    options,
+			Config:     config,
 		})
+	}
+
+	var keyRows []entityKeyRow
+	_ = r.db.WithContext(ctx).
+		Model(&entityKeyRow{}).
+		Select("name, field_ids").
+		Where("tenant_id = ? AND entity_id = ? AND deleted_at IS NULL", tenantID, entityID).
+		Find(&keyRows).Error
+
+	keys := make([]EntityKeySchema, 0, len(keyRows))
+	for _, row := range keyRows {
+		var ids []uuid.UUID
+		_ = json.Unmarshal(row.FieldIDs, &ids)
+		names := make([]string, 0, len(ids))
+		for _, id := range ids {
+			if name, ok := fieldIDToName[id]; ok {
+				names = append(names, name)
+			}
+		}
+		if len(names) > 0 {
+			keys = append(keys, EntityKeySchema{Name: row.Name, FieldNames: names})
+		}
 	}
 
 	return &EntitySchema{
@@ -231,7 +296,121 @@ func (r *PostgresRepository) GetEntitySchema(ctx context.Context, tenantID, enti
 		TenantID: entity.TenantID,
 		Name:     entity.Name,
 		Fields:   fields,
+		Keys:     keys,
 	}, nil
+}
+
+// ExistsWithFieldValue returns true if another non-deleted record has the same JSON field value.
+func (r *PostgresRepository) ExistsWithFieldValue(ctx context.Context, tenantID, entityID uuid.UUID, fieldName string, value interface{}, excludeRecordID *uuid.UUID) (bool, error) {
+	q := r.db.WithContext(ctx).Model(&recordRow{}).
+		Where("tenant_id = ? AND entity_id = ? AND deleted_on IS NULL", tenantID, entityID).
+		Where("data ->> ? = ?", fieldName, fmt.Sprint(value))
+	if excludeRecordID != nil {
+		q = q.Where("id <> ?", *excludeRecordID)
+	}
+	var count int64
+	if err := q.Count(&count).Error; err != nil {
+		return false, fmt.Errorf("records: unique check: %w", err)
+	}
+	return count > 0, nil
+}
+
+// ExistsWithKeyValues checks composite alternate key uniqueness.
+func (r *PostgresRepository) ExistsWithKeyValues(ctx context.Context, tenantID, entityID uuid.UUID, fieldNames []string, data map[string]interface{}, excludeRecordID *uuid.UUID) (bool, error) {
+	q := r.db.WithContext(ctx).Model(&recordRow{}).
+		Where("tenant_id = ? AND entity_id = ? AND deleted_on IS NULL", tenantID, entityID)
+	for _, name := range fieldNames {
+		q = q.Where("data ->> ? = ?", name, fmt.Sprint(data[name]))
+	}
+	if excludeRecordID != nil {
+		q = q.Where("id <> ?", *excludeRecordID)
+	}
+	var count int64
+	if err := q.Count(&count).Error; err != nil {
+		return false, fmt.Errorf("records: key check: %w", err)
+	}
+	return count > 0, nil
+}
+
+// AssociateLinks creates an N:N association between two records.
+func (r *PostgresRepository) AssociateLinks(ctx context.Context, tenantID, relationshipID, leftID, rightID, userID uuid.UUID) error {
+	row := recordLinkRow{
+		ID:             uuid.New(),
+		TenantID:       tenantID,
+		RelationshipID: relationshipID,
+		LeftRecordID:   leftID,
+		RightRecordID:  rightID,
+		CreatedOn:      time.Now().UTC(),
+		CreatedBy:      &userID,
+	}
+	if err := r.db.WithContext(ctx).Create(&row).Error; err != nil {
+		return fmt.Errorf("records: associate: %w", err)
+	}
+	return nil
+}
+
+// DisassociateLinks soft-deletes an N:N association.
+func (r *PostgresRepository) DisassociateLinks(ctx context.Context, tenantID, relationshipID, leftID, rightID, userID uuid.UUID) error {
+	now := time.Now().UTC()
+	result := r.db.WithContext(ctx).Model(&recordLinkRow{}).
+		Where("tenant_id = ? AND relationship_id = ? AND left_record_id = ? AND right_record_id = ? AND deleted_on IS NULL",
+			tenantID, relationshipID, leftID, rightID).
+		Updates(map[string]interface{}{
+			"deleted_on": now,
+			"deleted_by": userID,
+		})
+	if result.Error != nil {
+		return fmt.Errorf("records: disassociate: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ListLinkedRecordIDs returns related record IDs for an N:N relationship from one side.
+func (r *PostgresRepository) ListLinkedRecordIDs(ctx context.Context, tenantID, relationshipID, recordID uuid.UUID, fromLeft bool) ([]uuid.UUID, error) {
+	var rows []recordLinkRow
+	q := r.db.WithContext(ctx).
+		Where("tenant_id = ? AND relationship_id = ? AND deleted_on IS NULL", tenantID, relationshipID)
+	if fromLeft {
+		q = q.Where("left_record_id = ?", recordID)
+	} else {
+		q = q.Where("right_record_id = ?", recordID)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("records: list links: %w", err)
+	}
+	ids := make([]uuid.UUID, 0, len(rows))
+	for _, row := range rows {
+		if fromLeft {
+			ids = append(ids, row.RightRecordID)
+		} else {
+			ids = append(ids, row.LeftRecordID)
+		}
+	}
+	return ids, nil
+}
+
+// RelationshipExists returns true when the metadata relationship row exists for the tenant.
+func (r *PostgresRepository) RelationshipExists(ctx context.Context, tenantID, relationshipID uuid.UUID) (bool, uuid.UUID, uuid.UUID, error) {
+	type relRow struct {
+		ID            uuid.UUID `gorm:"column:id"`
+		LeftEntityID  uuid.UUID `gorm:"column:left_entity_id"`
+		RightEntityID uuid.UUID `gorm:"column:right_entity_id"`
+	}
+	var row relRow
+	err := r.db.WithContext(ctx).Table("entity_relationships").
+		Select("id, left_entity_id, right_entity_id").
+		Where("id = ? AND tenant_id = ? AND deleted_at IS NULL", relationshipID, tenantID).
+		First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, uuid.Nil, uuid.Nil, nil
+	}
+	if err != nil {
+		return false, uuid.Nil, uuid.Nil, err
+	}
+	return true, row.LeftEntityID, row.RightEntityID, nil
 }
 
 func buildOrderClause(opts ListOptions) (string, error) {

@@ -15,6 +15,8 @@ export function CreateTableModal({ open, onClose, onCreated }: CreateTableModalP
   const [applicationId, setApplicationId] = useState("");
   const [name, setName] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [pluralDisplayName, setPluralDisplayName] = useState("");
+  const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,9 +41,14 @@ export function CreateTableModal({ open, onClose, onCreated }: CreateTableModalP
       await entitiesApi.create(applicationId, {
         name: name.trim(),
         display_name: displayName.trim(),
+        plural_display_name: pluralDisplayName.trim() || undefined,
+        description: description.trim() || undefined,
+        create_primary_name: true,
       });
       setName("");
       setDisplayName("");
+      setPluralDisplayName("");
+      setDescription("");
       onClose();
       onCreated();
     } catch (err) {
@@ -94,8 +101,27 @@ export function CreateTableModal({ open, onClose, onCreated }: CreateTableModalP
             <input
               style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px" }}
               value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
+              onChange={(e) => {
+                setDisplayName(e.target.value);
+                if (!pluralDisplayName) setPluralDisplayName(`${e.target.value}s`);
+              }}
               required
+            />
+          </label>
+          <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
+            Plural Display Name
+            <input
+              style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px" }}
+              value={pluralDisplayName}
+              onChange={(e) => setPluralDisplayName(e.target.value)}
+            />
+          </label>
+          <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
+            Description
+            <textarea
+              style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px", minHeight: 60 }}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
             />
           </label>
           {error ? (

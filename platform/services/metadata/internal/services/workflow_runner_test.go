@@ -57,6 +57,10 @@ func (s *stubWorkflowSession) ComponentDefinitions() repositories.ComponentDefin
 }
 func (s *stubWorkflowSession) Entities() repositories.EntityRepository         { return nil }
 func (s *stubWorkflowSession) EntityFields() repositories.EntityFieldRepository { return nil }
+func (s *stubWorkflowSession) EntityKeys() repositories.EntityKeyRepository     { return nil }
+func (s *stubWorkflowSession) EntityRelationships() repositories.EntityRelationshipRepository {
+	return nil
+}
 func (s *stubWorkflowSession) SolutionPackages() repositories.SolutionPackageRepository {
 	return nil
 }

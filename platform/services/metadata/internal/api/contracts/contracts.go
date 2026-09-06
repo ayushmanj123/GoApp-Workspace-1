@@ -95,29 +95,57 @@ type CreateComponentDefinitionRequest struct {
 
 // Entity DTOs
 type CreateEntityRequest struct {
-	Name        string `json:"name" validate:"required,min=1,max=200"`
-	DisplayName string `json:"display_name" validate:"required,min=1,max=200"`
+	Name              string `json:"name" validate:"required,min=1,max=200"`
+	DisplayName       string `json:"display_name" validate:"required,min=1,max=200"`
+	PluralDisplayName string `json:"plural_display_name" validate:"omitempty,max=200"`
+	Description       string `json:"description" validate:"omitempty,max=2000"`
+	// CreatePrimaryName defaults to true when omitted via pointer nil → service default true.
+	CreatePrimaryName *bool `json:"create_primary_name"`
 }
 
 type UpdateEntityRequest struct {
-	Name        *string `json:"name" validate:"omitempty,min=1,max=200"`
-	DisplayName *string `json:"display_name" validate:"omitempty,min=1,max=200"`
+	Name              *string `json:"name" validate:"omitempty,min=1,max=200"`
+	DisplayName       *string `json:"display_name" validate:"omitempty,min=1,max=200"`
+	PluralDisplayName *string `json:"plural_display_name" validate:"omitempty,max=200"`
+	Description       *string `json:"description" validate:"omitempty,max=2000"`
+	PrimaryFieldID    *string `json:"primary_field_id" validate:"omitempty"`
 }
 
 type CreateEntityFieldRequest struct {
-	Name            string  `json:"name" validate:"required,min=1,max=200"`
-	DisplayName     string  `json:"display_name" validate:"required,min=1,max=200"`
-	FieldType       string  `json:"field_type" validate:"required,oneof=text number boolean date lookup"`
-	RelatedEntityID *string `json:"related_entity_id" validate:"omitempty,uuid4"`
+	Name            string          `json:"name" validate:"required,min=1,max=200"`
+	DisplayName     string          `json:"display_name" validate:"required,min=1,max=200"`
+	FieldType       string          `json:"field_type" validate:"required,oneof=text number boolean date lookup multiline email phone url integer decimal currency datetime choice choices"`
+	IsRequired      bool            `json:"is_required"`
+	IsUnique        bool            `json:"is_unique"`
+	RelatedEntityID *string         `json:"related_entity_id" validate:"omitempty,uuid4"`
+	Options         []string        `json:"options"`
+	ConfigJSON      json.RawMessage `json:"config_json" validate:"omitempty"`
+	DeleteBehavior  string          `json:"delete_behavior" validate:"omitempty,oneof=restrict clear cascade"`
 }
 
 type UpdateEntityFieldRequest struct {
 	Name        *string `json:"name" validate:"omitempty,min=1,max=200"`
 	DisplayName *string `json:"display_name" validate:"omitempty,min=1,max=200"`
-	FieldType   *string `json:"field_type" validate:"omitempty,oneof=text number boolean date lookup"`
+	FieldType   *string `json:"field_type" validate:"omitempty,oneof=text number boolean date lookup multiline email phone url integer decimal currency datetime choice choices"`
+	IsRequired  *bool   `json:"is_required"`
+	IsUnique    *bool   `json:"is_unique"`
 	// RelatedEntityID: a valid UUID sets/changes the relationship target; an
 	// explicit empty string clears it. Omit the field to leave it unchanged.
-	RelatedEntityID *string `json:"related_entity_id" validate:"omitempty"`
+	RelatedEntityID *string         `json:"related_entity_id" validate:"omitempty"`
+	Options         []string        `json:"options"`
+	ConfigJSON      json.RawMessage `json:"config_json" validate:"omitempty"`
+	DeleteBehavior  *string         `json:"delete_behavior" validate:"omitempty,oneof=restrict clear cascade"`
+}
+
+type CreateEntityKeyRequest struct {
+	Name     string   `json:"name" validate:"required,min=1,max=200"`
+	FieldIDs []string `json:"field_ids" validate:"required,min=1,dive,uuid4"`
+}
+
+type CreateEntityRelationshipRequest struct {
+	Name          string `json:"name" validate:"required,min=1,max=200"`
+	LeftEntityID  string `json:"left_entity_id" validate:"required,uuid4"`
+	RightEntityID string `json:"right_entity_id" validate:"required,uuid4"`
 }
 
 // Connector DTOs

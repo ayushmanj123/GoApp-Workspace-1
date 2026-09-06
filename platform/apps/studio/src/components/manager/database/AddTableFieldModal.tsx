@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  ENTITY_FIELD_TYPES,
   entitiesApi,
   type EntityFieldType,
 } from "../../../api/entities-api";
@@ -7,17 +8,13 @@ import { useTenantTablesContext } from "./TenantTablesContext";
 import shellStyles from "../../preview/RuntimePreviewModal.module.css";
 import modalStyles from "../../layout/InsertComponentModal.module.css";
 
-const FIELD_TYPES: EntityFieldType[] = ["text", "number", "boolean", "date", "lookup"];
-
 interface AddTableFieldModalProps {
   open: boolean;
   entityId: string | null;
   entityName: string;
   onClose: () => void;
   onCreated: () => void;
-  /** Preselects the field type — used by the "New relationship" entry point. */
   initialFieldType?: EntityFieldType;
-  /** Overrides the modal header, e.g. "New Relationship". */
   title?: string;
 }
 
@@ -35,6 +32,10 @@ export function AddTableFieldModal({
   const [displayName, setDisplayName] = useState("");
   const [fieldType, setFieldType] = useState<EntityFieldType>(initialFieldType);
   const [relatedEntityId, setRelatedEntityId] = useState("");
+  const [isRequired, setIsRequired] = useState(false);
+  const [isUnique, setIsUnique] = useState(false);
+  const [optionsText, setOptionsText] = useState("");
+  const [deleteBehavior, setDeleteBehavior] = useState<"restrict" | "clear" | "cascade">("restrict");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +43,11 @@ export function AddTableFieldModal({
     if (open) {
       setFieldType(initialFieldType);
       setRelatedEntityId("");
+      setIsRequired(false);
+      setIsUnique(false);
+      setOptionsText("");
+      setDeleteBehavior("restrict");
+      setError(null);
     }
   }, [open, initialFieldType]);
 
@@ -49,8 +55,12 @@ export function AddTableFieldModal({
 
   const relatedTables = tables.filter((t) => t.id !== entityId);
   const isLookup = fieldType === "lookup";
+  const isChoice = fieldType === "choice" || fieldType === "choices";
   const canSubmit =
-    name.trim().length > 0 && displayName.trim().length > 0 && (!isLookup || relatedEntityId.length > 0);
+    name.trim().length > 0 &&
+    displayName.trim().length > 0 &&
+    (!isLookup || relatedEntityId.length > 0) &&
+    (!isChoice || optionsText.trim().length > 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,11 +68,22 @@ export function AddTableFieldModal({
     setSaving(true);
     setError(null);
     try {
+      const options = isChoice
+        ? optionsText
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined;
       await entitiesApi.createField(entityId, {
         name: name.trim(),
         display_name: displayName.trim(),
         field_type: fieldType,
-        ...(isLookup ? { related_entity_id: relatedEntityId } : {}),
+        is_required: isRequired,
+        is_unique: isUnique,
+        ...(isLookup
+          ? { related_entity_id: relatedEntityId, delete_behavior: deleteBehavior }
+          : {}),
+        ...(options ? { options } : {}),
       });
       setName("");
       setDisplayName("");
@@ -84,10 +105,12 @@ export function AddTableFieldModal({
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label={`${title} — ${entityName}`}
+        aria-label={title}
       >
         <header className={shellStyles.header}>
-          <div className={shellStyles.title}>{title} — {entityName}</div>
+          <div className={shellStyles.title}>
+            {title} — {entityName}
+          </div>
         </header>
         <form className={modalStyles.body} onSubmit={(e) => void handleSubmit(e)}>
           <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
@@ -116,32 +139,67 @@ export function AddTableFieldModal({
               value={fieldType}
               onChange={(e) => setFieldType(e.target.value as EntityFieldType)}
             >
-              {FIELD_TYPES.map((type) => (
+              {ENTITY_FIELD_TYPES.map((type) => (
                 <option key={type} value={type}>
                   {type}
                 </option>
               ))}
             </select>
           </label>
-          {isLookup ? (
+          <label style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, fontSize: 12 }}>
+            <input type="checkbox" checked={isRequired} onChange={(e) => setIsRequired(e.target.checked)} />
+            Required
+          </label>
+          <label style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, fontSize: 12 }}>
+            <input type="checkbox" checked={isUnique} onChange={(e) => setIsUnique(e.target.checked)} />
+            Unique
+          </label>
+          {isChoice ? (
             <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
-              Related Table
-              <select
-                style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px" }}
-                value={relatedEntityId}
-                onChange={(e) => setRelatedEntityId(e.target.value)}
+              Options (one per line)
+              <textarea
+                style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px", minHeight: 80 }}
+                value={optionsText}
+                onChange={(e) => setOptionsText(e.target.value)}
                 required
-              >
-                <option value="" disabled>
-                  Select a table…
-                </option>
-                {relatedTables.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.display_name || t.name} ({t.application_name})
-                  </option>
-                ))}
-              </select>
+              />
             </label>
+          ) : null}
+          {isLookup ? (
+            <>
+              <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
+                Related Table
+                <select
+                  style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px" }}
+                  value={relatedEntityId}
+                  onChange={(e) => setRelatedEntityId(e.target.value)}
+                  required
+                >
+                  <option value="" disabled>
+                    Select a table…
+                  </option>
+                  {relatedTables.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.display_name || t.name} ({t.application_name})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: "block", marginBottom: 10, fontSize: 12 }}>
+                Delete behavior
+                <select
+                  style={{ display: "block", width: "100%", marginTop: 4, padding: "6px 8px" }}
+                  value={deleteBehavior}
+                  onChange={(e) =>
+                    setDeleteBehavior(e.target.value as "restrict" | "clear" | "cascade")
+                  }
+                >
+                  <option value="restrict">Restrict</option>
+                  <option value="clear">Clear</option>
+                  <option value="cascade">Cascade</option>
+                </select>
+              </label>
+            </>
           ) : null}
           {error ? (
             <p className={modalStyles.empty} style={{ color: "var(--color-danger)" }}>
@@ -158,7 +216,7 @@ export function AddTableFieldModal({
               style={{ width: "auto", marginLeft: 8 }}
               disabled={saving || !canSubmit}
             >
-              Add
+              {saving ? "Saving…" : "Add"}
             </button>
           </div>
         </form>

@@ -1,7 +1,17 @@
-import { NavLink } from "react-router-dom";
+import type { ReactNode } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import styles from "./ManagerSidebar.module.css";
 
-const NAV_ITEMS = [
+type NavItem = {
+  to: string;
+  label: string;
+  end?: boolean;
+  nested?: boolean;
+  icon: ReactNode;
+  match?: (pathname: string) => boolean;
+};
+
+const NAV_ITEMS: NavItem[] = [
   {
     to: "/studio",
     label: "Apps",
@@ -25,6 +35,24 @@ const NAV_ITEMS = [
         <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
       </svg>
     ),
+    match: (pathname) =>
+      pathname === "/studio/database" || pathname.startsWith("/studio/database/tables"),
+  },
+  {
+    to: "/studio/database/diagram",
+    label: "ER Diagram Canvas",
+    nested: true,
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="5" r="2.5" />
+        <circle cx="5" cy="19" r="2.5" />
+        <circle cx="19" cy="19" r="2.5" />
+        <path d="M12 7.5v3" />
+        <path d="M12 10.5 6.5 17" />
+        <path d="M12 10.5 17.5 17" />
+      </svg>
+    ),
+    match: (pathname) => pathname === "/studio/database/diagram",
   },
   {
     to: "/studio/excel-apps",
@@ -89,9 +117,17 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
-] as const;
+];
+
+function itemIsActive(item: NavItem, pathname: string): boolean {
+  if (item.match) return item.match(pathname);
+  if (item.end) return pathname === item.to;
+  return pathname === item.to || pathname.startsWith(item.to + "/");
+}
 
 export function ManagerSidebar() {
+  const { pathname } = useLocation();
+
   return (
     <aside className={styles.sidebar}>
       <div className={styles.header}>
@@ -99,19 +135,26 @@ export function ManagerSidebar() {
         <div className={styles.envLabel}>Prod Environment</div>
       </div>
       <nav className={styles.nav}>
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={"end" in item ? item.end : false}
-            className={({ isActive }) =>
-              [styles.navItem, isActive ? styles.navItemActive : ""].filter(Boolean).join(" ")
-            }
-          >
-            <span className={styles.navIcon}>{item.icon}</span>
-            {item.label}
-          </NavLink>
-        ))}
+        {NAV_ITEMS.map((item) => {
+          const active = itemIsActive(item, pathname);
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end ?? false}
+              className={[
+                styles.navItem,
+                item.nested ? styles.navItemNested : "",
+                active ? styles.navItemActive : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              <span className={styles.navIcon}>{item.icon}</span>
+              {item.label}
+            </NavLink>
+          );
+        })}
       </nav>
     </aside>
   );

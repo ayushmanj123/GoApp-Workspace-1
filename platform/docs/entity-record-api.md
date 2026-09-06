@@ -25,6 +25,7 @@ Or, when `AUTH_MODE=development`, gateway/runtime auth middleware accepts `X-Ten
 |--------|------|-------------|
 | `POST` | `/api/entities/{entityId}/records` | Create a record |
 | `GET` | `/api/entities/{entityId}/records` | List records |
+| `POST` | `/api/entities/{entityId}/records/import` | CSV import |
 | `GET` | `/api/entities/{entityId}/records/{recordId}` | Get one record |
 | `PATCH` | `/api/entities/{entityId}/records/{recordId}` | Update a record |
 | `DELETE` | `/api/entities/{entityId}/records/{recordId}` | Soft-delete a record |
@@ -94,11 +95,37 @@ Field values must match entity field types:
 
 | Field type | JSON type | Notes |
 |------------|-----------|-------|
-| `text` | string | |
-| `number` | number | integer or float |
+| `text` / `multiline` / `email` / `phone` / `url` | string | Format checks for email/phone/url; optional `max_length` in `config_json` |
+| `number` / `decimal` / `currency` | number | Optional min/max in config |
+| `integer` | number | Whole numbers only |
 | `boolean` | boolean | |
 | `date` | string | `YYYY-MM-DD` |
-| `lookup` | string | UUID of a record in the field's `related_entity_id` entity (many-to-one relationship) |
+| `datetime` | string | RFC3339 |
+| `choice` | string | Must be in field options |
+| `choices` | string[] | Each value in options |
+| `lookup` | string | UUID of a related record |
+
+Unique fields (`is_unique`) and alternate keys (`entity_keys`) are enforced on create/update.
+
+### Import (`POST …/records/import`)
+
+Multipart form:
+
+| Field | Description |
+|-------|-------------|
+| `file` | CSV file (header row required) |
+| `mapping` | JSON object mapping CSV header → entity field name |
+| `dryRun` | `true` to validate without inserting |
+
+Max 2000 data rows. Response: `{ created, failed, dryRun, errors: [{ row, message }] }`.
+
+### N:N links
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/relationships/{relationshipId}/associate` | Body `{ leftRecordId, rightRecordId }` |
+| `POST` | `/api/relationships/{relationshipId}/disassociate` | Same body |
+| `GET` | `/api/relationships/{relationshipId}/related/{recordId}?side=left\|right` | Related record IDs |
 
 ### List (`GET`)
 
@@ -149,6 +176,9 @@ Before create or update, the runtime service:
 3. Rejects unknown field names (`400`).
 4. Enforces `is_required` fields from `entity_fields` on create and after merge on update.
 5. Validates value types against `field_type`.
+6. Enforces `is_unique` columns and alternate keys when present.
+
+See also [database-manager.md](./database-manager.md) for Studio schema management.
 
 ## Relationships (lookup fields)
 
@@ -179,7 +209,7 @@ Single table `entity_records`:
 | `modified_on` / `modified_by` | | Audit |
 | `deleted_on` / `deleted_by` | | Soft delete |
 
-Migrations live in the metadata service (`000010_entity_records`, `000011_entity_fields_is_required`, `000018_entity_lookup_fields`) because metadata and runtime share one PostgreSQL database.
+Migrations live in the metadata service (`000010_entity_records`, `000011_entity_fields_is_required`, `000018_entity_lookup_fields`, `000025_database_manager_parity`) because metadata and runtime share one PostgreSQL database.
 
 ## Optimistic concurrency
 

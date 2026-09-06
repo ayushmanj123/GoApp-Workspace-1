@@ -5,6 +5,7 @@ import { AppsDashboard } from "./components/manager/apps/AppsDashboard";
 import { DatabaseManagerPage } from "./components/manager/database/DatabaseManagerPage";
 import { TablesListView } from "./components/manager/database/TablesListView";
 import { TablePropertyView } from "./components/manager/database/TablePropertyView";
+import { DatabaseDiagramView } from "./components/manager/database/DatabaseDiagramView";
 import { PackagesManagerPage } from "./components/manager/packages/PackagesManagerPage";
 import { PackagesListView } from "./components/manager/packages/PackagesListView";
 import { PackageDetailView } from "./components/manager/packages/PackageDetailView";
@@ -28,6 +29,7 @@ export default function App() {
           <Route index element={<AppsDashboard />} />
           <Route path="database" element={<DatabaseManagerPage />}>
             <Route index element={<TablesListView />} />
+            <Route path="diagram" element={<DatabaseDiagramView />} />
             <Route path="tables/:entityId" element={<TablePropertyView />} />
           </Route>
           <Route path="excel-apps" element={<ExcelAppsPage />} />

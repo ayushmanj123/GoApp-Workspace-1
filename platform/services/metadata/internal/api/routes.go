@@ -102,6 +102,12 @@ func RegisterRoutes(app *fiber.App, store repositories.Store, middlewares ...fib
 	v1.Put("/entities/:id", admin, func(c *fiber.Ctx) error {
 		return handlers.NewEntityHandler(store).Update(c)
 	})
+	v1.Delete("/entities/:id", admin, func(c *fiber.Ctx) error {
+		return handlers.NewEntityHandler(store).Delete(c)
+	})
+	v1.Get("/entities/:entityId/dependents", func(c *fiber.Ctx) error {
+		return handlers.NewEntityHandler(store).ListDependents(c)
+	})
 	v1.Post("/entities/:entityId/fields", admin, func(c *fiber.Ctx) error {
 		return handlers.NewEntityHandler(store).CreateField(c)
 	})
@@ -110,6 +116,27 @@ func RegisterRoutes(app *fiber.App, store repositories.Store, middlewares ...fib
 	})
 	v1.Put("/entity-fields/:id", admin, func(c *fiber.Ctx) error {
 		return handlers.NewEntityHandler(store).UpdateField(c)
+	})
+	v1.Delete("/entity-fields/:id", admin, func(c *fiber.Ctx) error {
+		return handlers.NewEntityHandler(store).DeleteField(c)
+	})
+	v1.Post("/entities/:entityId/keys", admin, func(c *fiber.Ctx) error {
+		return handlers.NewEntityHandler(store).CreateKey(c)
+	})
+	v1.Get("/entities/:entityId/keys", func(c *fiber.Ctx) error {
+		return handlers.NewEntityHandler(store).ListKeys(c)
+	})
+	v1.Delete("/entity-keys/:id", admin, func(c *fiber.Ctx) error {
+		return handlers.NewEntityHandler(store).DeleteKey(c)
+	})
+	v1.Post("/entity-relationships", admin, func(c *fiber.Ctx) error {
+		return handlers.NewEntityHandler(store).CreateRelationship(c)
+	})
+	v1.Get("/entities/:entityId/relationships", func(c *fiber.Ctx) error {
+		return handlers.NewEntityHandler(store).ListRelationships(c)
+	})
+	v1.Delete("/entity-relationships/:id", admin, func(c *fiber.Ctx) error {
+		return handlers.NewEntityHandler(store).DeleteRelationship(c)
 	})
 
 	// Connectors

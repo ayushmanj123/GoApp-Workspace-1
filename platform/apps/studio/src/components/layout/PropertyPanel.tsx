@@ -61,6 +61,12 @@ interface PropRowProps {
   onChange: (value: string) => void;
 }
 
+function isCommitableNumber(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "-" || trimmed === "." || trimmed === "-.") return false;
+  return Number.isFinite(Number(trimmed));
+}
+
 function PropRow({ label, type = "text", value, onChange }: PropRowProps) {
   const [draft, setDraft] = useState(value);
   const focusedRef = useRef(false);
@@ -84,6 +90,10 @@ function PropRow({ label, type = "text", value, onChange }: PropRowProps) {
         }}
         onBlur={() => {
           focusedRef.current = false;
+          if (type === "number" && !isCommitableNumber(draft)) {
+            setDraft(value);
+            return;
+          }
           if (draft !== value) {
             onChange(draft);
           }
@@ -91,6 +101,9 @@ function PropRow({ label, type = "text", value, onChange }: PropRowProps) {
         onChange={(event: ChangeEvent<HTMLInputElement>) => {
           const next = event.currentTarget.value;
           setDraft(next);
+          if (type === "number" && !isCommitableNumber(next)) {
+            return;
+          }
           onChange(next);
         }}
       />
@@ -103,24 +116,28 @@ interface MetadataPropRowProps {
   value: unknown;
   evaluationContext: Record<string, unknown>;
   onChange: (entry: Record<string, unknown>) => void;
+  groupId?: string;
 }
 
 function PropertyModeSelector({
   definition,
   mode,
   onModeChange,
+  groupId,
 }: {
   definition: PropertyFieldDefinition;
   mode: PropertyMode;
   onModeChange: (mode: PropertyMode) => void;
+  groupId?: string;
 }) {
+  const radioName = `${groupId ?? "property"}-${definition.name}-mode`;
   return (
     <div className={styles.propModeRow}>
       <div className={styles.modeOptions}>
         <label className={styles.modeOption}>
           <input
             type="radio"
-            name={`${definition.name}-mode`}
+            name={radioName}
             checked={mode === "static"}
             data-testid={`${definition.name}-mode-static`}
             onChange={() => onModeChange("static")}
@@ -130,7 +147,7 @@ function PropertyModeSelector({
         <label className={styles.modeOption}>
           <input
             type="radio"
-            name={`${definition.name}-mode`}
+            name={radioName}
             checked={mode === "formula"}
             data-testid={`${definition.name}-mode-formula`}
             onChange={() => onModeChange("formula")}
@@ -147,6 +164,7 @@ function MetadataPropRow({
   value,
   evaluationContext,
   onChange,
+  groupId,
 }: MetadataPropRowProps) {
   const { label, type } = definition;
   const formulaCapable = supportsFormulaMode(definition);
@@ -255,6 +273,7 @@ function MetadataPropRow({
         <PropertyModeSelector
           definition={definition}
           mode={mode}
+          groupId={groupId}
           onModeChange={handleModeChange}
         />
         <div className={styles.formulaEditorRow}>
@@ -302,6 +321,7 @@ function MetadataPropRow({
         <PropertyModeSelector
           definition={definition}
           mode={mode}
+          groupId={groupId}
           onModeChange={handleModeChange}
         />
       </div>
@@ -317,15 +337,14 @@ function MetadataPropRow({
           type="number"
           value={String(numeric)}
           onChange={(nextValue) => {
-            const parsed = Number(nextValue);
-            if (Number.isFinite(parsed)) {
-              onChange(writePropertyValue("number", parsed));
-            }
+            if (!isCommitableNumber(nextValue)) return;
+            onChange(writePropertyValue("number", Number(nextValue)));
           }}
         />
         <PropertyModeSelector
           definition={definition}
           mode={mode}
+          groupId={groupId}
           onModeChange={handleModeChange}
         />
       </div>
@@ -348,6 +367,7 @@ function MetadataPropRow({
         <PropertyModeSelector
           definition={definition}
           mode={mode}
+          groupId={groupId}
           onModeChange={handleModeChange}
         />
       )}
@@ -374,8 +394,9 @@ function LayoutMetricRow({
   const formula = readPropertyFormula(stored);
 
   const writeStatic = (nextValue: string) => {
-    const parsed = Number(nextValue);
-    if (!Number.isFinite(parsed)) return;
+    if (!isCommitableNumber(nextValue)) return;
+    const parsed = Number(nextValue.trim());
+    if (parsed === control[field] && mode !== "formula") return;
     const properties: Record<string, unknown> = { ...(control.properties ?? {}) };
     properties[field] = null;
     updateControl(control.id, { [field]: parsed, properties });
@@ -405,6 +426,7 @@ function LayoutMetricRow({
         <PropertyModeSelector
           definition={definition}
           mode={mode}
+          groupId={control.id}
           onModeChange={(next) => {
             if (next === "static") writeStatic(String(control[field] ?? 0));
           }}
@@ -445,6 +467,7 @@ function LayoutMetricRow({
       <PropertyModeSelector
         definition={definition}
         mode="static"
+        groupId={control.id}
         onModeChange={(next) => {
           if (next === "formula") writeFormula(String(control[field] ?? 0));
         }}
@@ -767,6 +790,7 @@ export function PropertyPanel() {
                         <MetadataPropRow
                           key={definition.name}
                           definition={definition}
+                          groupId={selectedControl.id}
                           value={selectedControl.properties?.[definition.name]}
                           evaluationContext={evaluationContext}
                           onChange={(entry) =>
@@ -1098,6 +1122,7 @@ export function PropertyPanel() {
                           <MetadataPropRow
                             key={definition.name}
                             definition={definition}
+                            groupId={selectedControl.id}
                             value={selectedControl.properties?.[definition.name]}
                             evaluationContext={evaluationContext}
                             onChange={(entry) =>
@@ -1175,6 +1200,7 @@ export function PropertyPanel() {
                       <MetadataPropRow
                         key={definition.name}
                         definition={definition}
+                        groupId={selectedControl.id}
                         value={selectedControl.properties?.[definition.name]}
                         evaluationContext={evaluationContext}
                         onChange={(entry) =>

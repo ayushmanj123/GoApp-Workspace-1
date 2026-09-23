@@ -227,7 +227,7 @@ export function CanvasSurface() {
                 .slice()
                 .sort((a, b) => a.zIndex - b.zIndex || a.controlId.localeCompare(b.controlId));
               return htmlNodes.map((node) => {
-              if (designerFormulaEntry(node.controlId)?.visible === false) return null;
+              const hidden = designerFormulaEntry(node.controlId)?.visible === false;
               const screen = toScreenBounds(node.absoluteBounds, offset, zoom);
               return (
                 <div
@@ -239,6 +239,7 @@ export function CanvasSurface() {
                     width: screen.width,
                     height: screen.height,
                     zIndex: node.zIndex,
+                    opacity: hidden ? 0.35 : undefined,
                   }}
                 >
                   <DesignerNodeRenderer

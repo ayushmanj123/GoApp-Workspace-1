@@ -25,11 +25,10 @@ export function hitTestAtPoint(
   nodes: DesignerNode[],
   x: number,
   y: number,
-  opts?: { containerEditId?: string | null },
+  _opts?: { containerEditId?: string | null },
 ): DesignerNode | null {
   const flat = flattenDesignerNodes(nodes);
   const byId = new Map(flat.map((n) => [n.controlId, n]));
-  const containerEditId = opts?.containerEditId ?? null;
 
   const candidates = flat.filter(
     (node) => node.selectable && containsPoint(node, x, y),
@@ -39,17 +38,36 @@ export function hitTestAtPoint(
     return null;
   }
 
-  if (containerEditId) {
-    const inContainer = candidates.filter(
-      (node) =>
-        node.controlId === containerEditId ||
-        isDescendantOfId(node, containerEditId, byId),
-    );
-    return inContainer.sort((a, b) => b.zIndex - a.zIndex)[0] ?? null;
-  }
-
+  // The front-most root under the pointer wins, then the deepest control
+  // inside it. A selected form must not keep capturing clicks meant for
+  // its fields or for controls sitting beside it.
   const roots = candidates.filter((node) => !node.parentId);
-  return roots.sort((a, b) => b.zIndex - a.zIndex)[0] ?? null;
+  const topRoot = roots.slice().sort((a, b) => b.zIndex - a.zIndex)[0];
+  if (!topRoot) {
+    return pickDeepest(candidates, byId);
+  }
+  const inTopRoot = candidates.filter(
+    (node) =>
+      node.controlId === topRoot.controlId ||
+      isDescendantOfId(node, topRoot.controlId, byId),
+  );
+  return pickDeepest(inTopRoot, byId);
+}
+
+function pickDeepest(
+  candidates: DesignerNode[],
+  byId: Map<string, DesignerNode>,
+): DesignerNode | null {
+  if (candidates.length === 0) {
+    return null;
+  }
+  return candidates.slice().sort((a, b) => {
+    const depthDiff = nodeDepth(b, byId) - nodeDepth(a, byId);
+    if (depthDiff !== 0) {
+      return depthDiff;
+    }
+    return b.zIndex - a.zIndex;
+  })[0];
 }
 
 function nodeDepth(node: DesignerNode, byId: Map<string, DesignerNode>): number {

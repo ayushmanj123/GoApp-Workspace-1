@@ -16,6 +16,24 @@ import { isEditableKeyboardTarget } from "../../utils/editable-keyboard-target";
 import { isControlLocked } from "../../utils/control-lock";
 
 const DOUBLE_CLICK_MS = 400;
+/** Pointer movement below this stays a selection and does not rewrite X/Y. */
+const DRAG_THRESHOLD_PX = 3;
+
+function hitBelongsToContainer(
+  nodes: DesignerNode[],
+  hit: DesignerNode | null,
+  containerId: string,
+): boolean {
+  let current = hit;
+  const seen = new Set<string>();
+  while (current) {
+    if (current.controlId === containerId) return true;
+    if (!current.parentId || seen.has(current.controlId)) return false;
+    seen.add(current.controlId);
+    current = findDesignerNode(nodes, current.parentId);
+  }
+  return false;
+}
 
 function normalizeRect(
   x1: number,
@@ -51,6 +69,7 @@ export function useCanvasEventRouter(
   const lastClickRef = useRef<{ controlId: string; time: number } | null>(null);
   /** Shift-snap preference for the active drag (updated on each move). */
   const shiftSnapRef = useRef(false);
+  const dragMovedRef = useRef(false);
 
   const toArtboardPoint = useCallback(
     (clientX: number, clientY: number) => {
@@ -274,6 +293,12 @@ export function useCanvasEventRouter(
       const point = toArtboardPoint(event.clientX, event.clientY);
       const containerEditId = useInteractionStore.getState().containerEditId;
       const hit = hitTestAtPoint(nodes, point.x, point.y, { containerEditId });
+      if (
+        containerEditId &&
+        !hitBelongsToContainer(nodes, hit, containerEditId)
+      ) {
+        useInteractionStore.getState().exitContainerEdit();
+      }
 
       if (hit) {
         const now = Date.now();
@@ -298,6 +323,7 @@ export function useCanvasEventRouter(
 
         if (hit.draggable) {
           shiftSnapRef.current = event.shiftKey;
+          dragMovedRef.current = false;
           useInteractionStore
             .getState()
             .beginDrag(hit.controlId, point, {
@@ -319,6 +345,10 @@ export function useCanvasEventRouter(
             if (!node) {
               return;
             }
+            if (!dragMovedRef.current && Math.abs(dx) < DRAG_THRESHOLD_PX && Math.abs(dy) < DRAG_THRESHOLD_PX) {
+              return;
+            }
+            dragMovedRef.current = true;
             const absX = dragState.dragOrigin.x + dx;
             const absY = dragState.dragOrigin.y + dy;
             applyDragPosition(node, absX, absY, ev.shiftKey);
@@ -326,26 +356,32 @@ export function useCanvasEventRouter(
           };
 
           const onUp = (ev: PointerEvent) => {
-            const dragState = useInteractionStore.getState();
-            if (dragState.draggingControlId && dragState.dragOrigin && dragState.dragStartPointer) {
-              const current = toArtboardPoint(ev.clientX, ev.clientY);
-              const dx = current.x - dragState.dragStartPointer.x;
-              const dy = current.y - dragState.dragStartPointer.y;
-              const node = findDesignerNode(nodes, dragState.draggingControlId);
-              if (node) {
-                commitReparent(
-                  node,
-                  dragState.dragOrigin.x + dx,
-                  dragState.dragOrigin.y + dy,
-                  dragState.containerEditId,
-                  ev.shiftKey || shiftSnapRef.current,
-                );
+            try {
+              const dragState = useInteractionStore.getState();
+              if (dragState.draggingControlId && dragState.dragOrigin && dragState.dragStartPointer) {
+                const current = toArtboardPoint(ev.clientX, ev.clientY);
+                const dx = current.x - dragState.dragStartPointer.x;
+                const dy = current.y - dragState.dragStartPointer.y;
+                const node = findDesignerNode(nodes, dragState.draggingControlId);
+                if (node && dragMovedRef.current) {
+                  commitReparent(
+                    node,
+                    dragState.dragOrigin.x + dx,
+                    dragState.dragOrigin.y + dy,
+                    dragState.containerEditId,
+                    ev.shiftKey || shiftSnapRef.current,
+                  );
+                }
               }
+              useInteractionStore.getState().endDrag();
+              const stage = event.currentTarget as HTMLDivElement | null;
+              if (stage?.hasPointerCapture?.(ev.pointerId)) {
+                stage.releasePointerCapture(ev.pointerId);
+              }
+            } finally {
+              window.removeEventListener("pointermove", onMove);
+              window.removeEventListener("pointerup", onUp);
             }
-            useInteractionStore.getState().endDrag();
-            (event.currentTarget as HTMLDivElement).releasePointerCapture(ev.pointerId);
-            window.removeEventListener("pointermove", onMove);
-            window.removeEventListener("pointerup", onUp);
           };
 
           window.addEventListener("pointermove", onMove);

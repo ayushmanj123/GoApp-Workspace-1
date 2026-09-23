@@ -45,6 +45,30 @@ export function designerMetric(
   return control[key];
 }
 
+/** A formula result may be 0. Null, blank, and property wrappers must not become 0. */
+function readEvaluatedLayoutNumber(raw: unknown): number | undefined {
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function readEvaluatedVisible(raw: unknown): boolean | undefined {
+  if (typeof raw === "boolean") return raw;
+  if (typeof raw === "string") {
+    const text = raw.trim().toLowerCase();
+    if (text === "true" || text === "1") return true;
+    if (text === "false" || text === "0") return false;
+    return undefined;
+  }
+  if (raw && typeof raw === "object" && "value" in raw && !("formula" in raw)) {
+    return readEvaluatedVisible((raw as { value: unknown }).value);
+  }
+  return undefined;
+}
+
 function isFormulaEntry(value: unknown): value is { formula: string } {
   return Boolean(
     value &&
@@ -79,15 +103,11 @@ export function useDesignerFormulaSync(controls: Control[], appName: string): nu
           }
         }
         for (const key of ["x", "y", "width", "height"] as const) {
-          const raw = properties[key];
-          const parsed = typeof raw === "number" ? raw : Number(raw);
-          if (Number.isFinite(parsed)) entry[key] = parsed;
+          const parsed = readEvaluatedLayoutNumber(properties[key]);
+          if (parsed !== undefined) entry[key] = parsed;
         }
-        const visibleRaw = properties.visible ?? properties.Visible;
-        if (typeof visibleRaw === "boolean") entry.visible = visibleRaw;
-        else if (typeof visibleRaw === "string") {
-          entry.visible = visibleRaw.trim().toLowerCase() !== "false";
-        }
+        const visible = readEvaluatedVisible(properties.visible ?? properties.Visible);
+        if (visible !== undefined) entry.visible = visible;
         next.set(control.id, entry);
       }
       if (!cancelled) {

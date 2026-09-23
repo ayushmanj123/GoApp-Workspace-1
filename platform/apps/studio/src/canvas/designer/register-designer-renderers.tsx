@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Control } from "../../api/controls-api";
 import registry from "@goapps/ui/registry.component-registry";
 import {
+  DesignerBadge,
   DesignerButton,
   DesignerCheckbox,
   DesignerDatePicker,
@@ -9,6 +10,12 @@ import {
   DesignerIcon,
   DesignerImage,
   DesignerLabel,
+  DesignerLink,
+  DesignerProgress,
+  DesignerRadio,
+  DesignerRating,
+  DesignerSlider,
+  DesignerSpinner,
   DesignerTextInput,
   DesignerTimer,
   DesignerToggle,
@@ -39,6 +46,13 @@ const DESIGNER_TYPES = [
   "Image",
   "Icon",
   "DatePicker",
+  "Radio",
+  "Slider",
+  "Link",
+  "Badge",
+  "Progress",
+  "Spinner",
+  "Rating",
   "ShapeRectangle",
   "ShapeEllipse",
   "ShapeLine",
@@ -57,6 +71,7 @@ function getDesignerRenderer(type: string): DesignerRenderer {
           text={p.text}
           disabled={Boolean(p.disabled)}
           selected={p.selected as boolean}
+          appearance={p}
         />
       );
     case "Label":
@@ -68,6 +83,7 @@ function getDesignerRenderer(type: string): DesignerRenderer {
           weight={p.weight}
           align={p.align}
           selected={p.selected as boolean}
+          appearance={p}
         />
       );
     case "TextInput":
@@ -77,6 +93,7 @@ function getDesignerRenderer(type: string): DesignerRenderer {
           placeholder={p.placeholder}
           disabled={Boolean(p.disabled)}
           selected={p.selected as boolean}
+          appearance={p}
         />
       );
     case "Gallery":
@@ -145,6 +162,7 @@ function getDesignerRenderer(type: string): DesignerRenderer {
           value={p.value}
           disabled={Boolean(p.disabled)}
           selected={p.selected as boolean}
+          appearance={p}
         />
       );
     case "Checkbox":
@@ -165,7 +183,7 @@ function getDesignerRenderer(type: string): DesignerRenderer {
       );
     case "Image":
       return (p) => (
-        <DesignerImage src={p.src} alt={p.alt} selected={p.selected as boolean} />
+        <DesignerImage src={p.src} alt={p.alt} selected={p.selected as boolean} appearance={p} />
       );
     case "Icon":
       return (p) => (
@@ -177,8 +195,23 @@ function getDesignerRenderer(type: string): DesignerRenderer {
           value={p.value}
           disabled={Boolean(p.disabled)}
           selected={p.selected as boolean}
+          appearance={p}
         />
       );
+    case "Radio":
+      return (p) => <DesignerRadio appearance={p} selected={p.selected as boolean} />;
+    case "Slider":
+      return (p) => <DesignerSlider appearance={p} selected={p.selected as boolean} />;
+    case "Link":
+      return (p) => <DesignerLink text={p.text} appearance={p} selected={p.selected as boolean} />;
+    case "Badge":
+      return (p) => <DesignerBadge text={p.text} appearance={p} selected={p.selected as boolean} />;
+    case "Progress":
+      return (p) => <DesignerProgress appearance={p} selected={p.selected as boolean} />;
+    case "Spinner":
+      return () => <DesignerSpinner />;
+    case "Rating":
+      return () => <DesignerRating />;
     case "ShapeRectangle":
     case "ShapeEllipse":
     case "ShapeLine":

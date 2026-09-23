@@ -1,5 +1,6 @@
 import React from "react";
 import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
+import { useRuntimeActionHandler } from "../hooks/use-runtime-action-handler";
 
 function readNumber(property: unknown, fallback: number): number {
   if (typeof property === "number" && Number.isFinite(property)) {
@@ -22,29 +23,69 @@ interface ShapeProps {
   src?: unknown;
   numPoints?: unknown;
   innerRadius?: unknown;
+  radius?: unknown;
+  onSelect?: unknown;
+  controlName?: string;
+  name?: string;
+  disabled?: boolean;
   style?: React.CSSProperties;
+}
+
+function hasActionFormula(property: unknown): boolean {
+  if (property && typeof property === "object" && "formula" in property) {
+    const formula = (property as { formula?: unknown }).formula;
+    return typeof formula === "string" && formula.trim().length > 0;
+  }
+  return false;
 }
 
 function ShapeSvgFrame({
   children,
   opacity,
   style,
+  onSelect,
+  controlName,
+  name,
+  disabled,
 }: {
   children: React.ReactNode;
   opacity?: unknown;
   style?: React.CSSProperties;
+  onSelect?: unknown;
+  controlName?: string;
+  name?: string;
+  disabled?: boolean;
 }) {
   const resolvedOpacity = readNumber(opacity, 1);
+  const runOnSelect = useRuntimeActionHandler(onSelect, controlName ?? name, "OnSelect");
+  const clickable = hasActionFormula(onSelect) && !disabled;
   return (
-    <svg
-      width="100%"
-      height="100%"
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
-      style={{ ...style, opacity: resolvedOpacity, display: "block" }}
+    <div
+      style={{ width: "100%", height: "100%", cursor: clickable ? "pointer" : undefined }}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={clickable ? () => void runOnSelect() : undefined}
+      onKeyDown={
+        clickable
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                void runOnSelect();
+              }
+            }
+          : undefined
+      }
     >
-      {children}
-    </svg>
+      <svg
+        width="100%"
+        height="100%"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        style={{ ...style, opacity: resolvedOpacity, display: "block" }}
+      >
+        {children}
+      </svg>
+    </div>
   );
 }
 
@@ -52,13 +93,23 @@ export function ShapeRectangle(props: ShapeProps) {
   const fill = useResolvedPropertyText(props.fill, "#4A90D9");
   const stroke = useResolvedPropertyText(props.stroke, "#1a1a1a");
   const strokeWidth = readNumber(props.strokeWidth, 1);
+  const radius = readNumber(props.radius, 0);
   return (
-    <ShapeSvgFrame opacity={props.opacity} style={props.style}>
+    <ShapeSvgFrame
+      opacity={props.opacity}
+      style={props.style}
+      onSelect={props.onSelect}
+      controlName={props.controlName}
+      name={props.name}
+      disabled={props.disabled}
+    >
       <rect
         x={strokeWidth / 2}
         y={strokeWidth / 2}
         width={100 - strokeWidth}
         height={100 - strokeWidth}
+        rx={radius}
+        ry={radius}
         fill={fill}
         stroke={stroke}
         strokeWidth={strokeWidth}
@@ -73,7 +124,14 @@ export function ShapeEllipse(props: ShapeProps) {
   const stroke = useResolvedPropertyText(props.stroke, "#33691E");
   const strokeWidth = readNumber(props.strokeWidth, 1);
   return (
-    <ShapeSvgFrame opacity={props.opacity} style={props.style}>
+    <ShapeSvgFrame
+      opacity={props.opacity}
+      style={props.style}
+      onSelect={props.onSelect}
+      controlName={props.controlName}
+      name={props.name}
+      disabled={props.disabled}
+    >
       <ellipse
         cx="50"
         cy="50"
@@ -110,7 +168,14 @@ export function ShapeArrow(props: ShapeProps) {
   const stroke = useResolvedPropertyText(props.stroke, "#333333");
   const strokeWidth = readNumber(props.strokeWidth, 2);
   return (
-    <ShapeSvgFrame opacity={props.opacity} style={props.style}>
+    <ShapeSvgFrame
+      opacity={props.opacity}
+      style={props.style}
+      onSelect={props.onSelect}
+      controlName={props.controlName}
+      name={props.name}
+      disabled={props.disabled}
+    >
       <defs>
         <marker
           id="arrowhead"
@@ -184,7 +249,14 @@ export function ShapeStar(props: ShapeProps) {
     points.push(`${x},${y}`);
   }
   return (
-    <ShapeSvgFrame opacity={props.opacity} style={props.style}>
+    <ShapeSvgFrame
+      opacity={props.opacity}
+      style={props.style}
+      onSelect={props.onSelect}
+      controlName={props.controlName}
+      name={props.name}
+      disabled={props.disabled}
+    >
       <polygon
         points={points.join(" ")}
         fill={fill}

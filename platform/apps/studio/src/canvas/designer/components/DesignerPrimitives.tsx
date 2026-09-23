@@ -1,4 +1,5 @@
 import { readDesignerDisplay } from "../designer-display";
+import { designerChromeStyle } from "../designer-chrome";
 
 const baseStyle: React.CSSProperties = {
   width: "100%",
@@ -10,10 +11,12 @@ const baseStyle: React.CSSProperties = {
 export function DesignerButton({
   text = "Button",
   disabled = false,
+  appearance,
 }: {
   text?: unknown;
   disabled?: boolean;
   selected?: boolean;
+  appearance?: Record<string, unknown>;
 }) {
   const label = readDesignerDisplay(text, "Button");
   return (
@@ -28,6 +31,7 @@ export function DesignerButton({
         borderRadius: 4,
         color: "#222",
         fontSize: 13,
+        ...designerChromeStyle(appearance),
       }}
     >
       {label}
@@ -41,6 +45,7 @@ export function DesignerLabel({
   size,
   weight,
   align,
+  appearance,
 }: {
   text?: unknown;
   color?: unknown;
@@ -48,6 +53,7 @@ export function DesignerLabel({
   weight?: unknown;
   align?: unknown;
   selected?: boolean;
+  appearance?: Record<string, unknown>;
 }) {
   const label = readDesignerDisplay(text, "Label");
   const colorValue = readDesignerDisplay(color, "");
@@ -72,6 +78,7 @@ export function DesignerLabel({
         fontSize: Number.isFinite(sizeNum) && sizeNum > 0 ? sizeNum : 13,
         fontWeight: weightText || 600,
         textAlign,
+        ...designerChromeStyle(appearance),
       }}
     >
       {label}
@@ -83,11 +90,13 @@ export function DesignerTextInput({
   value,
   placeholder,
   disabled,
+  appearance,
 }: {
   value?: unknown;
   placeholder?: unknown;
   disabled?: boolean;
   selected?: boolean;
+  appearance?: Record<string, unknown>;
 }) {
   const displayValue = readDesignerDisplay(value, "");
   const placeholderText = readDesignerDisplay(placeholder, "");
@@ -105,6 +114,7 @@ export function DesignerTextInput({
         background: "#ffffff",
         color: "#222",
         fontSize: 13,
+        ...designerChromeStyle(appearance),
       }}
     />
   );
@@ -139,11 +149,13 @@ export function DesignerTimer({
 export function DesignerDropdown({
   items,
   value,
+  appearance,
 }: {
   items?: unknown;
   value?: unknown;
   disabled?: boolean;
   selected?: boolean;
+  appearance?: Record<string, unknown>;
 }) {
   const itemsLabel = readDesignerDisplay(items, "Items");
   const valueLabel = readDesignerDisplay(value, "");
@@ -158,6 +170,7 @@ export function DesignerDropdown({
         padding: "4px 8px",
         background: "#ffffff",
         fontSize: 13,
+        ...designerChromeStyle(appearance),
       }}
     >
       <option>{itemsLabel || valueLabel || "Dropdown"}</option>
@@ -261,10 +274,12 @@ export function DesignerToggle({
 export function DesignerImage({
   src,
   alt,
+  appearance,
 }: {
   src?: unknown;
   alt?: unknown;
   selected?: boolean;
+  appearance?: Record<string, unknown>;
 }) {
   const srcValue = readDesignerDisplay(src, "");
   const altValue = readDesignerDisplay(alt, "Image");
@@ -273,7 +288,7 @@ export function DesignerImage({
       <img
         src={srcValue}
         alt={altValue.startsWith("[") ? "Image" : altValue}
-        style={{ ...baseStyle, objectFit: "contain", background: "#f5f5f5" }}
+        style={{ ...baseStyle, objectFit: "contain", background: "#f5f5f5", ...designerChromeStyle(appearance) }}
       />
     );
   }
@@ -333,10 +348,12 @@ export function DesignerIcon({
 
 export function DesignerDatePicker({
   value,
+  appearance,
 }: {
   value?: unknown;
   disabled?: boolean;
   selected?: boolean;
+  appearance?: Record<string, unknown>;
 }) {
   const displayValue = readDesignerDisplay(value, "");
   return (
@@ -351,7 +368,66 @@ export function DesignerDatePicker({
         padding: "4px 8px",
         background: "#ffffff",
         fontSize: 13,
+        ...designerChromeStyle(appearance),
       }}
     />
+  );
+}
+
+export function DesignerRadio({ appearance }: { appearance?: Record<string, unknown>; selected?: boolean }) {
+  return (
+    <div style={{ ...baseStyle, display: "flex", flexDirection: "column", gap: 4, fontSize: 12, ...designerChromeStyle(appearance) }}>
+      <label><input type="radio" readOnly checked /> Option 1</label>
+      <label><input type="radio" readOnly /> Option 2</label>
+    </div>
+  );
+}
+
+export function DesignerSlider({ appearance }: { appearance?: Record<string, unknown>; selected?: boolean }) {
+  return <input type="range" readOnly defaultValue={40} style={{ ...baseStyle, ...designerChromeStyle(appearance) }} />;
+}
+
+export function DesignerLink({ text, appearance }: { text?: unknown; appearance?: Record<string, unknown>; selected?: boolean }) {
+  return (
+    <span style={{ ...baseStyle, color: "#1a56db", textDecoration: "underline", display: "flex", alignItems: "center", ...designerChromeStyle(appearance) }}>
+      {readDesignerDisplay(text, "Link")}
+    </span>
+  );
+}
+
+export function DesignerBadge({ text, appearance }: { text?: unknown; appearance?: Record<string, unknown>; selected?: boolean }) {
+  return (
+    <span style={{ ...baseStyle, display: "flex", alignItems: "center", justifyContent: "center", background: "#e8f0fe", color: "#1a56db", borderRadius: 999, fontSize: 12, ...designerChromeStyle(appearance) }}>
+      {readDesignerDisplay(text, "Badge")}
+    </span>
+  );
+}
+
+export function DesignerProgress({ appearance }: { appearance?: Record<string, unknown>; selected?: boolean }) {
+  return (
+    <div style={{ ...baseStyle, background: "#e6e6e6", borderRadius: 999, overflow: "hidden" }}>
+      <div style={{ width: "40%", height: "100%", background: "#4A90D9", ...designerChromeStyle(appearance) }} />
+    </div>
+  );
+}
+
+export function DesignerSpinner() {
+  return (
+    <div
+      style={{
+        ...baseStyle,
+        borderRadius: "50%",
+        border: "3px solid #4A90D9",
+        borderTopColor: "transparent",
+      }}
+    />
+  );
+}
+
+export function DesignerRating() {
+  return (
+    <div style={{ ...baseStyle, display: "flex", alignItems: "center", color: "#f5b301", fontSize: 16 }}>
+      ★★★☆☆
+    </div>
   );
 }

@@ -5,6 +5,7 @@ import { useFormEditContext } from "../form-edit-context";
 import { parseParentItemField } from "../utils/parent-item-field";
 import { useControlValueStore } from "../formula/formula-context";
 import { useRuntimeActionHandler } from "../hooks/use-runtime-action-handler";
+import { useControlChrome } from "../hooks/use-control-chrome";
 import { parseLooseBoolean } from "../hooks/use-editable-control-value";
 
 function readPropertyFormula(property: unknown): string {
@@ -36,8 +37,17 @@ export const Toggle: React.FC<any> = ({
   controlName,
   name,
   id,
+  trueText,
+  falseText,
+  ...chromeSource
 }) => {
   const label = useResolvedPropertyText(text, "Toggle");
+  const onLabel = useResolvedPropertyText(trueText);
+  const offLabel = useResolvedPropertyText(falseText);
+  const chrome = useControlChrome(
+    { ...chromeSource, trueText, falseText, text, tooltip },
+    { disabled: Boolean(disabled), includeText: true },
+  );
   const resolvedTooltip = useResolvedPropertyText(tooltip);
   const formEdit = useFormEditContext();
   const controlValueStore = useControlValueStore();
@@ -98,6 +108,7 @@ export const Toggle: React.FC<any> = ({
         boxSizing: "border-box",
         cursor: isLocked ? "not-allowed" : "pointer",
         opacity: isLocked ? 0.7 : 1,
+        ...chrome.style,
       }}
     >
       <button
@@ -132,7 +143,7 @@ export const Toggle: React.FC<any> = ({
           }}
         />
       </button>
-      {label}
+      {localChecked ? onLabel || label : offLabel || label}
     </label>
   );
 };

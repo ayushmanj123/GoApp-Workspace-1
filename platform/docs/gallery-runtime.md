@@ -210,6 +210,8 @@ Example dependency registration:
 3. Formula context → `Gallery.Reader(sessionId)` for `Selected` / `AllItems`
 4. Session expiration → gallery cache cleared with state and reactive subscriptions
 
+- Gallery **Layout** is `vertical`, `horizontal`, or `wrap`. **TemplateSize**, **TemplatePadding**, **ShowScrollbar**, **Selectable**, **Default**, and **OnSelect** are authored on the control. Data table adds **NoDataText**, **HeaderFill**, **HoverFill**, **SelectedFill**, and **OnSelect**.
+
 ## Related docs
 
 - [Runtime Kernel](./runtime-kernel.md)

@@ -32,6 +32,20 @@ const REGISTRY_ALIASES: Record<string, string> = {
 
   datepicker: "DatePicker",
 
+  radio: "Radio",
+
+  slider: "Slider",
+
+  link: "Link",
+
+  badge: "Badge",
+
+  progress: "Progress",
+
+  spinner: "Spinner",
+
+  rating: "Rating",
+
   shaperectangle: "ShapeRectangle",
 
   shapeellipse: "ShapeEllipse",
@@ -81,6 +95,20 @@ const STUDIO_REGISTRY_TYPES = new Set([
   "Icon",
 
   "DatePicker",
+
+  "Radio",
+
+  "Slider",
+
+  "Link",
+
+  "Badge",
+
+  "Progress",
+
+  "Spinner",
+
+  "Rating",
 
   "ShapeRectangle",
 

@@ -6,6 +6,8 @@ import { colorForApp } from "./diagram/types";
 import { useTenantTablesContext } from "./TenantTablesContext";
 import { CreateTableModal } from "./CreateTableModal";
 import { AddTableFieldModal } from "./AddTableFieldModal";
+import { confirmDeleteTable } from "./confirmDeleteTable";
+import { entitiesApi } from "../../../api/entities-api";
 import styles from "./database-manager.module.css";
 
 function formatRelative(iso?: string | null): string | null {
@@ -45,7 +47,9 @@ export function TablesListView() {
   const [addFieldEntityId, setAddFieldEntityId] = useState<string | null>(null);
   const [recordTotals, setRecordTotals] = useState<Record<string, number>>({});
   const [recordLoading, setRecordLoading] = useState<Record<string, boolean>>({});
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     for (const t of tables) {
@@ -63,6 +67,28 @@ export function TablesListView() {
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [filterOpen]);
+
+  useEffect(() => {
+    if (!menuOpenId) return;
+    const onDoc = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpenId(null);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [menuOpenId]);
+
+  const deleteFromList = async (id: string, name: string) => {
+    setMenuOpenId(null);
+    if (!(await confirmDeleteTable(id, name))) return;
+    try {
+      await entitiesApi.delete(id);
+      await loadTables();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Delete failed");
+    }
+  };
 
   const apps = useMemo(() => {
     const set = new Set<string>();
@@ -252,18 +278,46 @@ export function TablesListView() {
                   </div>
                   <div className={styles.tableListRight}>
                     {updated ? <span className={styles.tableUpdated}>{updated}</span> : null}
-                    <button
-                      type="button"
-                      className={styles.iconBtn}
-                      title="Open table"
-                      aria-label={`Open ${label}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/studio/database/tables/${table.id}`);
-                      }}
+                    <div
+                      ref={menuOpenId === table.id ? menuRef : undefined}
+                      style={{ position: "relative" }}
                     >
-                      <IconMoreVert size={16} />
-                    </button>
+                      <button
+                        type="button"
+                        className={styles.iconBtn}
+                        title="More actions"
+                        aria-label={`More actions for ${label}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpenId((cur) => (cur === table.id ? null : table.id));
+                        }}
+                      >
+                        <IconMoreVert size={16} />
+                      </button>
+                      {menuOpenId === table.id ? (
+                        <div
+                          className={styles.tablesFilterMenu}
+                          style={{ right: 0, left: "auto", minWidth: 160 }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            className={styles.tablesFilterOption}
+                            onClick={() => navigate(`/studio/database/tables/${table.id}`)}
+                          >
+                            Open schema
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.tablesFilterOption}
+                            style={{ color: "var(--color-danger)" }}
+                            onClick={() => void deleteFromList(table.id, label)}
+                          >
+                            Delete table
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                     <button
                       type="button"
                       className={styles.iconBtn}

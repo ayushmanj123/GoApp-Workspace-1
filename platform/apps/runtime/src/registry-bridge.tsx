@@ -35,6 +35,8 @@ import { Icon } from "./components/icon";
 
 import { DatePicker } from "./components/datepicker";
 
+import { Badge, Link, Progress, Radio, Rating, Slider, Spinner } from "./components/simple-controls";
+
 import {
 
   ShapeArrow,
@@ -90,6 +92,20 @@ const RUNTIME_TYPES = [
   "Icon",
 
   "DatePicker",
+
+  "Radio",
+
+  "Slider",
+
+  "Link",
+
+  "Badge",
+
+  "Progress",
+
+  "Spinner",
+
+  "Rating",
 
   "ShapeRectangle",
 
@@ -161,29 +177,7 @@ function registerRuntime() {
 
       events: [],
 
-      renderRuntime: (p: any) => (
-
-        <TextInput
-
-          value={p.value}
-
-          default={p.default}
-
-          placeholder={p.placeholder}
-
-          disabled={p.disabled}
-
-          readOnly={p.readOnly}
-
-          controlName={p.controlName}
-
-          id={p.id}
-
-          onChange={p.onChange}
-
-        />
-
-      ),
+      renderRuntime: (p: any) => <TextInput {...p} />,
 
       renderDesigner: noopDesigner,
 
@@ -199,31 +193,7 @@ function registerRuntime() {
 
       events: [],
 
-      renderRuntime: (p: any) => (
-
-        <Dropdown
-
-          items={p.items}
-
-          default={p.default}
-
-          value={p.value}
-
-          disabled={p.disabled}
-
-          readOnly={p.readOnly}
-
-          controlName={p.controlName}
-
-          name={p.name}
-
-          id={p.id}
-
-          onChange={p.onChange}
-
-        />
-
-      ),
+      renderRuntime: (p: any) => <Dropdown {...p} />,
 
       renderDesigner: noopDesigner,
 
@@ -416,6 +386,118 @@ function registerRuntime() {
       events: [],
 
       renderRuntime: (p: any) => <DatePicker {...p} />,
+
+      renderDesigner: noopDesigner,
+
+    },
+
+    {
+
+      type: "Radio",
+
+      category: "input",
+
+      properties: [],
+
+      events: [],
+
+      renderRuntime: (p: any) => <Radio {...p} />,
+
+      renderDesigner: noopDesigner,
+
+    },
+
+    {
+
+      type: "Slider",
+
+      category: "input",
+
+      properties: [],
+
+      events: [],
+
+      renderRuntime: (p: any) => <Slider {...p} />,
+
+      renderDesigner: noopDesigner,
+
+    },
+
+    {
+
+      type: "Link",
+
+      category: "display",
+
+      properties: [],
+
+      events: [],
+
+      renderRuntime: (p: any) => <Link {...p} />,
+
+      renderDesigner: noopDesigner,
+
+    },
+
+    {
+
+      type: "Badge",
+
+      category: "display",
+
+      properties: [],
+
+      events: [],
+
+      renderRuntime: (p: any) => <Badge {...p} />,
+
+      renderDesigner: noopDesigner,
+
+    },
+
+    {
+
+      type: "Progress",
+
+      category: "display",
+
+      properties: [],
+
+      events: [],
+
+      renderRuntime: (p: any) => <Progress {...p} />,
+
+      renderDesigner: noopDesigner,
+
+    },
+
+    {
+
+      type: "Spinner",
+
+      category: "display",
+
+      properties: [],
+
+      events: [],
+
+      renderRuntime: (p: any) => <Spinner {...p} />,
+
+      renderDesigner: noopDesigner,
+
+    },
+
+    {
+
+      type: "Rating",
+
+      category: "input",
+
+      properties: [],
+
+      events: [],
+
+      renderRuntime: (p: any) => <Rating {...p} />,
 
       renderDesigner: noopDesigner,
 

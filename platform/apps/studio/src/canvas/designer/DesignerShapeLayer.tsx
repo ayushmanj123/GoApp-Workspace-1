@@ -122,6 +122,7 @@ export function DesignerShapeLayer({ nodes, offset, zoom }: DesignerShapeLayerPr
               stroke={stroke}
               strokeWidth={strokeWidth}
               opacity={opacity}
+              cornerRadius={readNumber(readPropertyRaw(node.control, "radius"), 0) * scale}
               listening={false}
             />
           );

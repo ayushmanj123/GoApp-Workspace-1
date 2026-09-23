@@ -32,7 +32,21 @@ export type HtmlToolboxControlType =
 
   | "icon"
 
-  | "datepicker";
+  | "datepicker"
+
+  | "radio"
+
+  | "slider"
+
+  | "link"
+
+  | "badge"
+
+  | "progress"
+
+  | "spinner"
+
+  | "rating";
 
 
 
@@ -258,6 +272,22 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
 
       displayMode: { value: "Edit" },
 
+      fill: { value: "#f5f5f5" },
+
+      color: { value: "#222222" },
+
+      borderColor: { value: "#c8c8c8" },
+
+      borderThickness: { value: 1 },
+
+      radius: { value: 4 },
+
+      padding: { value: 8 },
+
+      align: { value: "center" },
+
+      autoDisableOnSelect: { value: false },
+
     },
 
   },
@@ -312,6 +342,8 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
 
       placeholder: { value: "Enter text" },
 
+      mode: { value: "SingleLine" },
+
     },
 
   },
@@ -337,6 +369,12 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
       pageSize: { value: 10 },
 
       visible: { value: true },
+
+      layout: { value: "vertical" },
+
+      selectable: { value: true },
+
+      showScrollbar: { value: true },
 
     },
 
@@ -474,6 +512,16 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
 
       visible: { value: true },
 
+      gap: { value: 8 },
+
+      alignItems: { value: "stretch" },
+
+      justifyContent: { value: "flex-start" },
+
+      wrap: { value: false },
+
+      overflow: { value: "auto" },
+
     },
 
   },
@@ -595,6 +643,196 @@ const HTML_DEFAULTS: Record<HtmlToolboxControlType, ControlDefaults> = {
       value: { value: "" },
 
       default: { formula: "" },
+
+    },
+
+  },
+
+  radio: {
+
+    name: "Radio",
+
+    control_type: "radio",
+
+    x: 100,
+
+    y: 520,
+
+    width: 180,
+
+    height: 72,
+
+    properties: {
+
+      items: { formula: '["Option 1","Option 2"]' },
+
+      layout: { value: "vertical" },
+
+      visible: { value: true },
+
+    },
+
+  },
+
+  slider: {
+
+    name: "Slider",
+
+    control_type: "slider",
+
+    x: 100,
+
+    y: 600,
+
+    width: 200,
+
+    height: 36,
+
+    properties: {
+
+      min: { value: 0 },
+
+      max: { value: 100 },
+
+      value: { value: "40" },
+
+      showValue: { value: true },
+
+      visible: { value: true },
+
+    },
+
+  },
+
+  link: {
+
+    name: "Link",
+
+    control_type: "link",
+
+    x: 320,
+
+    y: 520,
+
+    width: 120,
+
+    height: 28,
+
+    properties: {
+
+      text: { value: "Link" },
+
+      color: { value: "#1a56db" },
+
+      visible: { value: true },
+
+    },
+
+  },
+
+  badge: {
+
+    name: "Badge",
+
+    control_type: "badge",
+
+    x: 320,
+
+    y: 560,
+
+    width: 72,
+
+    height: 24,
+
+    properties: {
+
+      text: { value: "Badge" },
+
+      fill: { value: "#e8f0fe" },
+
+      color: { value: "#1a56db" },
+
+      radius: { value: 999 },
+
+      visible: { value: true },
+
+    },
+
+  },
+
+  progress: {
+
+    name: "Progress",
+
+    control_type: "progress",
+
+    x: 320,
+
+    y: 600,
+
+    width: 200,
+
+    height: 16,
+
+    properties: {
+
+      value: { value: 40 },
+
+      max: { value: 100 },
+
+      fill: { value: "#4A90D9" },
+
+      visible: { value: true },
+
+    },
+
+  },
+
+  spinner: {
+
+    name: "Spinner",
+
+    control_type: "spinner",
+
+    x: 540,
+
+    y: 520,
+
+    width: 32,
+
+    height: 32,
+
+    properties: {
+
+      color: { value: "#4A90D9" },
+
+      visible: { value: true },
+
+    },
+
+  },
+
+  rating: {
+
+    name: "Rating",
+
+    control_type: "rating",
+
+    x: 540,
+
+    y: 560,
+
+    width: 140,
+
+    height: 32,
+
+    properties: {
+
+      max: { value: 5 },
+
+      value: { value: "3" },
+
+      visible: { value: true },
 
     },
 

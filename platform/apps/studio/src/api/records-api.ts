@@ -18,7 +18,7 @@ export interface EntityRecordItem {
 interface RuntimeEnvelope<T> {
   success: boolean;
   data: T;
-  error?: { code?: string; message?: string };
+  error?: { code?: string; message?: string; details?: Record<string, string> };
   meta?: { pagination?: { limit: number; offset: number; total: number } };
 }
 
@@ -42,10 +42,20 @@ export class RecordsApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    public readonly details?: Record<string, string>,
   ) {
     super(message);
     this.name = "RecordsApiError";
   }
+}
+
+function normalizeDetails(raw: unknown): Record<string, string> | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    out[k] = typeof v === "string" ? v : String(v);
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 async function parseEnvelope<T>(res: Response): Promise<T> {
@@ -57,6 +67,7 @@ async function parseEnvelope<T>(res: Response): Promise<T> {
     throw new RecordsApiError(
       res.status,
       body.error?.message ?? res.statusText ?? "Request failed",
+      normalizeDetails(body.error?.details),
     );
   }
   return body.data;
@@ -76,6 +87,7 @@ export const recordsApi = {
       throw new RecordsApiError(
         res.status,
         body.error?.message ?? res.statusText ?? "Failed to load records",
+        normalizeDetails(body.error?.details),
       );
     }
     return {

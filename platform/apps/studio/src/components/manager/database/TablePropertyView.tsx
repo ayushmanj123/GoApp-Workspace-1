@@ -23,6 +23,7 @@ import { useTenantTablesContext } from "./TenantTablesContext";
 import { AddTableFieldModal } from "./AddTableFieldModal";
 import { EditFieldModal } from "./EditFieldModal";
 import { TableRecordsPanel } from "./TableRecordsPanel";
+import { confirmDeleteTable } from "./confirmDeleteTable";
 import { colorForApp } from "./diagram/types";
 import {
   formatAuditDate,
@@ -168,6 +169,7 @@ export function TablePropertyView() {
   const [fieldTypeFilter, setFieldTypeFilter] = useState<string>("all");
   const [recordTotal, setRecordTotal] = useState<number | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [schemaActionMsg, setSchemaActionMsg] = useState<string | null>(null);
   const moreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -263,16 +265,7 @@ export function TablePropertyView() {
 
   const deleteTable = async () => {
     if (!entityId) return;
-    let depsNote = "";
-    try {
-      const deps = await entitiesApi.listDependents(entityId);
-      if (deps.items?.length) {
-        depsNote = `\n\nLookup dependents: ${deps.items.map((d) => d.name).join(", ")}`;
-      }
-    } catch {
-      /* ignore */
-    }
-    if (!window.confirm(`Delete table "${title}"?${depsNote}`)) return;
+    if (!(await confirmDeleteTable(entityId, title))) return;
     try {
       await entitiesApi.delete(entityId);
       await loadTables();
@@ -294,24 +287,64 @@ export function TablePropertyView() {
 
   const createKey = async () => {
     if (!entityId || !keyName.trim() || keyFieldIds.length === 0) return;
-    await entitiesApi.createKey(entityId, { name: keyName.trim(), field_ids: keyFieldIds });
-    setKeyName("");
-    setKeyFieldIds([]);
-    const d = await entitiesApi.listKeys(entityId);
-    setKeys(d.items ?? []);
+    setSchemaActionMsg(null);
+    try {
+      await entitiesApi.createKey(entityId, { name: keyName.trim(), field_ids: keyFieldIds });
+      setKeyName("");
+      setKeyFieldIds([]);
+      const d = await entitiesApi.listKeys(entityId);
+      setKeys(d.items ?? []);
+      setSchemaActionMsg("Alternate key created.");
+    } catch (err) {
+      setSchemaActionMsg(err instanceof Error ? err.message : "Failed to create key");
+    }
   };
 
   const createNn = async () => {
     if (!entityId || !nnName.trim() || !nnOtherId) return;
-    await entitiesApi.createRelationship({
-      name: nnName.trim(),
-      left_entity_id: entityId,
-      right_entity_id: nnOtherId,
-    });
-    setNnName("");
-    setNnOtherId("");
-    const d = await entitiesApi.listRelationships(entityId);
-    setNnRels(d.items ?? []);
+    setSchemaActionMsg(null);
+    try {
+      await entitiesApi.createRelationship({
+        name: nnName.trim(),
+        left_entity_id: entityId,
+        right_entity_id: nnOtherId,
+      });
+      setNnName("");
+      setNnOtherId("");
+      const d = await entitiesApi.listRelationships(entityId);
+      setNnRels(d.items ?? []);
+      setSchemaActionMsg("N:N relationship created.");
+    } catch (err) {
+      setSchemaActionMsg(err instanceof Error ? err.message : "Failed to create N:N");
+    }
+  };
+
+  const deleteKey = async (keyId: string) => {
+    setSchemaActionMsg(null);
+    try {
+      await entitiesApi.deleteKey(keyId);
+      if (entityId) {
+        const d = await entitiesApi.listKeys(entityId);
+        setKeys(d.items ?? []);
+      }
+      setSchemaActionMsg("Key deleted.");
+    } catch (err) {
+      setSchemaActionMsg(err instanceof Error ? err.message : "Failed to delete key");
+    }
+  };
+
+  const deleteNn = async (relId: string) => {
+    setSchemaActionMsg(null);
+    try {
+      await entitiesApi.deleteRelationship(relId);
+      if (entityId) {
+        const d = await entitiesApi.listRelationships(entityId);
+        setNnRels(d.items ?? []);
+      }
+      setSchemaActionMsg("Relationship deleted.");
+    } catch (err) {
+      setSchemaActionMsg(err instanceof Error ? err.message : "Failed to delete relationship");
+    }
   };
 
   const tabs: { id: SchemaTab; label: string; badge?: number }[] = [
@@ -427,6 +460,19 @@ export function TablePropertyView() {
           </div>
 
           <div className={styles.schemaPanel}>
+            {schemaActionMsg ? (
+              <p
+                style={{
+                  fontSize: 12,
+                  marginBottom: 10,
+                  color: schemaActionMsg.toLowerCase().includes("fail")
+                    ? "var(--color-danger)"
+                    : "var(--color-text-muted)",
+                }}
+              >
+                {schemaActionMsg}
+              </p>
+            ) : null}
             {activeTab === "fields" ? (
               <>
                 <div className={styles.fieldsToolbar}>
@@ -660,14 +706,7 @@ export function TablePropertyView() {
                             <button
                               type="button"
                               className={styles.iconBtn}
-                              onClick={() =>
-                                void entitiesApi.deleteRelationship(rel.id).then(async () => {
-                                  if (entityId) {
-                                    const d = await entitiesApi.listRelationships(entityId);
-                                    setNnRels(d.items ?? []);
-                                  }
-                                })
-                              }
+                              onClick={() => void deleteNn(rel.id)}
                             >
                               ×
                             </button>
@@ -717,14 +756,7 @@ export function TablePropertyView() {
                         <button
                           type="button"
                           className={styles.iconBtn}
-                          onClick={() =>
-                            void entitiesApi.deleteKey(key.id).then(async () => {
-                              if (entityId) {
-                                const d = await entitiesApi.listKeys(entityId);
-                                setKeys(d.items ?? []);
-                              }
-                            })
-                          }
+                          onClick={() => void deleteKey(key.id)}
                         >
                           ×
                         </button>

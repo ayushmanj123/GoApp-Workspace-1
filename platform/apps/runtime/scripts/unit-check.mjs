@@ -155,7 +155,7 @@ assert.match(
 const button = readFileSync(path.join(root, "src/components/button.tsx"), "utf8");
 assert.match(
   button,
-  /disabled=\{disabled\}/,
+  /disabled=\{disabled/,
   "Button must honor disabled from ControlRenderer DisplayMode cascade",
 );
 assert.match(
@@ -204,6 +204,10 @@ assert.match(
   /normalizeFlexDirection/,
   "control-layout must export normalizeFlexDirection",
 );
+const appearance = readFileSync(path.join(root, "src/utils/appearance-style.ts"), "utf8");
+assert.match(appearance, /export function appearanceCss/, "appearance helper must export appearanceCss");
+const radio = readFileSync(path.join(root, "src/components/simple-controls.tsx"), "utf8");
+assert.match(radio, /export const Radio/, "Radio control must be registered in simple-controls");
 
 const containerSrc = readFileSync(path.join(root, "src/components/container.tsx"), "utf8");
 assert.match(

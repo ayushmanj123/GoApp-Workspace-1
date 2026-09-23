@@ -116,26 +116,28 @@ function PropertyModeSelector({
 }) {
   return (
     <div className={styles.propModeRow}>
-      <label className={styles.modeOption}>
-        <input
-          type="radio"
-          name={`${definition.name}-mode`}
-          checked={mode === "static"}
-          data-testid={`${definition.name}-mode-static`}
-          onChange={() => onModeChange("static")}
-        />
-        Static
-      </label>
-      <label className={styles.modeOption}>
-        <input
-          type="radio"
-          name={`${definition.name}-mode`}
-          checked={mode === "formula"}
-          data-testid={`${definition.name}-mode-formula`}
-          onChange={() => onModeChange("formula")}
-        />
-        Formula
-      </label>
+      <div className={styles.modeOptions}>
+        <label className={styles.modeOption}>
+          <input
+            type="radio"
+            name={`${definition.name}-mode`}
+            checked={mode === "static"}
+            data-testid={`${definition.name}-mode-static`}
+            onChange={() => onModeChange("static")}
+          />
+          Static
+        </label>
+        <label className={styles.modeOption}>
+          <input
+            type="radio"
+            name={`${definition.name}-mode`}
+            checked={mode === "formula"}
+            data-testid={`${definition.name}-mode-formula`}
+            onChange={() => onModeChange("formula")}
+          />
+          Formula
+        </label>
+      </div>
     </div>
   );
 }
@@ -661,7 +663,13 @@ export function PropertyPanel() {
                   </PropertyCard>
                   <PropertyCard title="Appearance">
                     {propertyDefinitions
-                      .filter((d) => d.type === "color" || d.type === "text" || d.type === "boolean")
+                      .filter(
+                        (d) =>
+                          d.type === "color" ||
+                          d.type === "text" ||
+                          d.type === "boolean" ||
+                          d.type === "number",
+                      )
                       .map((definition) => (
                         <MetadataPropRow
                           key={definition.name}

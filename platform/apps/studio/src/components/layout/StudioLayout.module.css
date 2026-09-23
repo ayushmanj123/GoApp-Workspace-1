@@ -20,6 +20,15 @@
   height: 100%;
 }
 
+.allotment :global(.split-view-view) {
+  overflow: hidden;
+}
+
+.allotment :global(.split-view-view) > * {
+  height: 100%;
+  min-height: 0;
+}
+
 .leftPane {
   display: flex;
   flex-direction: row;

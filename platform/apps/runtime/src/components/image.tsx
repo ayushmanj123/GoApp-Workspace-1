@@ -1,6 +1,8 @@
 import React, { useCallback } from "react";
 import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
 import { useRuntimeActionHandler } from "../hooks/use-runtime-action-handler";
+import { useControlChrome } from "../hooks/use-control-chrome";
+import { readPropertyText } from "../utils/appearance-style";
 
 function hasActionFormula(property: unknown): boolean {
   if (property && typeof property === "object" && "formula" in property) {
@@ -10,17 +12,31 @@ function hasActionFormula(property: unknown): boolean {
   return false;
 }
 
-export const Image: React.FC<any> = ({
-  src,
-  alt = "",
-  onSelect,
-  controlName,
-  name,
-  disabled = false,
-  readOnly = false,
-}) => {
+function objectFitFor(position: unknown): React.CSSProperties["objectFit"] {
+  const text = readPropertyText(position).toLowerCase();
+  if (text === "fill" || text === "stretch") return "fill";
+  if (text === "center") return "none";
+  if (text === "cover") return "cover";
+  return "contain";
+}
+
+export const Image: React.FC<any> = (props) => {
+  const {
+    src,
+    alt = "",
+    onSelect,
+    controlName,
+    name,
+    disabled = false,
+    readOnly = false,
+    tooltip,
+    imagePosition,
+  } = props;
   const resolvedSrc = useResolvedPropertyText(src, "");
   const resolvedAlt = useResolvedPropertyText(alt, "Image");
+  const resolvedTooltip = useResolvedPropertyText(tooltip);
+  const chrome = useControlChrome(props, { disabled: Boolean(disabled), includeText: false });
+  const fit = objectFitFor(imagePosition);
   const resolvedControlName = controlName ?? name;
   const runOnSelect = useRuntimeActionHandler(
     onSelect,
@@ -48,11 +64,11 @@ export const Image: React.FC<any> = ({
   const interactiveProps = clickable
     ? {
         role: "button" as const,
-        tabIndex: 0,
+        tabIndex: chrome.tabIndex ?? 0,
         onClick: onActivate,
         onKeyDown,
       }
-    : {};
+    : { tabIndex: chrome.tabIndex };
 
   if (!resolvedSrc) {
     return (
@@ -69,7 +85,9 @@ export const Image: React.FC<any> = ({
           color: "#666",
           boxSizing: "border-box",
           cursor: clickable ? "pointer" : undefined,
+          ...chrome.style,
         }}
+        title={resolvedTooltip || undefined}
         {...interactiveProps}
       >
         Image
@@ -84,10 +102,13 @@ export const Image: React.FC<any> = ({
       style={{
         width: "100%",
         height: "100%",
-        objectFit: "contain",
+        objectFit: fit,
+        objectPosition: fit === "none" ? "center" : undefined,
         boxSizing: "border-box",
         cursor: clickable ? "pointer" : undefined,
+        ...chrome.style,
       }}
+      title={resolvedTooltip || undefined}
       {...interactiveProps}
     />
   );

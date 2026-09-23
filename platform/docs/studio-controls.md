@@ -148,6 +148,14 @@ Shared shape properties: `fill`, `stroke`, `strokeWidth`, `opacity`. `shape_imag
 - Label supports **Size** (px), **Weight** (number or normal/bold/semibold/light), and **Align** (left/center/right/justify) in the property panel; Runtime applies them as CSS `fontSize` / `fontWeight` / `textAlign`.
 - Explorer control tree indents nested children by depth (`paddingLeft` scales with parent/container nesting).
 
+### Appearance and later controls
+
+- Shared appearance (`fill`, `borderColor`, `borderThickness`, `radius`, `padding`, `opacity`, plus text chrome and hover/pressed/disabled/focus colors) is authored in the property panel and applied in Runtime through `appearance-style.ts`.
+- Text input supports `mode` (single line, multiline, password), `maxLength`, `clear`, and `delayOutput`. Dropdown supports `allowEmptySelection` and `isSearchable`.
+- Gallery `layout` is `vertical`, `horizontal`, or `wrap`. Container adds `gap`, `alignItems`, `justifyContent`, `wrap`, and `overflow`.
+- New toolbox controls: Radio, Slider, Link, Badge, Progress, Spinner, Rating. Combo box, tabs, and charts stay deferred.
+- Explorer shows Indent / Unnest on the selected row so a control can move into the previous container sibling or back out to the parent.
+
 ## Out of scope
 
 - Animated shape transitions

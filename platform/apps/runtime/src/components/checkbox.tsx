@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
 import { useParentItemDefault } from "../hooks/use-parent-item-default";
 import { useFormEditContext } from "../form-edit-context";
 import { parseParentItemField } from "../utils/parent-item-field";
 import { useControlValueStore } from "../formula/formula-context";
 import { useRuntimeActionHandler } from "../hooks/use-runtime-action-handler";
+import { useControlChrome } from "../hooks/use-control-chrome";
 import { parseLooseBoolean } from "../hooks/use-editable-control-value";
 
 function readPropertyFormula(property: unknown): string {
@@ -25,18 +26,21 @@ function readBooleanProperty(property: unknown, fallback = false): boolean {
   return fallback;
 }
 
-export const Checkbox: React.FC<any> = ({
-  text = "Checkbox",
-  checked = false,
-  default: defaultProperty,
-  disabled = false,
-  readOnly = false,
-  onChange,
-  tooltip,
-  controlName,
-  name,
-  id,
-}) => {
+export const Checkbox: React.FC<any> = (props) => {
+  const {
+    text = "Checkbox",
+    checked = false,
+    default: defaultProperty,
+    disabled = false,
+    readOnly = false,
+    onChange,
+    onCheck,
+    onUncheck,
+    tooltip,
+    controlName,
+    name,
+    id,
+  } = props;
   const label = useResolvedPropertyText(text, "Checkbox");
   const resolvedTooltip = useResolvedPropertyText(tooltip);
   const formEdit = useFormEditContext();
@@ -48,6 +52,9 @@ export const Checkbox: React.FC<any> = ({
   const staticChecked = readBooleanProperty(checked, false);
   const resolvedControlName = controlName ?? name;
   const runOnChange = useRuntimeActionHandler(onChange, resolvedControlName, "OnChange");
+  const runOnCheck = useRuntimeActionHandler(onCheck, resolvedControlName, "OnCheck");
+  const runOnUncheck = useRuntimeActionHandler(onUncheck, resolvedControlName, "OnUncheck");
+  const chrome = useControlChrome(props, { disabled: Boolean(disabled), includeText: true });
   const externalChecked = usesDefaultBinding
     ? parseLooseBoolean(resolvedDefault)
     : staticChecked;
@@ -76,19 +83,17 @@ export const Checkbox: React.FC<any> = ({
       controlValueStore.set(resolvedControlName, "Checked", nextValue);
     }
     await runOnChange();
+    if (nextValue) await runOnCheck();
+    else await runOnUncheck();
   };
-
-  const onFocus = useCallback(() => {
-    focusedRef.current = true;
-  }, []);
-  const onBlur = useCallback(() => {
-    focusedRef.current = false;
-  }, []);
 
   return (
     <label
       htmlFor={id}
       title={resolvedTooltip || undefined}
+      tabIndex={chrome.tabIndex}
+      onMouseEnter={chrome.handlers.onMouseEnter}
+      onMouseLeave={chrome.handlers.onMouseLeave}
       style={{
         display: "flex",
         alignItems: "center",
@@ -97,6 +102,7 @@ export const Checkbox: React.FC<any> = ({
         minHeight: 32,
         boxSizing: "border-box",
         opacity: isLocked ? 0.7 : 1,
+        ...chrome.style,
       }}
     >
       <input
@@ -104,8 +110,14 @@ export const Checkbox: React.FC<any> = ({
         type="checkbox"
         checked={localChecked}
         disabled={isLocked}
-        onFocus={onFocus}
-        onBlur={onBlur}
+        onFocus={() => {
+          focusedRef.current = true;
+          chrome.handlers.onFocus();
+        }}
+        onBlur={() => {
+          focusedRef.current = false;
+          chrome.handlers.onBlur();
+        }}
         onChange={handleChange}
       />
       {label}

@@ -767,6 +767,11 @@ func (d *Dispatcher) execResetForm(rtCtx *RuntimeFormulaContext, formula string)
 	if rtCtx.Events != nil {
 		rtCtx.RecordRefresh(rtCtx.Events.FormChanged(rtCtx.Session.SessionID, rtCtx.App.AppID, formName))
 	}
+	if reset := strings.TrimSpace(rtCtx.FormActions.FormBehaviorFormula(formName, "onReset")); reset != "" {
+		if _, resetErr := d.Dispatch(rtCtx, reset); resetErr != nil {
+			return nil, resetErr
+		}
+	}
 	return true, nil
 }
 

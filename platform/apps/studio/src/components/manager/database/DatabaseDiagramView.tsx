@@ -4,6 +4,7 @@ import { entitiesApi } from "../../../api/entities-api";
 import { recordsApi } from "../../../api/records-api";
 import { useTenantTablesContext } from "./TenantTablesContext";
 import { CreateTableModal } from "./CreateTableModal";
+import { confirmDeleteTable } from "./confirmDeleteTable";
 import { DiagramTopbar } from "./diagram/DiagramTopbar";
 import { DiagramCanvas } from "./diagram/DiagramCanvas";
 import { DiagramMinimap } from "./diagram/DiagramMinimap";
@@ -14,6 +15,7 @@ import styles from "./database-manager.module.css";
 const NODE_W = 220;
 const NODE_H = 168;
 const GRID = 24;
+const DIAGRAM_LAYOUT_KEY = "goapps:diagram-layout";
 
 function computeLayout(tableIds: string[]): Record<string, NodePos> {
   const cols = Math.max(1, Math.ceil(Math.sqrt(tableIds.length || 1)));
@@ -24,6 +26,31 @@ function computeLayout(tableIds: string[]): Record<string, NodePos> {
     map[id] = { x: 60 + col * 280, y: 60 + row * 220, w: NODE_W, h: NODE_H };
   });
   return map;
+}
+
+function loadStoredLayout(): Record<string, NodePos> {
+  try {
+    const raw = localStorage.getItem(DIAGRAM_LAYOUT_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, Partial<NodePos>>;
+    const out: Record<string, NodePos> = {};
+    for (const [id, p] of Object.entries(parsed)) {
+      if (typeof p?.x === "number" && typeof p?.y === "number") {
+        out[id] = { x: p.x, y: p.y, w: p.w ?? NODE_W, h: p.h ?? NODE_H };
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredLayout(positions: Record<string, NodePos>) {
+  try {
+    localStorage.setItem(DIAGRAM_LAYOUT_KEY, JSON.stringify(positions));
+  } catch {
+    /* ignore quota */
+  }
 }
 
 export function DatabaseDiagramView() {
@@ -37,7 +64,7 @@ export function DatabaseDiagramView() {
   const [minimap, setMinimap] = useState(true);
   const [fkVisible, setFkVisible] = useState(true);
   const [activeApp, setActiveApp] = useState<string | null>(null);
-  const [positions, setPositions] = useState<Record<string, NodePos>>({});
+  const [positions, setPositions] = useState<Record<string, NodePos>>(() => loadStoredLayout());
   const [nnEdges, setNnEdges] = useState<DiagramEdge[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -45,6 +72,7 @@ export function DatabaseDiagramView() {
   const [nodeStats, setNodeStats] = useState<NodeStats | null>(null);
   const [edgeStats, setEdgeStats] = useState<EdgeStats | null>(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 500 });
+  const layoutHydrated = useRef(false);
 
   const stageRef = useRef<HTMLDivElement>(null);
 
@@ -55,27 +83,44 @@ export function DatabaseDiagramView() {
   }, [tables, fieldsByEntityId, loadFields]);
 
   useEffect(() => {
-    setPositions((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      for (const t of tables) {
-        if (!next[t.id]) {
-          next[t.id] = { x: 0, y: 0, w: NODE_W, h: NODE_H };
-          changed = true;
-        }
-      }
-      for (const id of Object.keys(next)) {
-        if (!tables.find((t) => t.id === id)) {
-          delete next[id];
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-    if (Object.keys(positions).length === 0 && tables.length > 0) {
-      setPositions(computeLayout(tables.map((t) => t.id)));
+    if (tables.length === 0) {
+      setPositions({});
+      return;
     }
-  }, [tables, positions]);
+    setPositions((prev) => {
+      const stored = layoutHydrated.current ? prev : { ...loadStoredLayout(), ...prev };
+      layoutHydrated.current = true;
+      const next: Record<string, NodePos> = {};
+      const missing: string[] = [];
+      for (const t of tables) {
+        if (stored[t.id]) next[t.id] = { ...stored[t.id], w: NODE_W, h: NODE_H };
+        else missing.push(t.id);
+      }
+      if (missing.length > 0) {
+        const laid = computeLayout(missing);
+        // Offset new nodes so they don't stack on (0,0) when others exist
+        const offset = Object.keys(next).length > 0 ? 40 : 0;
+        for (const id of missing) {
+          next[id] = {
+            ...laid[id],
+            x: laid[id].x + offset,
+            y: laid[id].y + offset,
+          };
+        }
+      }
+      // If nothing was stored and everything was laid out fresh, use clean grid
+      if (Object.keys(stored).length === 0 && missing.length === tables.length) {
+        return computeLayout(tables.map((t) => t.id));
+      }
+      return next;
+    });
+  }, [tables]);
+
+  useEffect(() => {
+    if (!layoutHydrated.current) return;
+    if (Object.keys(positions).length === 0) return;
+    saveStoredLayout(positions);
+  }, [positions]);
 
   useEffect(() => {
     let cancelled = false;
@@ -374,7 +419,7 @@ export function DatabaseDiagramView() {
     setMultiSelect([]);
   }, []);
 
-  const createLookup = useCallback(async () => {
+  const connectTables = useCallback(async () => {
     if (multiSelect.length !== 2) {
       setMessage("Select two tables (Ctrl/Cmd+click) then Connect.");
       return;
@@ -383,18 +428,51 @@ export function DatabaseDiagramView() {
     const from = tablesById[fromId];
     const to = tablesById[toId];
     if (!from || !to) return;
+    const kindRaw = window.prompt(
+      `Connect ${from.display_name || from.name} → ${to.display_name || to.name}\nType "lookup" or "nn"`,
+      "lookup",
+    );
+    if (!kindRaw) return;
+    const kind = kindRaw.trim().toLowerCase();
+    if (kind !== "lookup" && kind !== "nn" && kind !== "n:n") {
+      setMessage('Unknown type. Use "lookup" or "nn".');
+      return;
+    }
     setBusy(true);
     setMessage(null);
     try {
-      await entitiesApi.createField(fromId, {
-        name: `${to.name}Id`,
-        display_name: to.display_name || to.name,
-        field_type: "lookup",
-        related_entity_id: toId,
-        delete_behavior: "restrict",
-      });
-      await loadFields(fromId);
-      setMessage(`Created lookup ${from.display_name} → ${to.display_name}`);
+      if (kind === "lookup") {
+        await entitiesApi.createField(fromId, {
+          name: `${to.name}Id`,
+          display_name: to.display_name || to.name,
+          field_type: "lookup",
+          related_entity_id: toId,
+          delete_behavior: "restrict",
+        });
+        await loadFields(fromId);
+        setMessage(`Created lookup ${from.display_name} → ${to.display_name}`);
+      } else {
+        const defaultName = `${from.name}_${to.name}`;
+        const nnName =
+          window.prompt("N:N relationship name", defaultName)?.trim() || defaultName;
+        const rel = await entitiesApi.createRelationship({
+          name: nnName,
+          left_entity_id: fromId,
+          right_entity_id: toId,
+        });
+        setNnEdges((prev) => [
+          ...prev,
+          {
+            id: rel.id,
+            kind: "nn",
+            from: fromId,
+            to: toId,
+            label: rel.name,
+            relationship: rel,
+          },
+        ]);
+        setMessage(`Created N:N ${nnName}`);
+      }
       setMultiSelect([]);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Failed to create relationship");
@@ -407,7 +485,7 @@ export function DatabaseDiagramView() {
     async (id: string) => {
       const t = tablesById[id];
       if (!t) return;
-      if (!window.confirm(`Delete table "${t.display_name || t.name}"? This cannot be undone.`)) return;
+      if (!(await confirmDeleteTable(id, t.display_name || t.name))) return;
       setBusy(true);
       try {
         await entitiesApi.delete(id);
@@ -483,7 +561,7 @@ export function DatabaseDiagramView() {
         onToggleSnap={() => setSnap((s) => !s)}
         onToggleMinimap={() => setMinimap((m) => !m)}
         onToggleFk={() => setFkVisible((f) => !f)}
-        onConnect={() => void createLookup()}
+        onConnect={() => void connectTables()}
         onAddTable={() => setCreateOpen(true)}
         onFilter={(app) => setActiveApp(app)}
       />

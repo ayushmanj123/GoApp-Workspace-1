@@ -1,5 +1,7 @@
 import React from "react";
 import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
+import { useControlChrome } from "../hooks/use-control-chrome";
+import { readBooleanProperty, readOptionalNumber, readPropertyText } from "../utils/appearance-style";
 
 function unwrapScalar(raw: unknown): string {
   if (raw == null) return "";
@@ -42,33 +44,59 @@ function resolveTextAlign(raw: unknown): React.CSSProperties["textAlign"] {
   return "left";
 }
 
-export const Label: React.FC<any> = ({
-  text = "",
-  color = "",
-  size,
-  weight,
-  align,
-  htmlFor,
-}) => {
+export const Label: React.FC<any> = (props) => {
+  const {
+    text = "",
+    color = "",
+    size,
+    weight,
+    align,
+    htmlFor,
+    tooltip,
+    wrap,
+    autoHeight,
+    overflow,
+    italic,
+    underline,
+    lineHeight,
+  } = props;
   const label = useResolvedPropertyText(text);
   const colorValue = useResolvedPropertyText(color) || undefined;
+  const resolvedTooltip = useResolvedPropertyText(tooltip);
+  const chrome = useControlChrome(props, { includeText: true });
+  const overflowMode = readPropertyText(overflow).toLowerCase();
+  const shouldWrap = readBooleanProperty(wrap, true);
+  const grow = readBooleanProperty(autoHeight, false);
+  const line = readOptionalNumber(lineHeight);
   const style: React.CSSProperties = {
-    color: colorValue || "var(--color-text-primary, #1c1c1e)",
     display: "block",
     width: "100%",
-    minHeight: 18,
+    minHeight: grow ? undefined : 18,
+    height: grow ? "auto" : undefined,
     boxSizing: "border-box",
-    fontSize: resolveFontSize(size),
-    fontWeight: resolveFontWeight(weight),
-    textAlign: resolveTextAlign(align),
+    whiteSpace: shouldWrap ? "normal" : "nowrap",
+    overflow: overflowMode === "scroll" ? "auto" : overflowMode === "hidden" || overflowMode === "ellipsis" ? "hidden" : undefined,
+    textOverflow: overflowMode === "ellipsis" ? "ellipsis" : undefined,
+    fontStyle: readBooleanProperty(italic, false) ? "italic" : undefined,
+    textDecoration: readBooleanProperty(underline, false) ? "underline" : undefined,
+    lineHeight: line,
+    ...chrome.style,
   };
+  style.color = chrome.style.color || colorValue || "var(--color-text-primary, #1c1c1e)";
+  style.fontSize = chrome.style.fontSize ?? resolveFontSize(size);
+  style.fontWeight = chrome.style.fontWeight ?? resolveFontWeight(weight);
+  style.textAlign = chrome.style.textAlign ?? resolveTextAlign(align);
   if (htmlFor) {
     return (
-      <label htmlFor={String(htmlFor)} style={style}>
+      <label htmlFor={String(htmlFor)} title={resolvedTooltip || undefined} style={style}>
         {label}
       </label>
     );
   }
-  return <span style={style}>{label}</span>;
+  return (
+    <span title={resolvedTooltip || undefined} style={style}>
+      {label}
+    </span>
+  );
 };
 export default Label;

@@ -149,6 +149,16 @@ assert.match(
 );
 assert.match(
   registrySrc,
+  /BUTTON_PROPERTIES[\s\S]*?\.\.\.BOX_CHROME/,
+  "Button registry must expose shared appearance",
+);
+assert.match(
+  registrySrc,
+  /RADIO_PROPERTIES[\s\S]*name:\s*"items"/,
+  "Radio registry must expose Items",
+);
+assert.match(
+  registrySrc,
   /IMAGE_PROPERTIES[\s\S]*name:\s*"onSelect"/,
   "Image registry must expose OnSelect",
 );

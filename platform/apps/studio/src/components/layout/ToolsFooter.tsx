@@ -103,6 +103,46 @@ const TOOL_ICON: Record<ToolboxControlType, ReactNode> = {
       <path d="M3 11h18" />
     </svg>
   ),
+  radio: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="3" fill="currentColor" />
+    </svg>
+  ),
+  slider: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <circle cx="14" cy="12" r="3" fill="currentColor" />
+    </svg>
+  ),
+  link: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11 4" />
+      <path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07L13 20" />
+    </svg>
+  ),
+  badge: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="8" width="18" height="8" rx="4" />
+      <path d="M8 12h8" />
+    </svg>
+  ),
+  progress: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="9" width="18" height="6" rx="3" />
+      <rect x="3" y="9" width="8" height="6" rx="3" fill="currentColor" />
+    </svg>
+  ),
+  spinner: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 3a9 9 0 1 0 9 9" />
+    </svg>
+  ),
+  rating: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 3l2.2 6.8H21l-5.5 4 2.1 6.7L12 16.5 6.4 20.5l2.1-6.7L3 9.8h6.8z" />
+    </svg>
+  ),
   shape_rectangle: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <rect x="4" y="6" width="16" height="12" />
@@ -151,6 +191,13 @@ const HTML_TOOL_ITEMS: Array<{ type: ToolboxControlType; label: string }> = [
   { type: "image", label: "Image" },
   { type: "icon", label: "Icon" },
   { type: "timer", label: "Timer" },
+  { type: "radio", label: "Radio" },
+  { type: "slider", label: "Slider" },
+  { type: "link", label: "Link" },
+  { type: "badge", label: "Badge" },
+  { type: "progress", label: "Progress" },
+  { type: "spinner", label: "Spinner" },
+  { type: "rating", label: "Rating" },
 ];
 
 const SHAPE_TOOL_ITEMS: Array<{ type: ToolboxControlType; label: string }> = [
@@ -245,7 +292,7 @@ function ToolButton({
         if (!disabled) createNestedControl(type);
       }}
     >
-      <span className={styles.toolIcon}>{TOOL_ICON[type]}</span>
+      <span className={styles.toolIcon}>{TOOL_ICON[type] ?? label.slice(0, 1)}</span>
     </button>
   );
 }

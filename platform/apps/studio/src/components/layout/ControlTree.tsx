@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Control } from "../../api/controls-api";
 import { buildControlTree, type ControlTreeNode } from "../../utils/build-control-tree";
+import { useApplicationStore } from "../../store/applicationStore";
 import styles from "./ExplorerPanel.module.css";
+
+const LAYOUT_PARENTS = new Set(["container", "form", "gallery", "component"]);
+
+function isLayoutParent(controlType: string): boolean {
+  return LAYOUT_PARENTS.has(controlType.trim().toLowerCase());
+}
 
 interface ControlTreeProps {
   controls: Control[];
@@ -19,6 +26,9 @@ function ControlTreeNodeRow({
   expandedIds,
   onToggleExpand,
   onSelectControl,
+  controls,
+  onIndent,
+  onUnnest,
 }: {
   node: ControlTreeNode;
   depth: number;
@@ -27,10 +37,21 @@ function ControlTreeNodeRow({
   expandedIds: Set<string>;
   onToggleExpand: (controlId: string) => void;
   onSelectControl: (controlId: string) => void;
+  controls: Control[];
+  onIndent: (controlId: string) => void;
+  onUnnest: (controlId: string) => void;
 }) {
   const hasChildren = node.children.length > 0;
   const isExpanded = expandedIds.has(node.id);
   const isSelected = selectedControlId === node.id;
+  const siblings = controls
+    .filter((item) => (item.parent_control_id ?? null) === (node.parent_control_id ?? null))
+    .slice()
+    .sort((a, b) => (a.z_index ?? 0) - (b.z_index ?? 0));
+  const siblingIndex = siblings.findIndex((item) => item.id === node.id);
+  const previous = siblingIndex > 0 ? siblings[siblingIndex - 1] : undefined;
+  const canIndent = Boolean(previous && isLayoutParent(previous.control_type));
+  const canUnnest = Boolean(node.parent_control_id);
 
   return (
     <>
@@ -72,6 +93,32 @@ function ControlTreeNodeRow({
           ) : null}
           <span className={styles.controlZIndex}>(z: {node.z_index})</span>
         </button>
+        {isSelected && canIndent ? (
+          <button
+            type="button"
+            data-testid={`explorer-indent-${node.id}`}
+            aria-label="Indent into previous container"
+            onClick={(event) => {
+              event.stopPropagation();
+              onIndent(node.id);
+            }}
+          >
+            Indent
+          </button>
+        ) : null}
+        {isSelected && canUnnest ? (
+          <button
+            type="button"
+            data-testid={`explorer-unnest-${node.id}`}
+            aria-label="Unnest from container"
+            onClick={(event) => {
+              event.stopPropagation();
+              onUnnest(node.id);
+            }}
+          >
+            Unnest
+          </button>
+        ) : null}
       </li>
       {hasChildren && isExpanded
         ? node.children.map((child) => (
@@ -84,6 +131,9 @@ function ControlTreeNodeRow({
               expandedIds={expandedIds}
               onToggleExpand={onToggleExpand}
               onSelectControl={onSelectControl}
+              controls={controls}
+              onIndent={onIndent}
+              onUnnest={onUnnest}
             />
           ))
         : null}
@@ -126,6 +176,26 @@ export function ControlTree({
     setExpandedIds(new Set(parentIds));
   }, [controls]);
 
+  const updateControl = useApplicationStore((s) => s.updateControl);
+  const indentControl = (controlId: string) => {
+    const control = controls.find((item) => item.id === controlId);
+    if (!control) return;
+    const siblings = controls
+      .filter((item) => (item.parent_control_id ?? null) === (control.parent_control_id ?? null))
+      .slice()
+      .sort((a, b) => (a.z_index ?? 0) - (b.z_index ?? 0));
+    const index = siblings.findIndex((item) => item.id === controlId);
+    const previous = index > 0 ? siblings[index - 1] : undefined;
+    if (!previous || !isLayoutParent(previous.control_type)) return;
+    updateControl(controlId, { parent_control_id: previous.id });
+  };
+  const unnestControl = (controlId: string) => {
+    const control = controls.find((item) => item.id === controlId);
+    if (!control?.parent_control_id) return;
+    const parent = controls.find((item) => item.id === control.parent_control_id);
+    updateControl(controlId, { parent_control_id: parent?.parent_control_id ?? null });
+  };
+
   const toggleExpand = (controlId: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -154,6 +224,9 @@ export function ControlTree({
           expandedIds={expandedIds}
           onToggleExpand={toggleExpand}
           onSelectControl={onSelectControl}
+          controls={controls}
+          onIndent={indentControl}
+          onUnnest={unnestControl}
         />
       ))}
     </ul>

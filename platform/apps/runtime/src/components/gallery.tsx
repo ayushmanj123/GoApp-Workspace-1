@@ -1,4 +1,7 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect } from "react";
+import { useRuntimeActionHandler } from "../hooks/use-runtime-action-handler";
+import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
+import { readBooleanProperty, readOptionalNumber, readPropertyText } from "../utils/appearance-style";
 import ControlRenderer from "../control-renderer";
 import {
   GalleryRowProvider,
@@ -28,6 +31,14 @@ export const Gallery: React.FC<{
   templateControls?: ControlPackage[];
   disabled?: boolean;
   readOnly?: boolean;
+  layout?: unknown;
+  templateSize?: unknown;
+  templatePadding?: unknown;
+  showScrollbar?: unknown;
+  selectable?: unknown;
+  default?: unknown;
+  onSelect?: unknown;
+  tooltip?: unknown;
 }> = ({
   name,
   controlId,
@@ -36,6 +47,14 @@ export const Gallery: React.FC<{
   pageSize,
   templateControls = [],
   disabled = false,
+  layout,
+  templateSize,
+  templatePadding,
+  showScrollbar,
+  selectable,
+  default: defaultProperty,
+  onSelect,
+  tooltip,
 }) => {
   const itemsProp = items ?? Items;
   const { records, loading, error } = useSessionGalleryItems(
@@ -47,7 +66,15 @@ export const Gallery: React.FC<{
   const { appId, sessionId, runtimeUnavailable, bumpFormRefresh } = useRuntime();
   const hasFormula = Boolean(readItemsFormula(itemsProp));
   const galleryName = name?.trim() ?? "";
-  const canSelect = Boolean(galleryName) && !isStudioCanvas && !disabled;
+  const allowSelect = readBooleanProperty(selectable, true);
+  const canSelect = Boolean(galleryName) && !isStudioCanvas && !disabled && allowSelect;
+  const resolvedTooltip = useResolvedPropertyText(tooltip);
+  const resolvedDefault = useResolvedPropertyText(defaultProperty);
+  const runOnSelect = useRuntimeActionHandler(onSelect, galleryName, "OnSelect");
+  const layoutName = readPropertyText(layout).toLowerCase();
+  const horizontal = layoutName === "horizontal" || layoutName === "row" || layoutName === "wrap";
+  const templateSizePx = readOptionalNumber(templateSize);
+  const templatePad = readOptionalNumber(templatePadding);
   const selectedRecord = canSelect ? selectionStore.get(galleryName) : undefined;
 
   const displayRecords =
@@ -67,6 +94,7 @@ export const Gallery: React.FC<{
     (record: Record<string, unknown>, index: number) => {
       if (!canSelect) return;
       selectionStore.select(galleryName, record);
+      void runOnSelect();
       if (sessionId && appId && !runtimeUnavailable) {
         void selectGalleryItem({
           appId,
@@ -89,8 +117,18 @@ export const Gallery: React.FC<{
       appId,
       runtimeUnavailable,
       bumpFormRefresh,
+      runOnSelect,
     ],
   );
+
+  useEffect(() => {
+    if (!canSelect || !resolvedDefault || selectedRecord) return;
+    const match = displayRecords.find(
+      (record, index) =>
+        firstStringLikeField(record) === resolvedDefault || String(index) === resolvedDefault,
+    );
+    if (match) selectionStore.select(galleryName, match);
+  }, [canSelect, resolvedDefault, displayRecords, selectedRecord, galleryName, selectionStore]);
 
   const isRowSelected = useCallback(
     (record: Record<string, unknown>) => {
@@ -102,6 +140,7 @@ export const Gallery: React.FC<{
 
   return (
     <div
+      title={resolvedTooltip || undefined}
       style={{
         ...fillParentStyle(),
         display: "flex",
@@ -113,10 +152,13 @@ export const Gallery: React.FC<{
         aria-label={galleryName || "Gallery"}
         style={{
           flex: 1,
-          overflow: "auto",
+          overflow: readBooleanProperty(showScrollbar, true) ? "auto" : "hidden",
           border: "1px solid #d0d0d0",
           borderRadius: 4,
-          padding: 4,
+          padding: templatePad ?? 4,
+          display: "flex",
+          flexDirection: horizontal ? "row" : "column",
+          flexWrap: layoutName === "wrap" ? "wrap" : "nowrap",
         }}
       >
         {visibleRecords.length === 0 && !loading ? (
@@ -147,7 +189,9 @@ export const Gallery: React.FC<{
             }
             style={{
               position: "relative",
-              minHeight: 32,
+              minHeight: templateSizePx ?? 32,
+              flex: horizontal ? "0 0 auto" : undefined,
+              width: horizontal && templateSizePx ? templateSizePx : undefined,
               padding: "4px 6px",
               borderBottom: "1px solid #eee",
               marginBottom: 2,

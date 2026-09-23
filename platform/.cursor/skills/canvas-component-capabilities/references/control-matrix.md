@@ -8,17 +8,24 @@ Status key: **Done** = usable in Studio + Runtime for the listed slice. **Partia
 
 | Type | Power Apps–inspired target | Already in GoApps | Next additive gap | Primary files |
 |------|----------------------------|-------------------|-------------------|---------------|
-| `button` | Text, Disabled, OnSelect, Visible, Tooltip | Text, Disabled, Visible, DisplayMode, Tooltip, OnSelect (Navigate/Set/Collect/SubmitForm/Patch/Refresh/…) | — | `apps/studio/.../registry.ts`, `apps/runtime/src/components/button.tsx` |
+| `button` | Text, Disabled, OnSelect, Visible, Tooltip | Text, Disabled, Visible, DisplayMode, Tooltip, OnSelect, appearance, interaction, AutoDisableOnSelect, Icon | — | `apps/studio/.../registry.ts`, `apps/runtime/src/components/button.tsx` |
 | `label` | Text, Color, Font, Size, Align, Visible | Text, Color (formula-capable), Size, Weight, Align, Visible | — | `label.tsx`, registry `LABEL_PROPERTIES` |
 | `textinput` | Default, Value, Placeholder, DisplayMode, Required, OnChange | Default (ThisItem), Value, Placeholder, inputMode, Disabled, Visible, DisplayMode, Required, Tooltip, OnChange | — | `text-input.tsx`, Form dirty flush |
 | `dropdown` | Items, Default, Value, DisplayMode, OnChange, DisplayFields | Items, Default, Value, DisplayField, ValueField, Disabled, Visible, DisplayMode, Required, Tooltip, OnChange | — | `dropdown.tsx`; see `docs/studio-controls.md` |
 | `checkbox` | Text, Default, Checked, DisplayMode, OnChange | Text, Checked, Default, Disabled, Visible, DisplayMode, Required, Tooltip, OnChange | — | `checkbox.tsx` |
 | `toggle` | Text, Default, Checked, DisplayMode, OnChange | Same pattern as Checkbox + Tooltip | Design-system polish only if requested | `toggle.tsx` |
-| `datepicker` | Default, Value, DisplayMode, OnChange | Value, Default, Disabled, Visible, DisplayMode, Required, Tooltip, OnChange | Locale/format options | `datepicker.tsx` |
+| `datepicker` | Default, Value, DisplayMode, OnChange | Value, Default, Disabled, Visible, DisplayMode, Required, Tooltip, OnChange, Format, StartOfWeek, MinDate, MaxDate | — | `datepicker.tsx` |
 | `image` | Image, Alt, OnSelect, Visible | Src, Alt, Visible, OnSelect | — | `image.tsx` |
 | `icon` | Icon, Color, OnSelect | Icon glyph map, Color, Visible, OnSelect | Richer icon packs (deferred in docs) | `icon.tsx` |
 | `timer` | Duration, OnTimerEnd, Start/Stop, AutoStart, Repeat | Duration, OnTimerEnd, AutoStart, Start, Repeat, Visible, DisplayMode | — | `timer.tsx`, registry `TIMER_PROPERTIES` |
-| `container` | Layout direction, nested children, auto-layout | Nesting (drop/reparent/edit mode); `direction` + Visible; flex packing by `z_index` | — | `container.tsx`, canvas nest helpers; `docs/studio-controls.md` |
+| `container` | Layout direction, nested children, auto-layout | Nesting (drop/reparent/edit mode); `direction` + Visible; flex packing by `z_index`; gap, align, justify, wrap, overflow | — | `container.tsx`, canvas nest helpers; `docs/studio-controls.md` |
+| `radio` | Items, Default, Layout, OnChange | Items, Default, Value, Layout, chrome, OnChange | — | `simple-controls.tsx` |
+| `slider` | Min, Max, Value, OnChange | Min, Max, Value, Default, ShowValue, OnChange | — | `simple-controls.tsx` |
+| `link` | Text, OnSelect | Text, in-app Href, OnSelect, text chrome | — | `simple-controls.tsx` |
+| `badge` | Text, Fill | Text, Fill, Color | — | `simple-controls.tsx` |
+| `progress` | Value, Max | Value, Max, Fill | — | `simple-controls.tsx` |
+| `spinner` | Visible | Visible, Color | — | `simple-controls.tsx` |
+| `rating` | Max, Value, OnChange | Max, Value, Default, OnChange | — | `simple-controls.tsx` |
 
 ## Data controls
 
@@ -54,6 +61,10 @@ Status key: **Done** = usable in Studio + Runtime for the listed slice. **Partia
 3. **Wave 3 — Data controls:** Form Item ← DataTable.Selected; EndsWith filter; DataTable column picker — **Done**.
 4. **Wave 4 — Layout & media:** Container packing from `direction`; Image/Icon OnSelect; Timer AutoStart/Start/Repeat — **Done**.
 5. **Wave 5 — Formula surface (narrow):** three-arg `Patch(DS, Selected\|Form.Item, {fields})` + base resolution — **Done** (no full evaluator rewrite).
+6. **Wave 6 — Shared appearance:** Fill, border, radius, padding, opacity, and text chrome on HTML controls — **Done**.
+7. **Wave 7 — Interaction states:** Hover/pressed/disabled/focus colors and TabIndex — **Done**.
+8. **Wave 8 — Per-control behavior:** input mode, gallery layout, container gap/align, date format, shape OnSelect, explorer indent/unnest — **Done**.
+9. **Wave 9 — New controls:** Radio, Slider, Link, Badge, Progress, Spinner, Rating — **Done**. Combo box, tabs, and charts remain deferred.
 
 ## Doc anchors
 

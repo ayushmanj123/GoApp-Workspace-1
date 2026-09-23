@@ -1,5 +1,8 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
+import { useControlChrome } from "../hooks/use-control-chrome";
+import { readBooleanProperty } from "../utils/appearance-style";
+import { iconGlyph } from "../utils/icon-glyphs";
 import {
   useFormulaEngine,
   useFormulaEvaluationContext,
@@ -35,17 +38,28 @@ const noopNavigationStore: RuntimeNavigationStore = {
   subscribe: () => () => {},
 };
 
-export const Button: React.FC<any> = ({
-  text = "Button",
-  disabled = false,
-  onSelect,
-  onClick,
-  controlName,
-  name,
-  tooltip,
-}) => {
+export const Button: React.FC<any> = (props) => {
+  const {
+    text = "Button",
+    disabled = false,
+    onSelect,
+    onClick,
+    controlName,
+    name,
+    tooltip,
+    autoDisableOnSelect,
+    icon,
+  } = props;
   const label = useResolvedPropertyText(text, "Button");
   const resolvedTooltip = useResolvedPropertyText(tooltip);
+  const resolvedIcon = useResolvedPropertyText(icon, "");
+  const glyph = resolvedIcon ? iconGlyph(resolvedIcon) : "";
+  const autoDisable = readBooleanProperty(autoDisableOnSelect, false);
+  const [pendingDisable, setPendingDisable] = useState(false);
+  const chrome = useControlChrome(props, {
+    disabled: Boolean(disabled || pendingDisable),
+    includeText: true,
+  });
   const engine = useFormulaEngine();
   const context = useFormulaEvaluationContext();
   const store = useVariableStore();
@@ -73,9 +87,11 @@ export const Button: React.FC<any> = ({
   }, [pkg, currentScreen]);
 
   const handleClick = useCallback(async () => {
+    if (autoDisable) setPendingDisable(true);
     const formula = readActionFormula(onSelect);
     if (!formula) {
       onClick?.();
+      if (autoDisable) setPendingDisable(false);
       return;
     }
 
@@ -114,6 +130,8 @@ export const Button: React.FC<any> = ({
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      if (autoDisable) setPendingDisable(false);
     }
     onClick?.();
   }, [
@@ -138,15 +156,28 @@ export const Button: React.FC<any> = ({
     runtimeUnavailable,
     pkg,
     bumpGalleryRefresh,
+    autoDisable,
   ]);
 
   return (
     <button
-      disabled={disabled}
+      disabled={disabled || pendingDisable}
       title={resolvedTooltip || undefined}
+      tabIndex={chrome.tabIndex}
       onClick={handleClick}
-      style={{ width: "100%", height: "100%" }}
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        boxSizing: "border-box",
+        ...chrome.style,
+      }}
+      {...chrome.handlers}
     >
+      {glyph ? <span aria-hidden="true">{glyph}</span> : null}
       {label}
     </button>
   );

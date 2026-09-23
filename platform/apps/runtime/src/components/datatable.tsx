@@ -1,4 +1,6 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
+import { useRuntimeActionHandler } from "../hooks/use-runtime-action-handler";
+import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
 import {
   useGallerySelectionStore,
 } from "../formula/formula-context";
@@ -86,6 +88,12 @@ export const DataTable: React.FC<{
   showRefresh?: unknown;
   disabled?: boolean;
   readOnly?: boolean;
+  noDataText?: unknown;
+  headerFill?: unknown;
+  hoverFill?: unknown;
+  selectedFill?: unknown;
+  onSelect?: unknown;
+  tooltip?: unknown;
 }> = ({
   name,
   controlId,
@@ -95,6 +103,12 @@ export const DataTable: React.FC<{
   columns,
   columnHints,
   disabled = false,
+  noDataText,
+  headerFill,
+  hoverFill,
+  selectedFill,
+  onSelect,
+  tooltip,
 }) => {
   const itemsProp = items ?? Items;
   const { records, loading, error } = useSessionGalleryItems(
@@ -107,6 +121,13 @@ export const DataTable: React.FC<{
   const hasFormula = Boolean(readItemsFormula(itemsProp));
   const tableName = name?.trim() ?? "";
   const canSelect = Boolean(tableName) && !isStudioCanvas && !disabled;
+  const resolvedNoData = useResolvedPropertyText(noDataText);
+  const resolvedHeader = useResolvedPropertyText(headerFill, "#f5f5f5");
+  const resolvedHover = useResolvedPropertyText(hoverFill);
+  const resolvedSelected = useResolvedPropertyText(selectedFill, "#e8f0fe");
+  const resolvedTooltip = useResolvedPropertyText(tooltip);
+  const runOnSelect = useRuntimeActionHandler(onSelect, tableName, "OnSelect");
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const selectedRecord = canSelect ? selectionStore.get(tableName) : undefined;
 
   const displayRecords =
@@ -129,6 +150,7 @@ export const DataTable: React.FC<{
     (record: Record<string, unknown>, index: number) => {
       if (!canSelect) return;
       selectionStore.select(tableName, record);
+      void runOnSelect();
       if (sessionId && appId && !runtimeUnavailable) {
         void selectGalleryItem({
           appId,
@@ -151,6 +173,7 @@ export const DataTable: React.FC<{
       appId,
       runtimeUnavailable,
       bumpFormRefresh,
+      runOnSelect,
     ],
   );
 
@@ -177,7 +200,7 @@ export const DataTable: React.FC<{
   );
 
   return (
-    <div style={{ ...fillParentStyle(), display: "flex", flexDirection: "column" }}>
+    <div title={resolvedTooltip || undefined} style={{ ...fillParentStyle(), display: "flex", flexDirection: "column" }}>
       {error && !isStudioCanvas ? (
         <div style={{ marginBottom: 4, fontSize: 11, color: "#b00020" }}>{error}</div>
       ) : null}
@@ -205,7 +228,7 @@ export const DataTable: React.FC<{
                     textAlign: "left",
                     padding: "6px 8px",
                     borderBottom: "1px solid #ddd",
-                    background: "#f5f5f5",
+                    background: resolvedHeader || "#f5f5f5",
                     position: "sticky",
                     top: 0,
                   }}
@@ -226,7 +249,7 @@ export const DataTable: React.FC<{
                     ? "Unable to load records."
                     : isStudioCanvas
                       ? "No sample rows"
-                      : "No records"}
+                      : resolvedNoData || "No records"}
                 </td>
               </tr>
             ) : null}
@@ -236,6 +259,8 @@ export const DataTable: React.FC<{
                 role={canSelect ? "row" : undefined}
                 tabIndex={canSelect ? 0 : undefined}
                 aria-selected={canSelect ? isRowSelected(record) : undefined}
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex((current) => (current === index ? null : current))}
                 onClick={
                   canSelect ? () => handleRowClick(record, index) : undefined
                 }
@@ -246,7 +271,11 @@ export const DataTable: React.FC<{
                 }
                 style={{
                   cursor: canSelect ? "pointer" : undefined,
-                  background: isRowSelected(record) ? "#e8f0fe" : undefined,
+                  background: isRowSelected(record)
+                    ? resolvedSelected || "#e8f0fe"
+                    : hoveredIndex === index && resolvedHover
+                      ? resolvedHover
+                      : undefined,
                   outline: isRowSelected(record) ? "1px solid #4A90D9" : undefined,
                 }}
               >

@@ -15,7 +15,8 @@ import {
   type RuntimeFormState,
 } from "../runtime-session-client";
 import { registerFormUpdateFlusher } from "../formula/form-update-flush";
-import { fillParentStyle, relativeContainerStyle } from "../utils/control-layout";
+import { fillParentStyle, relativeContainerStyle, resolveDisplayMode } from "../utils/control-layout";
+import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
 import type { ControlPackage } from "../runtime-types";
 
 function readItemFormula(property: unknown): string {
@@ -87,6 +88,8 @@ export const Form: React.FC<{
   readOnly?: boolean;
   layout?: unknown;
   columns?: unknown;
+  displayMode?: unknown;
+  tooltip?: unknown;
 }> = ({
   name,
   controlId,
@@ -97,6 +100,8 @@ export const Form: React.FC<{
   readOnly = false,
   layout,
   columns,
+  displayMode,
+  tooltip,
 }) => {
   const engine = useFormulaEngine();
   const context = useFormulaEvaluationContext();
@@ -122,7 +127,10 @@ export const Form: React.FC<{
   const formMode = sessionMode ?? packageMode;
   const identityKey = recordIdentityKey(record, formMode);
   const isEditLike = formMode === "Edit" || formMode === "New";
-  const isReadOnly = readOnly || disabled || formMode === "View";
+  const chromeMode = resolveDisplayMode(displayMode);
+  const resolvedTooltip = useResolvedPropertyText(tooltip);
+  const isReadOnly =
+    readOnly || disabled || formMode === "View" || chromeMode === "View" || chromeMode === "Disabled";
   const hasSession = Boolean(sessionId && appId && controlId && !runtimeUnavailable);
 
   const applySessionState = useCallback(
@@ -430,7 +438,7 @@ export const Form: React.FC<{
       ) : null}
       {templateControls.length > 0
         ? children
-        : Object.entries(record).map(([field, value]) => (
+        : Object.entries(record ?? {}).map(([field, value]) => (
             <div key={field} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <span style={{ fontSize: 12, fontWeight: 600 }}>{field}</span>
               <span>{stringifyFieldValue(value)}</span>
@@ -442,7 +450,7 @@ export const Form: React.FC<{
   return (
     <FormEditContext.Provider value={editContextValue}>
       <FormItemProvider item={resolvedRecord}>
-        <div style={{ ...fillParentStyle(), overflow: "auto" }}>{formBody}</div>
+        <div title={resolvedTooltip || undefined} style={{ ...fillParentStyle(), overflow: "auto" }}>{formBody}</div>
       </FormItemProvider>
     </FormEditContext.Provider>
   );

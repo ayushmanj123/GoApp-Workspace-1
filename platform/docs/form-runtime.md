@@ -161,6 +161,8 @@ The React Form shows a **status banner** when `runtimeUnavailable` or when there
 2. Optional seed sample entity rows so galleries are non-empty after seed.
 3. Card-level Update property evaluation when product needs Patch-from-card parity.
 
+- Form **DisplayMode** (Edit / View / Disabled) cascades read-only with the existing mode. **OnReset** runs after a successful `ResetForm`.
+
 ## Related docs
 
 - [Gallery Runtime](./gallery-runtime.md)

@@ -2,6 +2,8 @@ package records
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -24,10 +26,16 @@ func (f *fakeSchemaRepo) GetEntitySchema(_ context.Context, tenantID, entityID u
 type fakeRecordRepo struct {
 	mu      sync.Mutex
 	records map[uuid.UUID]EntityRecord
+	links   map[string]struct{} // key: rel|left|right
+	rels    map[uuid.UUID][2]uuid.UUID
 }
 
 func newFakeRecordRepo() *fakeRecordRepo {
-	return &fakeRecordRepo{records: map[uuid.UUID]EntityRecord{}}
+	return &fakeRecordRepo{
+		records: map[uuid.UUID]EntityRecord{},
+		links:   map[string]struct{}{},
+		rels:    map[uuid.UUID][2]uuid.UUID{},
+	}
 }
 
 func (f *fakeRecordRepo) Create(_ context.Context, record *EntityRecord) error {
@@ -99,6 +107,114 @@ func (f *fakeRecordRepo) SoftDelete(_ context.Context, tenantID, entityID, recor
 	record.DeletedBy = &userID
 	f.records[recordID] = record
 	return nil
+}
+
+func valuesEqual(a, b interface{}) bool {
+	return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
+}
+
+func (f *fakeRecordRepo) ExistsWithFieldValue(_ context.Context, tenantID, entityID uuid.UUID, fieldName string, value interface{}, excludeRecordID *uuid.UUID) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, record := range f.records {
+		if record.TenantID != tenantID || record.EntityID != entityID || record.DeletedOn != nil {
+			continue
+		}
+		if excludeRecordID != nil && record.ID == *excludeRecordID {
+			continue
+		}
+		if valuesEqual(record.Data[fieldName], value) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (f *fakeRecordRepo) ExistsWithKeyValues(_ context.Context, tenantID, entityID uuid.UUID, fieldNames []string, data map[string]interface{}, excludeRecordID *uuid.UUID) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, record := range f.records {
+		if record.TenantID != tenantID || record.EntityID != entityID || record.DeletedOn != nil {
+			continue
+		}
+		if excludeRecordID != nil && record.ID == *excludeRecordID {
+			continue
+		}
+		match := true
+		for _, name := range fieldNames {
+			if !valuesEqual(record.Data[name], data[name]) {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func linkKey(rel, left, right uuid.UUID) string {
+	return rel.String() + "|" + left.String() + "|" + right.String()
+}
+
+func (f *fakeRecordRepo) AssociateLinks(_ context.Context, tenantID, relationshipID, leftID, rightID, _ uuid.UUID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.links[linkKey(relationshipID, leftID, rightID)] = struct{}{}
+	_ = tenantID
+	return nil
+}
+
+func (f *fakeRecordRepo) DisassociateLinks(_ context.Context, tenantID, relationshipID, leftID, rightID, _ uuid.UUID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.links, linkKey(relationshipID, leftID, rightID))
+	_ = tenantID
+	return nil
+}
+
+func (f *fakeRecordRepo) ListLinkedRecordIDs(_ context.Context, tenantID, relationshipID, recordID uuid.UUID, fromLeft bool) ([]uuid.UUID, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	_ = tenantID
+	out := []uuid.UUID{}
+	prefix := relationshipID.String() + "|"
+	for k := range f.links {
+		if !strings.HasPrefix(k, prefix) {
+			continue
+		}
+		parts := strings.Split(k, "|")
+		if len(parts) != 3 {
+			continue
+		}
+		left, _ := uuid.Parse(parts[1])
+		right, _ := uuid.Parse(parts[2])
+		if fromLeft && left == recordID {
+			out = append(out, right)
+		}
+		if !fromLeft && right == recordID {
+			out = append(out, left)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeRecordRepo) RelationshipExists(_ context.Context, tenantID, relationshipID uuid.UUID) (bool, uuid.UUID, uuid.UUID, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	_ = tenantID
+	ends, ok := f.rels[relationshipID]
+	if !ok {
+		return false, uuid.Nil, uuid.Nil, nil
+	}
+	return true, ends[0], ends[1], nil
+}
+
+func (f *fakeRecordRepo) registerRel(id, left, right uuid.UUID) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.rels[id] = [2]uuid.UUID{left, right}
 }
 
 func testSchema(entityID, tenantID uuid.UUID) *EntitySchema {
@@ -302,3 +418,115 @@ func TestServiceListFilterPaging(t *testing.T) {
 		t.Fatalf("unexpected item: %#v", items[0].Data)
 	}
 }
+
+func TestServiceUniquenessAndAlternateKey(t *testing.T) {
+	tenantID := uuid.New()
+	userID := uuid.New()
+	entityID := uuid.New()
+	schema := &EntitySchema{
+		EntityID: entityID,
+		TenantID: tenantID,
+		Name:     "account",
+		Fields: []FieldSchema{
+			{Name: "email", FieldType: "email", IsRequired: true, IsUnique: true},
+			{Name: "code", FieldType: "text", IsRequired: true},
+		},
+		Keys: []EntityKeySchema{{Name: "ak_code", FieldNames: []string{"code"}}},
+	}
+	schemaRepo := &fakeSchemaRepo{schemas: map[uuid.UUID]*EntitySchema{entityID: schema}}
+	repo := newFakeRecordRepo()
+	svc := NewService(repo, schemaRepo)
+	ctx := context.Background()
+
+	_, err := svc.Create(ctx, tenantID, userID, entityID, map[string]interface{}{
+		"email": "a@example.com",
+		"code":  "C1",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	_, err = svc.Create(ctx, tenantID, userID, entityID, map[string]interface{}{
+		"email": "a@example.com",
+		"code":  "C2",
+	})
+	var validationErr *ValidationError
+	if !asValidation(err, &validationErr) || validationErr.Field != "email" {
+		t.Fatalf("expected unique email conflict, got %v", err)
+	}
+
+	_, err = svc.Create(ctx, tenantID, userID, entityID, map[string]interface{}{
+		"email": "b@example.com",
+		"code":  "C1",
+	})
+	if !asValidation(err, &validationErr) || validationErr.Field != "ak_code" {
+		t.Fatalf("expected alternate key conflict, got %v", err)
+	}
+}
+
+func TestServiceImportCSVDryRun(t *testing.T) {
+	tenantID := uuid.New()
+	userID := uuid.New()
+	entityID := uuid.New()
+	schemaRepo := &fakeSchemaRepo{schemas: map[uuid.UUID]*EntitySchema{
+		entityID: testSchema(entityID, tenantID),
+	}}
+	repo := newFakeRecordRepo()
+	svc := NewService(repo, schemaRepo)
+	ctx := context.Background()
+
+	csvBody := "Name,Age\nAlice,30\n,bad\n"
+	result, err := svc.ImportCSV(ctx, tenantID, userID, entityID, strings.NewReader(csvBody), map[string]string{
+		"Name": "name",
+		"Age":  "age",
+	}, true)
+	if err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if !result.DryRun {
+		t.Fatal("expected dry run")
+	}
+	if result.Created < 1 {
+		t.Fatalf("expected at least one ok row, got %+v", result)
+	}
+	if result.Failed < 1 {
+		t.Fatalf("expected at least one failed row, got %+v", result)
+	}
+	if len(repo.records) != 0 {
+		t.Fatalf("dry run must not persist records, got %d", len(repo.records))
+	}
+}
+
+func TestServiceAssociateDisassociate(t *testing.T) {
+	tenantID := uuid.New()
+	userID := uuid.New()
+	relID := uuid.New()
+	leftID := uuid.New()
+	rightID := uuid.New()
+	repo := newFakeRecordRepo()
+	repo.registerRel(relID, uuid.New(), uuid.New())
+	svc := NewService(repo, &fakeSchemaRepo{schemas: map[uuid.UUID]*EntitySchema{}})
+	ctx := context.Background()
+
+	if err := svc.Associate(ctx, tenantID, userID, relID, leftID, rightID); err != nil {
+		t.Fatalf("associate: %v", err)
+	}
+	ids, err := svc.ListRelated(ctx, tenantID, relID, leftID, true)
+	if err != nil {
+		t.Fatalf("listRelated: %v", err)
+	}
+	if len(ids) != 1 || ids[0] != rightID {
+		t.Fatalf("unexpected related: %#v", ids)
+	}
+	if err := svc.Disassociate(ctx, tenantID, userID, relID, leftID, rightID); err != nil {
+		t.Fatalf("disassociate: %v", err)
+	}
+	ids, err = svc.ListRelated(ctx, tenantID, relID, leftID, true)
+	if err != nil {
+		t.Fatalf("listRelated after: %v", err)
+	}
+	if len(ids) != 0 {
+		t.Fatalf("expected no links, got %#v", ids)
+	}
+}
+

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   useFormulaEngine,
   useFormulaEvaluationContext,
@@ -70,6 +70,8 @@ export const Timer: React.FC<any> = ({
   autoStart,
   start,
   repeat,
+  onTimerStart,
+  autoPause,
   controlName,
   name,
   disabled = false,
@@ -102,15 +104,26 @@ export const Timer: React.FC<any> = ({
 
   const durationMs = readDuration(duration);
   const formula = readActionFormula(onTimerEnd);
+  const startFormula = readActionFormula(onTimerStart);
   const autoStartEnabled = readBoolean(autoStart, true);
   const startEnabled = readBoolean(start, true);
   const repeatEnabled = readBoolean(repeat, false);
+  const autoPauseEnabled = readBoolean(autoPause, false);
+  const [pageVisible, setPageVisible] = useState(true);
+  useEffect(() => {
+    if (!autoPauseEnabled) return;
+    const onVisibility = () => setPageVisible(document.visibilityState !== "hidden");
+    document.addEventListener("visibilitychange", onVisibility);
+    onVisibility();
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [autoPauseEnabled]);
   const isRunning =
     !disabled &&
     startEnabled &&
     (autoStartEnabled || startEnabled) &&
+    (!autoPauseEnabled || pageVisible) &&
     durationMs > 0 &&
-    Boolean(formula);
+    Boolean(formula || startFormula);
 
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -168,8 +181,44 @@ export const Timer: React.FC<any> = ({
       });
     };
 
+    const runTimerStart = () => {
+      if (!startFormula) return;
+      const actionServices = {
+        store,
+        screenContextStore,
+        collectionStore,
+        formUpdatesStore,
+        recordStore,
+        controls,
+        gallerySelectionStore,
+        navigationStore,
+        resolveScreenId,
+        engine,
+        context,
+        session:
+          sessionId && appId && currentScreenName && !runtimeUnavailable
+            ? { appId, sessionId, screen: currentScreenName }
+            : undefined,
+        entityNames: [
+          ...(pkg?.entities?.map((entity) => entity.name) ?? []),
+          ...(pkg?.connectors?.map((connector) => connector.name) ?? []),
+        ],
+        navigateFromServer: navigateFromServer ?? undefined,
+        bumpGalleryRefresh,
+      };
+      const run = actionServices.session
+        ? executeRuntimeAction(
+            { formula: startFormula, controlName: resolvedControlName, event: "OnTimerStart" },
+            actionServices,
+          )
+        : executeAction({ formula: startFormula }, actionServices);
+      void run.catch((err) => console.error("[Timer Error]", err));
+    };
+
     const schedule = () => {
       clearScheduled();
+      runTimerStart();
+      if (!formula) return;
       timeoutRef.current = setTimeout(() => {
         timeoutRef.current = null;
         runTimerEnd();
@@ -187,6 +236,7 @@ export const Timer: React.FC<any> = ({
   }, [
     isRunning,
     formula,
+    startFormula,
     durationMs,
     repeatEnabled,
     startEnabled,

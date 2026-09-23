@@ -1,4 +1,6 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
+import { chainFocus, useControlChrome } from "../hooks/use-control-chrome";
+import { readBooleanProperty } from "../utils/appearance-style";
 import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
 import { useParentItemDefault } from "../hooks/use-parent-item-default";
 import { useFormEditContext } from "../form-edit-context";
@@ -66,20 +68,23 @@ const selectChrome: React.CSSProperties = {
   background: "#fff",
 };
 
-export const Dropdown: React.FC<any> = ({
-  items,
-  default: defaultProperty,
-  value,
-  displayField,
-  valueField,
-  disabled = false,
-  readOnly = false,
-  onChange,
-  tooltip,
-  controlName,
-  name,
-  id,
-}) => {
+export const Dropdown: React.FC<any> = (props) => {
+  const {
+    items,
+    default: defaultProperty,
+    value,
+    displayField,
+    valueField,
+    disabled = false,
+    readOnly = false,
+    onChange,
+    tooltip,
+    controlName,
+    name,
+    id,
+    allowEmptySelection,
+    isSearchable,
+  } = props;
   const formEdit = useFormEditContext();
   const controlValueStore = useControlValueStore();
   const records = useResolvedGalleryRecords(items);
@@ -89,6 +94,19 @@ export const Dropdown: React.FC<any> = ({
     () => toDropdownOptions(records, resolvedDisplayField, resolvedValueField),
     [records, resolvedDisplayField, resolvedValueField],
   );
+  const allowEmpty = readBooleanProperty(allowEmptySelection, false);
+  const searchable = readBooleanProperty(isSearchable, false);
+  const [query, setQuery] = useState("");
+  const visibleOptions = useMemo(() => {
+    const base = allowEmpty ? [{ value: "", label: "" }, ...options] : options;
+    const q = query.trim().toLowerCase();
+    if (!searchable || !q) return base;
+    return base.filter(
+      (option) =>
+        option.label.toLowerCase().includes(q) || option.value.toLowerCase().includes(q),
+    );
+  }, [allowEmpty, options, query, searchable]);
+  const chrome = useControlChrome(props, { disabled: Boolean(disabled), includeText: true });
   const defaultFormula = readPropertyFormula(defaultProperty);
   const bindingField = defaultFormula ? parseParentItemField(defaultFormula) : null;
   const usesDefaultBinding = Boolean(bindingField && defaultProperty);
@@ -104,6 +122,7 @@ export const Dropdown: React.FC<any> = ({
     useEditableControlValue(externalValue, {
       recordKey: formEdit?.recordKey ?? null,
     });
+  const focus = chainFocus(chrome, onFocus, onBlur);
 
   const handleChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
     if (isLocked) return;
@@ -118,7 +137,7 @@ export const Dropdown: React.FC<any> = ({
     await runOnChange();
   };
 
-  return (
+  const select = (
     <select
       id={id}
       data-testid={resolvedControlName ? `dropdown-${resolvedControlName}` : undefined}
@@ -126,17 +145,35 @@ export const Dropdown: React.FC<any> = ({
       title={resolvedTooltip || undefined}
       disabled={isLocked}
       aria-readonly={isLocked || undefined}
-      onFocus={onFocus}
-      onBlur={onBlur}
+      tabIndex={chrome.tabIndex}
+      onFocus={focus.onFocus}
+      onBlur={focus.onBlur}
+      onMouseEnter={chrome.handlers.onMouseEnter}
+      onMouseLeave={chrome.handlers.onMouseLeave}
       onChange={handleChange}
-      style={selectChrome}
+      style={{ ...selectChrome, ...chrome.style }}
     >
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
+      {visibleOptions.map((opt) => (
+        <option key={`${opt.value}:${opt.label}`} value={opt.value}>
           {opt.label}
         </option>
       ))}
     </select>
+  );
+
+  if (!searchable) return select;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100%", gap: 4 }}>
+      <input
+        aria-label="Search"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Search"
+        style={{ ...selectChrome, height: 28, minHeight: 28 }}
+      />
+      {select}
+    </div>
   );
 };
 export default Dropdown;

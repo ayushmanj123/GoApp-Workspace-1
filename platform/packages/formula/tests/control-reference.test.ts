@@ -30,8 +30,10 @@ function buildContext(controls = CONTROLS) {
 describe("buildControlFormulaSymbols", () => {
   it("maps TextInput1.Value and Label1.Text", () => {
     const symbols = buildControlFormulaSymbols(CONTROLS);
-    assert.deepEqual(symbols.TextInput1, { Value: "Hello" });
-    assert.deepEqual(symbols.Label1, { Text: "Approved" });
+    assert.equal(symbols.TextInput1.Value, "Hello");
+    assert.equal(symbols.Label1.Text, "Approved");
+    assert.equal(symbols.Label1.Visible, "true");
+    assert.ok("X" in symbols.Label1);
   });
 });
 

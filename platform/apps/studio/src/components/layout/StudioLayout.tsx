@@ -9,6 +9,8 @@ import { ExplorerPanel } from "./ExplorerPanel";
 import { DataPanel } from "./DataPanel";
 import { CanvasPanel } from "../canvas/CanvasPanel";
 import { PropertyPanel } from "./PropertyPanel";
+import { VariablesPanel } from "./VariablesPanel";
+import { FormulaHintSync } from "../formula/FormulaHintSync";
 import { ToolsFooter } from "./ToolsFooter";
 import { CommandPalette } from "./CommandPalette";
 import { RuntimePreviewModal } from "../preview/RuntimePreviewModal";
@@ -89,7 +91,13 @@ export function StudioLayout() {
                     .filter(Boolean)
                     .join(" ")}
                 >
-                  {activeNavItem === "data" ? <DataPanel /> : <ExplorerPanel />}
+                  {activeNavItem === "data" ? (
+                    <DataPanel />
+                  ) : activeNavItem === "variables" ? (
+                    <VariablesPanel />
+                  ) : (
+                    <ExplorerPanel />
+                  )}
                 </div>
               </div>
             </Allotment.Pane>
@@ -110,6 +118,7 @@ export function StudioLayout() {
         )}
       </div>
 
+      <FormulaHintSync />
       {!isLibraryView && <ToolsFooter />}
       <CommandPalette />
       <RuntimePreviewModal

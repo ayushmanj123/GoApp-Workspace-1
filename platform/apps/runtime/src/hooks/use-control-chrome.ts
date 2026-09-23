@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
-import { useResolvedPropertyText } from "./use-resolved-property-text";
+import {
+  useResolvedNumber,
+  useResolvedPropertyText,
+} from "./use-resolved-property-text";
 import {
   appearanceCss,
-  readOptionalNumber,
   resolveInteractionStyle,
 } from "../utils/appearance-style";
 
@@ -26,6 +28,12 @@ export function useControlChrome(
     source.focusedBorderColor ?? source.FocusedBorderColor,
     "",
   );
+  const borderThickness = useResolvedNumber(source.borderThickness ?? source.BorderThickness);
+  const radius = useResolvedNumber(source.radius ?? source.Radius);
+  const padding = useResolvedNumber(source.padding ?? source.Padding);
+  const opacity = useResolvedNumber(source.opacity ?? source.Opacity);
+  const size = useResolvedNumber(source.size ?? source.Size);
+  const tabIndex = useResolvedNumber(source.tabIndex ?? source.TabIndex);
 
   const disabled = Boolean(options?.disabled);
   const includeText = options?.includeText !== false;
@@ -42,7 +50,18 @@ export function useControlChrome(
       pressedColor,
       focusedBorderColor,
     };
-    const base = appearanceCss(colors, source, { includeText });
+    const base = appearanceCss(
+      colors,
+      {
+        ...source,
+        borderThickness,
+        radius,
+        padding,
+        opacity,
+        size,
+      },
+      { includeText },
+    );
     return resolveInteractionStyle(base, colors, { hover, pressed, focused, disabled });
   }, [
     fill,
@@ -55,14 +74,17 @@ export function useControlChrome(
     pressedColor,
     focusedBorderColor,
     source,
+    borderThickness,
+    radius,
+    padding,
+    opacity,
+    size,
     includeText,
     hover,
     pressed,
     focused,
     disabled,
   ]);
-
-  const tabIndex = readOptionalNumber(source.tabIndex ?? source.TabIndex);
 
   const handlers = {
     onMouseEnter: () => setHover(true),

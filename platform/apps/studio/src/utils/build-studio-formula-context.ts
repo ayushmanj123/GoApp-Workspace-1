@@ -11,6 +11,10 @@ export function buildStudioFormulaContext(
     name: control.name,
     control_type: control.control_type,
     properties: control.properties,
+    x: control.x,
+    y: control.y,
+    width: control.width,
+    height: control.height,
   }));
 
   return buildFormulaRuntimeContext(

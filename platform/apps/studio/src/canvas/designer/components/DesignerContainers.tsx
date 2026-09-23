@@ -1,6 +1,29 @@
 import type { ReactNode } from "react";
 import type { ControlPackage } from "../../../../../runtime/src/runtime-types";
 import type { Control } from "../../../api/controls-api";
+import { designerMetric } from "../designer-formula-cache";
+
+function layoutStyle(control: {
+  id?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+}) {
+  const box = {
+    id: control.id ?? "",
+    x: control.x ?? 0,
+    y: control.y ?? 0,
+    width: control.width ?? 0,
+    height: control.height ?? 0,
+  };
+  return {
+    left: designerMetric(box, "x"),
+    top: designerMetric(box, "y"),
+    width: designerMetric(box, "width"),
+    height: designerMetric(box, "height"),
+  };
+}
 
 const boxStyle: React.CSSProperties = {
   width: "100%",
@@ -95,10 +118,7 @@ export function DesignerGallery({
                 key={`${index}-${control.id}`}
                 style={{
                   position: "absolute",
-                  left: control.x,
-                  top: control.y,
-                  width: control.width,
-                  height: control.height,
+                  ...layoutStyle(control),
                 }}
               >
                 {renderChild ? renderChild(control as Control) : null}
@@ -239,10 +259,7 @@ export function DesignerForm({
               key={control.id}
               style={{
                 position: "absolute",
-                left: control.x,
-                top: control.y,
-                width: control.width,
-                height: control.height,
+                ...layoutStyle(control),
               }}
             >
               {renderChild ? renderChild(control as Control) : null}
@@ -301,10 +318,7 @@ export function DesignerDataCard({
             key={control.id}
             style={{
               position: "absolute",
-              left: control.x,
-              top: control.y,
-              width: control.width,
-              height: control.height,
+              ...layoutStyle(control),
             }}
           >
             {renderChild ? renderChild(control as Control) : null}
@@ -338,10 +352,7 @@ export function DesignerComponent({
           key={control.id}
           style={{
             position: "absolute",
-            left: control.x,
-            top: control.y,
-            width: control.width,
-            height: control.height,
+            ...layoutStyle(control),
           }}
         >
           {renderChild ? renderChild(control as Control) : null}
@@ -396,8 +407,8 @@ export function DesignerContainer({
               key={control.id}
               style={{
                 position: "relative",
-                width: control.width > 0 ? control.width : undefined,
-                height: control.height > 0 ? control.height : undefined,
+                width: layoutStyle(control).width > 0 ? layoutStyle(control).width : undefined,
+                height: layoutStyle(control).height > 0 ? layoutStyle(control).height : undefined,
                 flexShrink: 0,
                 boxSizing: "border-box",
               }}

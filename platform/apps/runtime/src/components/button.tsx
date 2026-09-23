@@ -1,5 +1,8 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
+import {
+  useResolvedBoolean,
+  useResolvedPropertyText,
+} from "../hooks/use-resolved-property-text";
 import { useControlChrome } from "../hooks/use-control-chrome";
 import { readBooleanProperty } from "../utils/appearance-style";
 import { iconGlyph } from "../utils/icon-glyphs";
@@ -50,6 +53,7 @@ export const Button: React.FC<any> = (props) => {
     autoDisableOnSelect,
     icon,
   } = props;
+  const resolvedDisabled = useResolvedBoolean(disabled, false);
   const label = useResolvedPropertyText(text, "Button");
   const resolvedTooltip = useResolvedPropertyText(tooltip);
   const resolvedIcon = useResolvedPropertyText(icon, "");
@@ -57,7 +61,7 @@ export const Button: React.FC<any> = (props) => {
   const autoDisable = readBooleanProperty(autoDisableOnSelect, false);
   const [pendingDisable, setPendingDisable] = useState(false);
   const chrome = useControlChrome(props, {
-    disabled: Boolean(disabled || pendingDisable),
+    disabled: resolvedDisabled || pendingDisable,
     includeText: true,
   });
   const engine = useFormulaEngine();
@@ -161,7 +165,7 @@ export const Button: React.FC<any> = (props) => {
 
   return (
     <button
-      disabled={disabled || pendingDisable}
+      disabled={resolvedDisabled || pendingDisable}
       title={resolvedTooltip || undefined}
       tabIndex={chrome.tabIndex}
       onClick={handleClick}

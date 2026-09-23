@@ -20,7 +20,10 @@ function hydrateFromSnapshot(
   variableStore: RuntimeVariableStore,
   collectionStore: RuntimeCollectionStore,
 ): void {
-  variableStore.replaceAll(snapshot.globalVariables ?? {});
+  variableStore.replaceAll({
+    ...variableStore.getAll(),
+    ...(snapshot.globalVariables ?? {}),
+  });
   collectionStore.replaceAll(snapshot.collections ?? {});
 }
 
@@ -55,9 +58,6 @@ export async function hydrateSessionContext(
   const snapshot = await fetchRuntimeStateSnapshot(input.appId, input.sessionId);
   if (snapshot) {
     hydrateFromSnapshot(snapshot, input.variableStore, input.collectionStore);
-  } else {
-    input.variableStore.replaceAll({});
-    input.collectionStore.replaceAll({});
   }
   await hydrateEntityCollections(input);
 }

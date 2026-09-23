@@ -92,9 +92,6 @@ func (v *valueEvaluator) evaluate(rtCtx *RuntimeFormulaContext, expression strin
 	}
 
 	if identifierPattern.MatchString(expression) {
-		if value, ok := lookupOverlay(rtCtx, expression); ok {
-			return value, nil
-		}
 		if value, ok := rtCtx.State.GetVariable(expression); ok {
 			return value, nil
 		}
@@ -105,30 +102,23 @@ func (v *valueEvaluator) evaluate(rtCtx *RuntimeFormulaContext, expression strin
 		if value, ok := rtCtx.State.GetContext(screen, expression); ok {
 			return value, nil
 		}
+		if value, ok := lookupOverlay(rtCtx, expression); ok {
+			return value, nil
+		}
 		if items, ok := queryEntityTable(rtCtx, expression); ok {
 			return items, nil
 		}
 		return nil, newFormulaError("RUNTIME_ERROR", "unknown variable: "+expression, nil)
 	}
 
-	if referencePattern.MatchString(expression) {
-		if rtCtx.Forms != nil {
-			if value, ok := rtCtx.Forms.ResolveReference(expression); ok {
-				return value, nil
-			}
-		}
-		if rtCtx.Gallery != nil {
-			if value, ok := rtCtx.Gallery.ResolveReference(expression); ok {
-				return value, nil
-			}
-		}
-		return nil, newFormulaError("RUNTIME_ERROR", "unknown reference: "+expression, nil)
-	}
-
 	if strings.Contains(expression, ".") {
 		if value, err := v.evaluateDottedPath(rtCtx, expression); err == nil {
 			return value, nil
 		}
+	}
+
+	if referencePattern.MatchString(expression) {
+		return nil, newFormulaError("RUNTIME_ERROR", "unknown reference: "+expression, nil)
 	}
 
 	if value, ok, err := v.evaluateComparison(rtCtx, expression); ok {

@@ -20,7 +20,12 @@ export interface PropertyFieldDefinition {
 
 export function supportsFormulaMode(definition: PropertyFieldDefinition): boolean {
 
-  return definition.type === "text" || definition.type === "color";
+  return (
+    definition.type === "text" ||
+    definition.type === "color" ||
+    definition.type === "number" ||
+    definition.type === "boolean"
+  );
 
 }
 

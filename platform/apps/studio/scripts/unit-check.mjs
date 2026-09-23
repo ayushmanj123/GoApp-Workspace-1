@@ -221,4 +221,30 @@ assert.match(
   "Timer defaults must set repeat false",
 );
 
+const registryModeSrc = readFileSync(
+  path.join(root, "src/property-metadata/registry.ts"),
+  "utf8",
+);
+assert.match(
+  registryModeSrc,
+  /definition\.type === "number"/,
+  "number properties must support formula mode",
+);
+assert.match(
+  registryModeSrc,
+  /definition\.type === "boolean"/,
+  "boolean properties must support formula mode",
+);
+assert.match(propertyPanelSrc, /LayoutMetricRow/, "layout metrics must offer formula mode");
+assert.match(
+  readFileSync(path.join(root, "src/components/layout/StudioLayout.tsx"), "utf8"),
+  /VariablesPanel/,
+  "Variables nav must open the variables panel",
+);
+assert.match(
+  readFileSync(path.join(root, "src/components/formula/setup-monaco-formula.ts"), "utf8"),
+  /getFormulaHintSnapshot/,
+  "formula hints must read live controls and variables",
+);
+
 console.log("studio unit-check: PASS");

@@ -22,8 +22,9 @@ export async function resolvePropertyValue(
   fallback = "",
   context?: Record<string, unknown>,
 ): Promise<string> {
-  if (typeof property === "string") {
-    return property;
+  const scalar = readStaticValue(property);
+  if (scalar !== null) {
+    return scalar;
   }
 
   if (!property || typeof property !== "object") {
@@ -63,8 +64,9 @@ export function readStaticPropertyValue(
   property: unknown,
   fallback = "",
 ): string {
-  if (typeof property === "string") {
-    return property;
+  const scalar = readStaticValue(property);
+  if (scalar !== null) {
+    return scalar;
   }
 
   if (!property || typeof property !== "object") {

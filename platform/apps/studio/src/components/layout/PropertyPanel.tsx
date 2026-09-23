@@ -233,41 +233,6 @@ function MetadataPropRow({
     );
   }
 
-  if (type === "boolean") {
-    const checked = Boolean(readPropertyValue("boolean", value));
-    return (
-      <div className={styles.propRow}>
-        <label className={styles.propLabel}>{label}</label>
-        <input
-          className={styles.propInput}
-          type="checkbox"
-          aria-label={label}
-          checked={checked}
-          onChange={(event: ChangeEvent<HTMLInputElement>) =>
-            onChange(writePropertyValue("boolean", event.currentTarget.checked))
-          }
-        />
-      </div>
-    );
-  }
-
-  if (type === "number") {
-    const numeric = readPropertyValue("number", value);
-    return (
-      <PropRow
-        label={label}
-        type="number"
-        value={String(numeric)}
-        onChange={(nextValue) => {
-          const parsed = Number(nextValue);
-          if (Number.isFinite(parsed)) {
-            onChange(writePropertyValue("number", parsed));
-          }
-        }}
-      />
-    );
-  }
-
   if (mode === "formula" && formulaCapable) {
     const formula = readPropertyFormula(value);
     const summary = truncateFormula(formula);
@@ -318,6 +283,55 @@ function MetadataPropRow({
     );
   }
 
+  if (type === "boolean") {
+    const checked = Boolean(readPropertyValue("boolean", value));
+    return (
+      <div className={styles.propBlock}>
+        <div className={styles.propRow}>
+          <label className={styles.propLabel}>{label}</label>
+          <input
+            className={styles.propInput}
+            type="checkbox"
+            aria-label={label}
+            checked={checked}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              onChange(writePropertyValue("boolean", event.currentTarget.checked))
+            }
+          />
+        </div>
+        <PropertyModeSelector
+          definition={definition}
+          mode={mode}
+          onModeChange={handleModeChange}
+        />
+      </div>
+    );
+  }
+
+  if (type === "number") {
+    const numeric = readPropertyValue("number", value);
+    return (
+      <div className={styles.propBlock}>
+        <PropRow
+          label={label}
+          type="number"
+          value={String(numeric)}
+          onChange={(nextValue) => {
+            const parsed = Number(nextValue);
+            if (Number.isFinite(parsed)) {
+              onChange(writePropertyValue("number", parsed));
+            }
+          }}
+        />
+        <PropertyModeSelector
+          definition={definition}
+          mode={mode}
+          onModeChange={handleModeChange}
+        />
+      </div>
+    );
+  }
+
   const text = String(readPropertyValue(type, value));
 
   return (
@@ -337,6 +351,104 @@ function MetadataPropRow({
           onModeChange={handleModeChange}
         />
       )}
+    </div>
+  );
+}
+
+function LayoutMetricRow({
+  field,
+  label,
+  control,
+  evaluationContext,
+}: {
+  field: "x" | "y" | "width" | "height";
+  label: string;
+  control: Control;
+  evaluationContext: Record<string, unknown>;
+}) {
+  const updateControl = useApplicationStore((s) => s.updateControl);
+  const stored = control.properties?.[field];
+  const mode = getPropertyMode(stored);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const definition = { name: field, label, type: "number" as const };
+  const formula = readPropertyFormula(stored);
+
+  const writeStatic = (nextValue: string) => {
+    const parsed = Number(nextValue);
+    if (!Number.isFinite(parsed)) return;
+    const properties: Record<string, unknown> = { ...(control.properties ?? {}) };
+    properties[field] = null;
+    updateControl(control.id, { [field]: parsed, properties });
+  };
+
+  const writeFormula = (nextFormula: string) => {
+    updateControl(control.id, {
+      properties: {
+        ...(control.properties ?? {}),
+        [field]: writePropertyFormula(nextFormula),
+      },
+    });
+  };
+
+  if (mode === "formula") {
+    return (
+      <div className={styles.propBlock}>
+        <div className={styles.propRow}>
+          <span className={styles.propLabel}>{label}</span>
+          <span className={styles.formulaModeBadge}>Formula</span>
+        </div>
+        <div className={styles.formulaSummaryRow}>
+          <span className={styles.formulaSummary} title={formula || undefined}>
+            {truncateFormula(formula) || "(empty)"}
+          </span>
+        </div>
+        <PropertyModeSelector
+          definition={definition}
+          mode={mode}
+          onModeChange={(next) => {
+            if (next === "static") writeStatic(String(control[field] ?? 0));
+          }}
+        />
+        <div className={styles.formulaEditorRow}>
+          <button
+            type="button"
+            className={styles.formulaEditorBtn}
+            onClick={() => setEditorOpen(true)}
+          >
+            Edit formula
+          </button>
+        </div>
+        <FormulaEditorModal
+          open={editorOpen}
+          propertyLabel={label}
+          initialFormula={formula}
+          validationMode="expression"
+          evaluationContext={evaluationContext}
+          onSave={(nextFormula) => {
+            writeFormula(nextFormula);
+            setEditorOpen(false);
+          }}
+          onCancel={() => setEditorOpen(false)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.propBlock}>
+      <PropRow
+        label={label}
+        type="number"
+        value={String(control[field] ?? 0)}
+        onChange={writeStatic}
+      />
+      <PropertyModeSelector
+        definition={definition}
+        mode="static"
+        onModeChange={(next) => {
+          if (next === "formula") writeFormula(String(control[field] ?? 0));
+        }}
+      />
     </div>
   );
 }
@@ -549,25 +661,6 @@ export function PropertyPanel() {
     void loadSheetColumns(resolvedSheetsConnector.id);
   }, [resolvedSheetsConnector, loadSheetColumns]);
 
-  const updateNumericField = (
-    field: "x" | "y" | "width" | "height",
-    nextValue: string,
-  ) => {
-    if (!selectedControl) {
-      return;
-    }
-
-    const parsed = Number(nextValue);
-    if (!Number.isFinite(parsed)) {
-      return;
-    }
-
-    const next: Partial<Pick<Control, "x" | "y" | "width" | "height">> = {
-      [field]: parsed,
-    } as Partial<Pick<Control, "x" | "y" | "width" | "height">>;
-    updateControl(selectedControl.id, next);
-  };
-
   const updateName = (nextValue: string) => {
     if (!selectedControl) return;
     updateControl(selectedControl.id, { name: nextValue });
@@ -636,29 +729,29 @@ export function PropertyPanel() {
                       value={selectedControl.name}
                       onChange={updateName}
                     />
-                    <PropRow
+                    <LayoutMetricRow
+                      field="x"
                       label="X"
-                      type="number"
-                      value={String(selectedControl.x)}
-                      onChange={(value) => updateNumericField("x", value)}
+                      control={selectedControl}
+                      evaluationContext={evaluationContext}
                     />
-                    <PropRow
+                    <LayoutMetricRow
+                      field="y"
                       label="Y"
-                      type="number"
-                      value={String(selectedControl.y)}
-                      onChange={(value) => updateNumericField("y", value)}
+                      control={selectedControl}
+                      evaluationContext={evaluationContext}
                     />
-                    <PropRow
+                    <LayoutMetricRow
+                      field="width"
                       label="Width"
-                      type="number"
-                      value={String(selectedControl.width)}
-                      onChange={(value) => updateNumericField("width", value)}
+                      control={selectedControl}
+                      evaluationContext={evaluationContext}
                     />
-                    <PropRow
+                    <LayoutMetricRow
+                      field="height"
                       label="Height"
-                      type="number"
-                      value={String(selectedControl.height)}
-                      onChange={(value) => updateNumericField("height", value)}
+                      control={selectedControl}
+                      evaluationContext={evaluationContext}
                     />
                   </PropertyCard>
                   <PropertyCard title="Appearance">

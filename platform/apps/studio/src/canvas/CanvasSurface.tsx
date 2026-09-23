@@ -8,6 +8,7 @@ import { computeArtboardOffset, toScreenBounds } from "./CoordinateSystem";
 import { DesignerProvider } from "./designer/DesignerProvider";
 import { DesignerNodeRenderer } from "./designer/DesignerNodeRenderer";
 import { buildDesignerNodeRegistry } from "./designer/DesignerNodeRegistry";
+import { designerFormulaEntry, useDesignerFormulaSync } from "./designer/designer-formula-cache";
 import { useInteractionStore } from "./interaction/interactionStore";
 import { useCanvasEventRouter } from "./interaction/useCanvasEventRouter";
 import { hitTestContainerAtPoint } from "./interaction/HitTestService";
@@ -20,6 +21,7 @@ import styles from "../components/canvas/CanvasPanel.module.css";
 export function CanvasSurface() {
   const containerRef = useRef<HTMLDivElement>(null);
   const zoom = useStudioStore((s) => s.zoom);
+  const appName = useStudioStore((s) => s.appName);
   const setZoom = useStudioStore((s) => s.setZoom);
   const selectedScreenId = useApplicationStore((s) => s.selectedScreenId);
   const controls = useApplicationStore((s) => s.controls);
@@ -72,9 +74,10 @@ export function CanvasSurface() {
     [size.width, size.height, zoom],
   );
 
+  const formulaRevision = useDesignerFormulaSync(controls, appName);
   const designerNodes = useMemo(
     () => buildDesignerNodeRegistry(controls),
-    [controls],
+    [controls, formulaRevision],
   );
 
   const artboardPointFromClient = (clientX: number, clientY: number) => {
@@ -224,6 +227,7 @@ export function CanvasSurface() {
                 .slice()
                 .sort((a, b) => a.zIndex - b.zIndex || a.controlId.localeCompare(b.controlId));
               return htmlNodes.map((node) => {
+              if (designerFormulaEntry(node.controlId)?.visible === false) return null;
               const screen = toScreenBounds(node.absoluteBounds, offset, zoom);
               return (
                 <div

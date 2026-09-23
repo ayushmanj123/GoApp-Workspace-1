@@ -71,7 +71,7 @@ export function resolveDisplayMode(raw: unknown): DisplayMode | null {
   } else if (typeof raw === "object" && "value" in raw) {
     value = String((raw as { value?: unknown }).value ?? "").trim();
   } else if (typeof raw === "object" && "formula" in raw) {
-    value = String((raw as { formula?: unknown }).formula ?? "").trim();
+    return null;
   }
   if (!value) return null;
   const lower = value.toLowerCase();

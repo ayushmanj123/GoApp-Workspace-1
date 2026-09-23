@@ -7,13 +7,14 @@ import {
   isContainerType,
 } from "./DesignerNode";
 import { isControlLocked } from "../../utils/control-lock";
+import { designerMetric } from "./designer-formula-cache";
 
 function toBounds(control: Control): DesignerBounds {
   return {
-    x: control.x,
-    y: control.y,
-    width: Math.max(control.width, 1),
-    height: Math.max(control.height, 1),
+    x: designerMetric(control, "x"),
+    y: designerMetric(control, "y"),
+    width: Math.max(designerMetric(control, "width"), 1),
+    height: Math.max(designerMetric(control, "height"), 1),
   };
 }
 

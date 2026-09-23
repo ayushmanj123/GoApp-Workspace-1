@@ -5,9 +5,9 @@ import { LayoutControlFrame } from "./layout-control-frame";
 import {
   fillParentStyle,
   resolveControlLayout,
-  resolveDisplayMode,
 } from "./utils/control-layout";
 import { mergeFormulasIntoProps } from "./utils/merge-control-formulas";
+import { useResolvedPropertyBag } from "./hooks/use-resolved-property-bag";
 import { useFormEditContext } from "./form-edit-context";
 
 interface Props {
@@ -69,6 +69,12 @@ export const ControlRenderer: React.FC<Props> = ({
   inputId,
 }) => {
   const formEdit = useFormEditContext();
+  const resolvedProperties = useResolvedPropertyBag(
+    mergeFormulasIntoProps(
+      { ...((control as { properties?: Record<string, unknown> }).properties || {}) },
+      (control as { formulas?: Parameters<typeof mergeFormulasIntoProps>[1] }).formulas,
+    ),
+  );
   const rawType =
     (control as any).control_type || (control as any).controlType || "";
   const typeKey = resolveRegistryType(rawType);
@@ -90,20 +96,22 @@ export const ControlRenderer: React.FC<Props> = ({
     );
   }
 
-  const props = mergeFormulasIntoProps(
-    { ...((control as any).properties || {}) },
-    (control as any).formulas,
-  );
+  const props = { ...resolvedProperties };
 
-  // Prefer evaluated/merged DisplayMode over raw package property.
-  const mergedDisplayMode =
-    resolveDisplayMode(props.DisplayMode ?? props.displayMode) ??
-    resolveControlLayout(control).displayMode;
-  const layout = {
-    ...resolveControlLayout(control),
-    displayMode: mergedDisplayMode,
-    disabled: mergedDisplayMode === "Disabled",
+  const layoutSource = {
+    ...control,
+    properties: resolvedProperties,
   };
+  const layout = resolveControlLayout(layoutSource);
+  const disabledFlag = resolvedProperties.disabled ?? resolvedProperties.Disabled;
+  if (
+    layout.displayMode === "Disabled" ||
+    disabledFlag === true ||
+    disabledFlag === "true" ||
+    disabledFlag === 1
+  ) {
+    layout.disabled = true;
+  }
   if (!layout.visible) {
     return null;
   }
@@ -166,7 +174,11 @@ export const ControlRenderer: React.FC<Props> = ({
     return rendered;
   }
 
-  return <LayoutControlFrame control={control}>{rendered}</LayoutControlFrame>;
+  return (
+    <LayoutControlFrame control={control} layout={layout}>
+      {rendered}
+    </LayoutControlFrame>
+  );
 };
 
 export default ControlRenderer;

@@ -20,7 +20,10 @@ import {
   useFormUpdatesStore,
   useRecordStore,
 } from "./formula/formula-context";
-import { InMemoryVariableStore } from "./formula/runtime-variable-store";
+import {
+  defaultVariableStore,
+  InMemoryVariableStore,
+} from "./formula/runtime-variable-store";
 import { InMemoryScreenContextStore } from "./formula/runtime-screen-context-store";
 import { InMemoryCollectionStore } from "./formula/runtime-collection-store";
 import { InMemoryGallerySelectionStore } from "./formula/runtime-gallery-selection-store";
@@ -265,7 +268,7 @@ export const RuntimeProvider: React.FC<{
     setGalleryRefreshTick((value) => value + 1);
   }, []);
 
-  const variableStoreRef = useRef(new InMemoryVariableStore({}));
+  const variableStoreRef = useRef(new InMemoryVariableStore(defaultVariableStore.getAll()));
   const screenContextStoreRef = useRef(new InMemoryScreenContextStore());
   const collectionStoreRef = useRef(new InMemoryCollectionStore());
   const gallerySelectionStoreRef = useRef(new InMemoryGallerySelectionStore());

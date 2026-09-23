@@ -728,3 +728,34 @@ func TestUserFormula(t *testing.T) {
 		t.Fatalf("User.Email: %#v %v", email, err)
 	}
 }
+
+func TestOverlayVariableAndControlProperty(t *testing.T) {
+	evaluator := NewEvaluator()
+	rtCtx := testRuntimeContext(t)
+	rtCtx.Overlay = map[string]interface{}{
+		"varCount": 10,
+		"Button1":  map[string]interface{}{"Text": "Save", "Visible": "true"},
+		"App":      map[string]interface{}{"Name": "Sales Pipeline"},
+	}
+
+	count, err := evaluator.Evaluate(rtCtx, "varCount")
+	if err != nil || count != 10 {
+		t.Fatalf("overlay variable: %#v %v", count, err)
+	}
+
+	label, err := evaluator.Evaluate(rtCtx, "Button1.Text")
+	if err != nil || label != "Save" {
+		t.Fatalf("overlay control property: %#v %v", label, err)
+	}
+
+	appName, err := evaluator.Evaluate(rtCtx, "App.Name")
+	if err != nil || appName != "Sales Pipeline" {
+		t.Fatalf("overlay app name: %#v %v", appName, err)
+	}
+
+	rtCtx.State.SetVariable("varCount", 99)
+	updated, err := evaluator.Evaluate(rtCtx, "varCount")
+	if err != nil || updated != 99 {
+		t.Fatalf("session variable should win over overlay: %#v %v", updated, err)
+	}
+}

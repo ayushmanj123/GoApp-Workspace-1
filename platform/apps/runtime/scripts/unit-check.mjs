@@ -130,6 +130,43 @@ assert.doesNotMatch(
 const controlRenderer = readFileSync(path.join(root, "src/control-renderer.tsx"), "utf8");
 assert.match(controlRenderer, /props\.items = props\.items \?\? props\.Items/, "renderer must normalize Items");
 assert.match(controlRenderer, /controlId/, "DataTable/Gallery must receive controlId");
+assert.match(
+  controlRenderer,
+  /useResolvedPropertyBag/,
+  "renderer must evaluate value formulas before layout",
+);
+assert.match(
+  sessionClient,
+  /JSON\.stringify\(context\)/,
+  "session evaluate must send the full formula context",
+);
+const hydrate = readFileSync(
+  path.join(root, "src/formula/hydrate-session-context.ts"),
+  "utf8",
+);
+assert.match(
+  hydrate,
+  /variableStore\.getAll\(\)/,
+  "session hydrate must keep client variables such as varCount",
+);
+const displayFormula = readFileSync(
+  path.join(root, "src/formula/evaluate-display-formula.ts"),
+  "utf8",
+);
+assert.match(
+  displayFormula,
+  /evaluateDisplayFormula/,
+  "preview must evaluate property formulas with client context",
+);
+const propertyText = readFileSync(
+  path.join(root, "src/hooks/use-resolved-property-text.ts"),
+  "utf8",
+);
+assert.match(
+  propertyText,
+  /evaluateDisplayFormula/,
+  "text, number, and boolean properties must use display formula evaluation",
+);
 
 assert.match(provider, /galleryRefreshTick/, "runtime-provider must expose galleryRefreshTick");
 assert.match(provider, /bumpGalleryRefresh/, "runtime-provider must expose bumpGalleryRefresh");
@@ -155,7 +192,7 @@ assert.match(
 const button = readFileSync(path.join(root, "src/components/button.tsx"), "utf8");
 assert.match(
   button,
-  /disabled=\{disabled/,
+  /disabled=\{resolvedDisabled/,
   "Button must honor disabled from ControlRenderer DisplayMode cascade",
 );
 assert.match(

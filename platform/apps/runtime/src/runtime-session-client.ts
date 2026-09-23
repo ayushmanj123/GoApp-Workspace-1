@@ -19,21 +19,19 @@ export interface RuntimeStateSnapshot {
   collections: Record<string, unknown[]>;
 }
 
-const FORMULA_OVERLAY_KEYS = ["ThisItem", "Parent"] as const;
-
+/** JSON-safe copy of the client formula context sent with each session evaluation. */
 export function extractFormulaEvaluateOverlay(
   context?: Record<string, unknown>,
 ): Record<string, unknown> | undefined {
   if (!context) {
     return undefined;
   }
-  const overlay: Record<string, unknown> = {};
-  for (const key of FORMULA_OVERLAY_KEYS) {
-    if (context[key] !== undefined) {
-      overlay[key] = context[key];
-    }
+  try {
+    const cloned = JSON.parse(JSON.stringify(context)) as Record<string, unknown>;
+    return Object.keys(cloned).length > 0 ? cloned : undefined;
+  } catch {
+    return undefined;
   }
-  return Object.keys(overlay).length > 0 ? overlay : undefined;
 }
 
 function runtimeBaseUrl(): string {

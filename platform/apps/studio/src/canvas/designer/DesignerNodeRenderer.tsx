@@ -15,6 +15,7 @@ import { isGoogleSheetsConnector } from "../../utils/google-sheets-columns";
 import { renderStudioDesignerPreview } from "./register-designer-renderers";
 import styles from "../../components/canvas/StudioControlRenderer.module.css";
 import { useEffect } from "react";
+import { designerFormulaEntry } from "./designer-formula-cache";
 
 ensureStudioRegistry();
 
@@ -88,7 +89,10 @@ export function DesignerNodeRenderer({
     return <FallbackBox label={control.name || resolvedType} />;
   }
 
-  const props: Record<string, unknown> = { ...(control.properties ?? {}) };
+  const cached = designerFormulaEntry(control.id);
+  const props: Record<string, unknown> = {
+    ...(cached?.properties ?? control.properties ?? {}),
+  };
   props.controlName = control.name;
   props.selected = selected;
 

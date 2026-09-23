@@ -29,10 +29,4 @@ export const FORMULA_SUGGESTIONS = [
   "App",
   "ThisItem",
   "Parent",
-  "Gallery",
-  "Form",
-  "Gallery.Selected",
-  "varTitle",
-  "varCount",
-  "varStatus",
 ] as const;

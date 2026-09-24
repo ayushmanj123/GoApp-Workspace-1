@@ -257,4 +257,70 @@ public class PowerFxEvaluatorTests
             CustomersContext(new { Name = "John" }, new { Name = "Jane" }));
         Assert.Equal(1, Convert.ToDecimal(result));
     }
+
+    [Fact]
+    public void Evaluate_Abs_ReturnsPositive()
+    {
+        var result = _evaluator.Evaluate("Abs(-3)");
+        Assert.Equal(3, Convert.ToDecimal(result));
+    }
+
+    [Fact]
+    public void Evaluate_Upper_ReturnsUppercase()
+    {
+        var result = _evaluator.Evaluate("Upper(\"ab\")");
+        Assert.Equal("AB", result);
+    }
+
+    [Fact]
+    public void Evaluate_Year_Returns2024()
+    {
+        var result = _evaluator.Evaluate("Year(Date(2024, 5, 1))");
+        Assert.Equal(2024, Convert.ToDecimal(result));
+    }
+
+    [Fact]
+    public void Evaluate_And_ReturnsFalse()
+    {
+        var result = _evaluator.Evaluate("And(true, false)");
+        Assert.Equal(false, result);
+    }
+
+    [Fact]
+    public void Evaluate_ColorBlue_ReturnsHex()
+    {
+        var result = _evaluator.Evaluate("Color.Blue");
+        Assert.Equal("#0000FF", result);
+    }
+
+    [Fact]
+    public void Evaluate_SumFilter_ReturnsMatchingAmount()
+    {
+        var result = _evaluator.Evaluate(
+            "Sum(Filter(Customers, Amount > 1), Amount)",
+            Context(("Customers", new[]
+            {
+                new { Name = "A", Amount = 1 },
+                new { Name = "B", Amount = 2 },
+            })));
+        Assert.Equal(2, Convert.ToDecimal(result));
+    }
+
+    [Fact]
+    public void Evaluate_NullContextValue_IsSkipped()
+    {
+        var context = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+            "{\"Missing\":null}")!;
+        var result = _evaluator.Evaluate("1+1", context);
+        Assert.Equal(2, Convert.ToDecimal(result));
+    }
+
+    [Fact]
+    public void ListFunctions_IncludesStandardAndHostNames()
+    {
+        var names = _evaluator.ListFunctions();
+        Assert.Contains("Abs", names);
+        Assert.Contains("Notify", names);
+        Assert.Contains("ForAll", names);
+    }
 }

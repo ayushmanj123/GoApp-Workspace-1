@@ -32,8 +32,29 @@ describe("buildControlFormulaSymbols", () => {
     const symbols = buildControlFormulaSymbols(CONTROLS);
     assert.equal(symbols.TextInput1.Value, "Hello");
     assert.equal(symbols.Label1.Text, "Approved");
-    assert.equal(symbols.Label1.Visible, "true");
-    assert.ok("X" in symbols.Label1);
+    assert.equal(symbols.Label1.Visible, true);
+    assert.equal(symbols.Label1.X, 0);
+  });
+
+  it("publishes Slider.Value as a number and keeps text values as text", () => {
+    const symbols = buildControlFormulaSymbols([
+      {
+        name: "Slider",
+        control_type: "slider",
+        properties: { value: { value: "40" }, min: { value: 0 }, visible: { value: true } },
+        x: 12,
+      },
+      {
+        name: "TextInput2",
+        control_type: "textinput",
+        properties: { value: { value: "40" } },
+      },
+    ]);
+    assert.equal(symbols.Slider.Value, 40);
+    assert.equal(symbols.Slider.Min, 0);
+    assert.equal(symbols.Slider.X, 12);
+    assert.equal(symbols.Slider.Visible, true);
+    assert.equal(symbols.TextInput2.Value, "40");
   });
 });
 

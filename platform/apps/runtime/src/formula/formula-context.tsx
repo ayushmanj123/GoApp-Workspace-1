@@ -40,6 +40,7 @@ import {
   defaultControlValueStore,
   type RuntimeControlValueStore,
 } from "./runtime-control-value-store";
+import { componentOutputStore } from "./component-scope";
 import {
   defaultVariableStore,
   type RuntimeVariableStore,
@@ -47,9 +48,24 @@ import {
 import { executeSet } from "./execute-set";
 
 const FormulaContext = createContext<FormulaEngine | null>(null);
-const FormulaEvaluationContext = createContext<Record<string, unknown>>(
+export const FormulaEvaluationContext = createContext<Record<string, unknown>>(
   buildFormulaRuntimeContext(),
 );
+const ComponentScopeContext = createContext<Record<string, unknown> | null>(null);
+
+export function ComponentScopeProvider({
+  value,
+  children,
+}: {
+  value: Record<string, unknown>;
+  children: ReactNode;
+}) {
+  return (
+    <ComponentScopeContext.Provider value={value}>
+      {children}
+    </ComponentScopeContext.Provider>
+  );
+}
 const VariableStoreContext =
   createContext<RuntimeVariableStore>(defaultVariableStore);
 
@@ -142,6 +158,8 @@ export function FormulaProvider({
     return resolvedControlValueStore.subscribe(() => setContextVersion((v) => v + 1));
   }, [resolvedControlValueStore]);
 
+  useEffect(() => componentOutputStore.subscribe(() => setContextVersion((v) => v + 1)), []);
+
   useEffect(() => {
     void formulaEngine.initialize().catch((error) => {
       console.warn(
@@ -210,7 +228,12 @@ export function useFormulaEngine(): FormulaEngine {
 }
 
 export function useFormulaEvaluationContext(): Record<string, unknown> {
-  return useContext(FormulaEvaluationContext);
+  const base = useContext(FormulaEvaluationContext);
+  const scope = useContext(ComponentScopeContext);
+  return useMemo(
+    () => (scope ? { ...base, Component: scope } : base),
+    [base, scope],
+  );
 }
 
 /** Scopes formula evaluation to a single gallery row via ThisItem. */

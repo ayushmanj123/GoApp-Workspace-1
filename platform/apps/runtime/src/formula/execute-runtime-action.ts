@@ -5,6 +5,11 @@ import {
 } from "../runtime-session-client";
 import { hydrateSessionContext } from "./hydrate-session-context";
 import { executeAction, type ActionServices } from "./execute-action";
+import {
+  isClientHostStatement,
+  prepareHostArguments,
+  splitFormulaStatements,
+} from "./prepare-host-arguments";
 
 export interface RuntimeActionInput {
   formula: string;
@@ -73,16 +78,28 @@ export async function executeRuntimeAction(
 ): Promise<void> {
   const session = services.session;
   const formula = input.formula?.trim();
-  if (!session?.sessionId || !formula) {
-    await executeAction({ formula: input.formula }, services);
+  if (!formula) return;
+  const prepared = await prepareHostArguments(formula, services.context);
+  if (!session?.sessionId) {
+    await executeAction({ formula: prepared }, services);
     return;
   }
+
+  const remote = splitFormulaStatements(prepared).filter(
+    (statement) => !isClientHostStatement(statement),
+  );
+  for (const statement of splitFormulaStatements(prepared)) {
+    if (isClientHostStatement(statement)) {
+      await executeAction({ formula: statement }, services);
+    }
+  }
+  if (remote.length === 0) return;
 
   const response = await evaluateRuntimeFormula({
     appId: session.appId,
     sessionId: session.sessionId,
     screen: session.screen,
-    formula,
+    formula: remote.join("; "),
   });
   await applySessionSideEffects(
     session,

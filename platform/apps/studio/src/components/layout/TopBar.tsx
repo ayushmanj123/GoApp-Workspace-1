@@ -29,9 +29,11 @@ export function TopBar({
   const setZoom = useStudioStore((s) => s.setZoom);
   const setCommandPaletteOpen = useStudioStore((s) => s.setCommandPaletteOpen);
   const selectedScreenId = useApplicationStore((s) => s.selectedScreenId);
+  const editingDefinitionId = useApplicationStore((s) => s.editingDefinitionId);
   const controls = useApplicationStore((s) => s.controls);
   const setControls = useApplicationStore((s) => s.setControlsFromHistory);
   const saveScreen = useApplicationStore((s) => s.saveScreen);
+  const saveComponentDefinition = useApplicationStore((s) => s.saveComponentDefinition);
   const setSaving = useStudioStore((s) => s.setSaving);
   const setSaveMessage = useStudioStore((s) => s.setSaveMessage);
   const canUndo = useHistoryStore((s) => s.canUndo);
@@ -43,17 +45,27 @@ export function TopBar({
   const isComponents = location.pathname.startsWith("/studio/components");
 
   const handleSave = useCallback(async () => {
-    if (saving || !selectedScreenId) return;
+    if (saving || (!selectedScreenId && !editingDefinitionId)) return;
     setSaving(true);
     try {
-      const result = await saveScreen();
+      const result = editingDefinitionId
+        ? await saveComponentDefinition()
+        : await saveScreen();
       setSaveMessage(result.success ? "Changes saved" : "Save failed");
     } catch {
       setSaveMessage("Save failed");
     } finally {
       setSaving(false);
     }
-  }, [saving, selectedScreenId, saveScreen, setSaving, setSaveMessage]);
+  }, [
+    saving,
+    selectedScreenId,
+    editingDefinitionId,
+    saveScreen,
+    saveComponentDefinition,
+    setSaving,
+    setSaveMessage,
+  ]);
 
   const handlePublish = useCallback(async () => {
     if (!applicationId || publishing) return;

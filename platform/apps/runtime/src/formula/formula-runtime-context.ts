@@ -1,5 +1,7 @@
 import {
+  asFormulaTable,
   buildControlFormulaSymbols,
+  coerceControlSymbolFields,
   type FormulaControlContextInput,
 } from "@goapps/formula";
 import {
@@ -26,6 +28,7 @@ import {
   defaultControlValueStore,
   type RuntimeControlValueStore,
 } from "./runtime-control-value-store";
+import { mergeComponentOutputs } from "./component-scope";
 
 export const HARDCODED_USER = {
   FullName: "Test User",
@@ -42,14 +45,22 @@ function mergeControlSymbols(
   >;
   const live = controlValueStore.getSymbols();
 
+  const typeByName = new Map<string, string>();
+  for (const control of controls) {
+    const name = control.name?.trim();
+    if (name) typeByName.set(name, control.control_type);
+  }
+
   const merged: Record<string, unknown> = {};
   const names = new Set([...Object.keys(base), ...Object.keys(live)]);
 
   for (const name of names) {
-    merged[name] = {
+    const fields = {
       ...(base[name] ?? {}),
       ...(live[name] ?? {}),
     };
+    const controlType = typeByName.get(name);
+    merged[name] = controlType ? coerceControlSymbolFields(controlType, fields) : fields;
   }
 
   return merged;
@@ -65,16 +76,21 @@ export function buildFormulaRuntimeContext(
   formUpdatesStore: RuntimeFormUpdatesStore = defaultFormUpdatesStore,
   controlValueStore: RuntimeControlValueStore = defaultControlValueStore,
 ): Record<string, unknown> {
-  return {
+  return mergeComponentOutputs({
     User: { ...HARDCODED_USER },
     App: { Name: appName },
     ...mergeControlSymbols(controls, controlValueStore),
     ...variableStore.getAll(),
     ...screenContextStore.getAll(),
-    ...collectionStore.getAll(),
+    ...Object.fromEntries(
+      Object.entries(collectionStore.getAll()).map(([name, items]) => [
+        name,
+        asFormulaTable(items),
+      ]),
+    ),
     ...gallerySelectionStore.getAll(),
     ...formUpdatesStore.getAll(),
-  };
+  });
 }
 
 export type { FormulaControlContextInput };

@@ -5,8 +5,10 @@ import type { RuntimeGallerySelectionStore } from "./runtime-gallery-selection-s
 import type { RuntimeNavigationStore } from "./runtime-navigation-store";
 import type { RuntimeRecordStore } from "./runtime-record-store";
 import type { RuntimeScreenContextStore } from "./runtime-screen-context-store";
+import type { RuntimeControlValueStore } from "./runtime-control-value-store";
 import type { RuntimeVariableStore } from "./runtime-variable-store";
 import { executeClearCollect, executeCollect } from "./execute-collect";
+import { executeClientHost } from "./execute-host";
 import { executeNavigate } from "./execute-navigate";
 import { executeSet } from "./execute-set";
 import { executeSubmitForm, type SubmitFormControl } from "./execute-submit-form";
@@ -27,13 +29,16 @@ export interface ActionServices {
   resolveScreenId: (name: string) => string | undefined;
   engine: FormulaEngine;
   context: Record<string, unknown>;
+  controlValueStore?: RuntimeControlValueStore;
+  notify?: (message: string) => void;
+  runFormula?: (formula: string) => Promise<void>;
 }
 
 /**
  * Executes a runtime action formula.
  *
- * Supported:  Set(...), UpdateContext(...), Navigate(...), Collect(...), ClearCollect(...), SubmitForm(...)
- * Unsupported: anything else throws [Action Error]
+ * Supported host functions plus Set, UpdateContext, Navigate, Collect, ClearCollect, and SubmitForm.
+ * Unsupported formulas throw [Action Error].
  */
 export async function executeAction(
   action: RuntimeAction,
@@ -74,6 +79,11 @@ export async function executeAction(
       services.screenContextStore,
       services.gallerySelectionStore,
     );
+    return;
+  }
+
+  if (/^(Notify|Reset|Select|Launch|Sort|SortByColumns|Search|ForAll)\s*\(/i.test(trimmed)) {
+    await executeClientHost(trimmed, services);
     return;
   }
 

@@ -1,7 +1,7 @@
 import type { Monaco } from "@monaco-editor/react";
 import type * as MonacoEditor from "monaco-editor";
 import { getPropertyDefinitions } from "../../property-metadata/registry";
-import { FORMULA_SUGGESTIONS } from "./formula-editor-suggestions";
+import { FORMULA_SUGGESTIONS, getFormulaSuggestions, refreshFormulaSuggestions } from "./formula-editor-suggestions";
 import { getFormulaHintSnapshot } from "./formula-hint-source";
 
 const POWERFX_LANGUAGE = "powerfx";
@@ -18,6 +18,7 @@ export function setupMonacoFormulaEditor(monaco: Monaco): void {
     return;
   }
   registered = true;
+  void refreshFormulaSuggestions();
 
   monaco.languages.register({ id: POWERFX_LANGUAGE });
   monaco.languages.setMonarchTokensProvider(POWERFX_LANGUAGE, {
@@ -72,7 +73,7 @@ export function setupMonacoFormulaEditor(monaco: Monaco): void {
       }
 
       const names = [
-        ...FORMULA_SUGGESTIONS.map((label) => ({
+        ...getFormulaSuggestions().map((label) => ({
           label,
           kind: monaco.languages.CompletionItemKind.Function,
         })),

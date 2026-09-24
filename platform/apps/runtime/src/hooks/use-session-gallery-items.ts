@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useResolvedGalleryRecords } from "./use-resolved-gallery-items";
-import { normalizeGalleryRecords } from "../utils/gallery-rows";
+import { normalizeGalleryRecords, readItemsFormula } from "../utils/gallery-rows";
 import { useRuntime } from "../runtime-hooks";
 import {
   fetchRuntimeGallery,
@@ -31,6 +31,7 @@ export function useSessionGalleryItems(
     runtimeUnavailable,
   } = useRuntime();
   const fallbackRecords = useResolvedGalleryRecords(items);
+  const usesComponentScope = Boolean(readItemsFormula(items)?.includes("Component."));
   const hasSession = Boolean(
     sessionId && appId && controlId && !runtimeUnavailable,
   );
@@ -88,7 +89,7 @@ export function useSessionGalleryItems(
     void load();
   }, [load, refreshTick, galleryRefreshTick]);
 
-  if (hasSession && sessionReady) {
+  if (!usesComponentScope && hasSession && sessionReady) {
     return {
       records: sessionRecords,
       source,

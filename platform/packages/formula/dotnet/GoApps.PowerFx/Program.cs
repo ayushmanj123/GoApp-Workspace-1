@@ -61,6 +61,9 @@ public static class Program
 
         app.MapGet("/health", () => Results.Json(new { ok = true }));
 
+        app.MapGet("/functions", (PowerFxEvaluator evaluator) =>
+            Results.Json(new { ok = true, functions = evaluator.ListFunctions() }, JsonOptions));
+
         app.MapPost("/evaluate", (EvaluateRequest request, PowerFxEvaluator evaluator) =>
         {
             if (string.IsNullOrWhiteSpace(request.Formula))

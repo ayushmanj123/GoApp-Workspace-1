@@ -53,6 +53,10 @@ export default function App() {
           path="/studio/apps/:applicationId/screens/:screenId"
           element={<StudioLayout />}
         />
+        <Route
+          path="/studio/apps/:applicationId/components/:definitionId"
+          element={<StudioLayout />}
+        />
       </Route>
       <Route path="/" element={<Navigate to="/studio" replace />} />
       <Route path="*" element={<Navigate to="/studio" replace />} />

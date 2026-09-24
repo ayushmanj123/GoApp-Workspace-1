@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/goapps-platform/metadata-service/internal/models"
 	"github.com/goapps-platform/metadata-service/internal/repositories"
@@ -42,6 +43,26 @@ func (s *ComponentDefinitionService) Get(ctx context.Context, tenantID, id uuid.
 	entity, err := sess.ComponentDefinitions().GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("get component definition: %w", err)
+	}
+	return entity, nil
+}
+
+func (s *ComponentDefinitionService) Update(ctx context.Context, tenantID, id uuid.UUID, name string, definition map[string]interface{}) (*models.ComponentDefinition, error) {
+	raw, err := json.Marshal(definition)
+	if err != nil {
+		return nil, fmt.Errorf("marshal component definition: %w", err)
+	}
+	sess := s.store.WithTenant(ctx, tenantID)
+	entity, err := sess.ComponentDefinitions().GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("get component definition: %w", err)
+	}
+	if strings.TrimSpace(name) != "" {
+		entity.Name = strings.TrimSpace(name)
+	}
+	entity.DefinitionJSON = datatypes.JSON(raw)
+	if err := sess.ComponentDefinitions().Update(ctx, entity); err != nil {
+		return nil, fmt.Errorf("update component definition: %w", err)
 	}
 	return entity, nil
 }

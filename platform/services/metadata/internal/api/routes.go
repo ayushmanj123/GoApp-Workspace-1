@@ -91,6 +91,9 @@ func RegisterRoutes(app *fiber.App, store repositories.Store, middlewares ...fib
 	v1.Get("/component-definitions/:id", func(c *fiber.Ctx) error {
 		return handlers.NewComponentDefinitionHandler(store).Get(c)
 	})
+	v1.Put("/component-definitions/:id", admin, func(c *fiber.Ctx) error {
+		return handlers.NewComponentDefinitionHandler(store).Update(c)
+	})
 
 	// Entities
 	v1.Post("/applications/:appId/entities", admin, func(c *fiber.Ctx) error {

@@ -759,3 +759,64 @@ func TestOverlayVariableAndControlProperty(t *testing.T) {
 		t.Fatalf("session variable should win over overlay: %#v %v", updated, err)
 	}
 }
+
+func TestNotifyResetSelectLaunch(t *testing.T) {
+	evaluator := NewEvaluator()
+	rtCtx := testRuntimeContext(t)
+
+	message, err := evaluator.Evaluate(rtCtx, `Notify("Saved")`)
+	if err != nil || message != "Saved" {
+		t.Fatalf("notify: %#v %v", message, err)
+	}
+	reset, err := evaluator.Evaluate(rtCtx, `Reset(Slider)`)
+	if err != nil || reset != true {
+		t.Fatalf("reset: %#v %v", reset, err)
+	}
+	selected, err := evaluator.Evaluate(rtCtx, `Select(Button1)`)
+	if err != nil || selected != true {
+		t.Fatalf("select: %#v %v", selected, err)
+	}
+	launched, err := evaluator.Evaluate(rtCtx, `Launch("https://example.com")`)
+	if err != nil || launched != "https://example.com" {
+		t.Fatalf("launch: %#v %v", launched, err)
+	}
+}
+
+func TestSortSearchAndForAll(t *testing.T) {
+	evaluator := NewEvaluator()
+	rtCtx := testRuntimeContext(t)
+
+	if _, err := evaluator.Evaluate(rtCtx, `Collect(People, { Name: "Zoe" })`); err != nil {
+		t.Fatalf("collect zoe: %v", err)
+	}
+	if _, err := evaluator.Evaluate(rtCtx, `Collect(People, { Name: "Amy" })`); err != nil {
+		t.Fatalf("collect amy: %v", err)
+	}
+	if _, err := evaluator.Evaluate(rtCtx, `Sort(People, "Name")`); err != nil {
+		t.Fatalf("sort: %v", err)
+	}
+	first, ok := rtCtx.State.First("People")
+	if !ok || recordField(first, "Name") != "Amy" {
+		t.Fatalf("sort order: %#v", first)
+	}
+	if _, err := evaluator.Evaluate(rtCtx, `SortByColumns(People, "Name", Descending)`); err != nil {
+		t.Fatalf("sort by columns: %v", err)
+	}
+	first, ok = rtCtx.State.First("People")
+	if !ok || recordField(first, "Name") != "Zoe" {
+		t.Fatalf("descending order: %#v", first)
+	}
+	if _, err := evaluator.Evaluate(rtCtx, `Search(People, "Am", "Name")`); err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if rtCtx.State.CountRows("People") != 1 {
+		t.Fatalf("search rows: %d", rtCtx.State.CountRows("People"))
+	}
+	if _, err := evaluator.Evaluate(rtCtx, `ForAll(People, Set(lastName, ThisRecord.Name))`); err != nil {
+		t.Fatalf("forall: %v", err)
+	}
+	lastName, ok := rtCtx.State.GetVariable("lastName")
+	if !ok || lastName != "Amy" {
+		t.Fatalf("forall value: %#v", lastName)
+	}
+}

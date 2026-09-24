@@ -8,6 +8,7 @@ export interface ParsedSubmitForm {
 export interface SubmitFormControl {
   name?: string;
   control_type?: string;
+  properties?: Record<string, unknown> | null;
   children?: SubmitFormControl[];
 }
 

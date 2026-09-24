@@ -8,6 +8,9 @@ export {
   readStaticPropertyValue,
 } from "./resolve-property-value.js";
 export {
+  asFormulaTable,
   buildControlFormulaSymbols,
+  coerceControlSymbolFields,
   type FormulaControlContextInput,
+  type FormulaSymbolValue,
 } from "./control-formula-context.js";

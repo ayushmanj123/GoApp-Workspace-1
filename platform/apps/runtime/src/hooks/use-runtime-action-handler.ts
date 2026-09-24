@@ -8,13 +8,17 @@ import {
   useGallerySelectionStore,
   useFormUpdatesStore,
   useRecordStore,
+  useControlValueStore,
 } from "../formula/formula-context";
 import {
   useNavigationStore,
   useScreenResolver,
   useRuntime,
 } from "../runtime-hooks";
-import { executeRuntimeAction } from "../formula/execute-runtime-action";
+import {
+  executeRuntimeAction,
+  type RuntimeActionServices,
+} from "../formula/execute-runtime-action";
 import { executeAction } from "../formula/execute-action";
 import { flushAllFormUpdates } from "../formula/form-update-flush";
 import type { RuntimeNavigationStore } from "../formula/runtime-navigation-store";
@@ -48,6 +52,7 @@ export function useRuntimeActionHandler(
   const gallerySelectionStore = useGallerySelectionStore();
   const formUpdatesStore = useFormUpdatesStore();
   const recordStore = useRecordStore();
+  const controlValueStore = useControlValueStore();
   const navigationStore = useNavigationStore() ?? noopNavigationStore;
   const resolveScreenId = useScreenResolver() ?? (() => undefined);
   const {
@@ -59,6 +64,7 @@ export function useRuntimeActionHandler(
     navigateFromServer,
     runtimeUnavailable,
     reportActionError,
+    reportNotice,
     clearActionError,
     bumpFormRefresh,
     bumpGalleryRefresh,
@@ -73,7 +79,7 @@ export function useRuntimeActionHandler(
       return;
     }
 
-    const actionServices = {
+    const actionServices: RuntimeActionServices = {
       store,
       screenContextStore,
       collectionStore,
@@ -85,6 +91,8 @@ export function useRuntimeActionHandler(
       resolveScreenId,
       engine,
       context,
+      controlValueStore,
+      notify: reportNotice,
       session:
         sessionId && appId && currentScreenName && !runtimeUnavailable
           ? { appId, sessionId, screen: currentScreenName }
@@ -95,6 +103,16 @@ export function useRuntimeActionHandler(
       ],
       navigateFromServer: navigateFromServer ?? undefined,
       bumpGalleryRefresh,
+    };
+    actionServices.runFormula = async (nextFormula: string) => {
+      if (actionServices.session) {
+        await executeRuntimeAction(
+          { formula: nextFormula, controlName, event },
+          actionServices,
+        );
+      } else {
+        await executeAction({ formula: nextFormula }, actionServices);
+      }
     };
 
     try {
@@ -130,6 +148,7 @@ export function useRuntimeActionHandler(
     collectionStore,
     formUpdatesStore,
     recordStore,
+    controlValueStore,
     controls,
     gallerySelectionStore,
     navigationStore,
@@ -145,6 +164,7 @@ export function useRuntimeActionHandler(
     runtimeUnavailable,
     pkg,
     reportActionError,
+    reportNotice,
     clearActionError,
     bumpFormRefresh,
     bumpGalleryRefresh,

@@ -90,9 +90,10 @@ function RenameInput({ initialValue, onCommit, onCancel }: RenameInputProps) {
 }
 
 export function ExplorerPanel() {
-  const { applicationId: routeAppId, screenId: routeScreenId } = useParams<{
+  const { applicationId: routeAppId, screenId: routeScreenId, definitionId } = useParams<{
     applicationId?: string;
     screenId?: string;
+    definitionId?: string;
   }>();
   const navigate = useNavigate();
 
@@ -128,6 +129,7 @@ export function ExplorerPanel() {
     deleteScreen,
     componentDefinitions,
     componentDefinitionsLoading,
+    createComponentFromTemplate,
   } = useApplicationStore();
 
   const [renamingScreenId, setRenamingScreenId] = useState<string | null>(null);
@@ -154,6 +156,10 @@ export function ExplorerPanel() {
     const app = applications.find((a) => a.id === routeAppId);
     if (!app) return;
 
+    if (definitionId) {
+      setActiveApp(routeAppId, app.name);
+      return;
+    }
     if (selectedApplicationId !== routeAppId) {
       selectApplication(routeAppId);
       setActiveApp(routeAppId, app.name);
@@ -162,7 +168,7 @@ export function ExplorerPanel() {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routeAppId, routeScreenId, applications.length]);
+  }, [routeAppId, routeScreenId, definitionId, applications.length]);
 
   useEffect(() => {
     if (!selectedScreenId) return;
@@ -396,16 +402,42 @@ export function ExplorerPanel() {
               ) : (
                 <ul className={styles.componentList}>
                   {componentDefinitions.map((definition) => (
-                    <li
-                      key={definition.id}
-                      className={styles.componentItem}
-                      data-testid={`explorer-component-def-${definition.name}`}
-                    >
-                      {definition.name}
+                    <li key={definition.id}>
+                      <button
+                        type="button"
+                        className={styles.componentItem}
+                        data-testid={`explorer-component-def-${definition.name}`}
+                        onClick={() => {
+                          if (!selectedApplicationId) return;
+                          navigate(`/studio/apps/${selectedApplicationId}/components/${definition.id}`);
+                        }}
+                      >
+                        {definition.name}
+                      </button>
                     </li>
                   ))}
                 </ul>
               )}
+              <div className={styles.sectionHeader}>
+                <span>New</span>
+              </div>
+              {(["blank", "list", "record-form"] as const).map((template) => (
+                <button
+                  key={template}
+                  type="button"
+                  className={styles.layerActionBtn}
+                  onClick={() => {
+                    if (!selectedApplicationId) return;
+                    const name = window.prompt("Component name", template === "record-form" ? "RecordForm" : template === "list" ? "RecordList" : "Component");
+                    if (!name?.trim()) return;
+                    void createComponentFromTemplate(selectedApplicationId, template, name.trim()).then((created) => {
+                      navigate(`/studio/apps/${selectedApplicationId}/components/${created.id}`);
+                    });
+                  }}
+                >
+                  {template === "blank" ? "Blank" : template === "list" ? "List" : "Record form"}
+                </button>
+              ))}
             </div>
           )}
 

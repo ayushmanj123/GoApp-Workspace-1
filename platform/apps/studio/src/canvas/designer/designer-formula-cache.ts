@@ -79,12 +79,19 @@ function isFormulaEntry(value: unknown): value is { formula: string } {
   );
 }
 
-export function useDesignerFormulaSync(controls: Control[], appName: string): number {
+export function useDesignerFormulaSync(
+  controls: Control[],
+  appName: string,
+  componentScope?: Record<string, unknown>,
+): number {
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    const context = buildStudioFormulaContext(appName, controls);
+    const context = {
+      ...buildStudioFormulaContext(appName, controls),
+      ...(componentScope ? { Component: componentScope } : {}),
+    };
     const literal = new LiteralFormulaEngine();
 
     void (async () => {
@@ -119,7 +126,7 @@ export function useDesignerFormulaSync(controls: Control[], appName: string): nu
     return () => {
       cancelled = true;
     };
-  }, [controls, appName]);
+  }, [controls, appName, componentScope]);
 
   useEffect(() => {
     const listener = () => setRevision((value) => value + 1);

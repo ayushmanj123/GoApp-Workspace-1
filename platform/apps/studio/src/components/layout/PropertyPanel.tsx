@@ -23,9 +23,13 @@ import {
 import { useStudioStore } from "../../store/studioStore";
 import { useApplicationStore } from "../../store/applicationStore";
 import { buildStudioFormulaContext } from "../../utils/build-studio-formula-context";
+import { readComponentDefinitionId } from "../../utils/component-definition";
+import { componentScopeDefaults } from "../../../../runtime/src/formula/component-scope";
 import { resolveFormEntity, resolveFormGoogleSheetsConnector } from "../../utils/generate-form-fields";
 import { isGoogleSheetsConnector } from "../../utils/google-sheets-columns";
 import { PropertyCard, TabBar } from "../ui";
+import { ComponentCustomProperties } from "./ComponentCustomProperties";
+import { ComponentInstanceFields } from "./ComponentInstanceFields";
 import styles from "./PropertyPanel.module.css";
 
 const ChevronLeftIcon = () => (
@@ -654,15 +658,26 @@ export function PropertyPanel() {
     void loadConnectors(applicationId);
   }, [applicationId, loadEntities, loadConnectors]);
 
+  const editingDefinitionId = useApplicationStore((s) => s.editingDefinitionId);
+  const componentProperties = useApplicationStore((s) => s.componentProperties);
+  const setComponentProperties = useApplicationStore((s) => s.setComponentProperties);
+  const componentDefinitions = useApplicationStore((s) => s.componentDefinitions);
   const selectedControl = controls.find(
     (control) => control.id === selectedControlId,
   );
+  const componentContract = selectedControl?.control_type === "component"
+    ? componentDefinitions.find((item) => item.id === readComponentDefinitionId(selectedControl.properties))
+        ?.definition_json?.properties ?? []
+    : [];
   const selectedScreen = screens.find((screen) => screen.id === selectedScreenId);
   const onVisibleFormula = selectedScreen?.on_visible ?? "";
   const propertyDefinitions = selectedControl
     ? getPropertyDefinitions(selectedControl.control_type)
     : [];
-  const evaluationContext = buildStudioFormulaContext(appName, controls);
+  const evaluationContext = {
+    ...buildStudioFormulaContext(appName, controls),
+    ...(editingDefinitionId ? { Component: componentScopeDefaults(componentProperties) } : {}),
+  };
   const resolvedFormEntity = selectedControl
     ? resolveFormEntity(selectedControl, entities)
     : null;
@@ -729,6 +744,26 @@ export function PropertyPanel() {
             }
           />
         <div className={styles.content}>
+          {editingDefinitionId && (
+            <ComponentCustomProperties
+              properties={componentProperties}
+              onChange={setComponentProperties}
+            />
+          )}
+          {selectedControl?.control_type === "component" && (
+            <ComponentInstanceFields
+              control={selectedControl}
+              contract={componentContract}
+              onChange={(name, entry) => {
+                updateControl(selectedControl.id, {
+                  properties: {
+                    ...(selectedControl.properties ?? {}),
+                    [name]: entry,
+                  },
+                });
+              }}
+            />
+          )}
           {selectedControl ? (
             <>
               <div className={styles.controlBadge}>

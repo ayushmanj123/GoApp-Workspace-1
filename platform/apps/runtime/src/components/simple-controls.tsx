@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useResolvedPropertyText } from "../hooks/use-resolved-property-text";
 import { useParentItemDefault } from "../hooks/use-parent-item-default";
 import { useRuntimeActionHandler } from "../hooks/use-runtime-action-handler";
@@ -113,6 +113,14 @@ export const Slider: React.FC<any> = (props) => {
   const runOnChange = useRuntimeActionHandler(onChange, resolvedName, "OnChange");
   const store = useControlValueStore();
   const chrome = useControlChrome(props, { disabled: Boolean(disabled || readOnly), includeText: false });
+  useEffect(() => {
+    if (!resolvedName) return;
+    return store.subscribe(() => {
+      if (store.get(resolvedName, "Value") == null) {
+        setLocal(external || "0");
+      }
+    });
+  }, [store, resolvedName, external]);
   const minN = readOptionalNumber(min) ?? 0;
   const maxN = readOptionalNumber(max) ?? 100;
   const show = readBooleanProperty(showValue, true);
@@ -144,7 +152,10 @@ export const Slider: React.FC<any> = (props) => {
           if (resolvedName) store.set(resolvedName, "Value", next);
           await runOnChange();
         }}
-        style={{ flex: 1 }}
+        style={{
+          flex: 1,
+          accentColor: typeof chrome.style.background === "string" ? chrome.style.background : undefined,
+        }}
         {...chrome.handlers}
       />
       {show ? <span>{local}</span> : null}
@@ -229,7 +240,10 @@ export const Progress: React.FC<any> = (props) => {
   const max = readOptionalNumber(props.max) ?? 100;
   const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
   const chrome = useControlChrome(props, { includeText: false });
-  const fill = typeof chrome.style.background === "string" ? chrome.style.background : "#4A90D9";
+  const fill =
+    (typeof chrome.style.background === "string" && chrome.style.background) ||
+    (typeof chrome.style.borderColor === "string" && chrome.style.borderColor) ||
+    "#4A90D9";
   return (
     <div
       role="progressbar"
@@ -244,7 +258,7 @@ export const Progress: React.FC<any> = (props) => {
         overflow: "hidden",
       }}
     >
-      <div style={{ height: "100%", background: fill, ...chrome.style, width: `${pct}%` }} />
+      <div style={{ height: "100%", width: `${pct}%`, background: fill }} />
     </div>
   );
 };

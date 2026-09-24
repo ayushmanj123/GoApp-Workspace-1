@@ -8,6 +8,24 @@ const baseStyle: React.CSSProperties = {
   pointerEvents: "none",
 };
 
+function designerColor(
+  source: Record<string, unknown> | undefined,
+  key: string,
+): string {
+  const value = readDesignerDisplay(source?.[key], "");
+  if (!value || value.startsWith("[")) return "";
+  return value;
+}
+
+function designerNumber(
+  source: Record<string, unknown> | undefined,
+  key: string,
+  fallback: number,
+): number {
+  const parsed = Number(designerColor(source, key));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export function DesignerButton({
   text = "Button",
   disabled = false,
@@ -384,7 +402,23 @@ export function DesignerRadio({ appearance }: { appearance?: Record<string, unkn
 }
 
 export function DesignerSlider({ appearance }: { appearance?: Record<string, unknown>; selected?: boolean }) {
-  return <input type="range" readOnly defaultValue={40} style={{ ...baseStyle, ...designerChromeStyle(appearance) }} />;
+  const chrome = designerChromeStyle(appearance);
+  const track = typeof chrome.background === "string" ? chrome.background : undefined;
+  return (
+    <input
+      type="range"
+      readOnly
+      min={designerNumber(appearance, "min", 0)}
+      max={designerNumber(appearance, "max", 100)}
+      value={designerNumber(appearance, "value", 0)}
+      style={{
+        ...baseStyle,
+        ...chrome,
+        background: "transparent",
+        accentColor: track,
+      }}
+    />
+  );
 }
 
 export function DesignerLink({ text, appearance }: { text?: unknown; appearance?: Record<string, unknown>; selected?: boolean }) {
@@ -404,9 +438,13 @@ export function DesignerBadge({ text, appearance }: { text?: unknown; appearance
 }
 
 export function DesignerProgress({ appearance }: { appearance?: Record<string, unknown>; selected?: boolean }) {
+  const value = designerNumber(appearance, "value", 0);
+  const max = designerNumber(appearance, "max", 100);
+  const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
+  const bar = designerColor(appearance, "fill") || designerColor(appearance, "borderColor") || "#4A90D9";
   return (
     <div style={{ ...baseStyle, background: "#e6e6e6", borderRadius: 999, overflow: "hidden" }}>
-      <div style={{ width: "40%", height: "100%", background: "#4A90D9", ...designerChromeStyle(appearance) }} />
+      <div style={{ width: `${pct}%`, height: "100%", background: bar }} />
     </div>
   );
 }

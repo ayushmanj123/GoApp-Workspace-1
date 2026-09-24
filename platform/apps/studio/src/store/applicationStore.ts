@@ -5,6 +5,7 @@ import { controlsApi, type Control } from "../api/controls-api";
 import { propertiesApi } from "../api/properties-api";
 import {
   componentDefinitionsApi,
+  type ComponentCustomProperty,
   type ComponentDefinitionRecord,
 } from "../api/component-definitions-api";
 import {
@@ -31,9 +32,14 @@ import {
 } from "../utils/google-sheets-columns";
 import { computeLayerUpdates, type LayerAction } from "../utils/layer-actions";
 import {
+  COMPONENT_DRAFT_SCREEN_ID,
   computeComponentBounds,
+  controlsFromSnapshots,
+  instanceInputProperties,
   snapshotControlSubtree,
+  snapshotsFromControls,
 } from "../utils/component-definition";
+import { componentTemplate, type ComponentTemplateId } from "../utils/component-templates";
 import { createLocalControlId, isLocalControlId } from "../utils/control-ids";
 import { withLockedProperty } from "../utils/control-lock";
 import { buildUniqueScreenName, buildFallbackScreenName } from "../utils/screen-names";
@@ -74,6 +80,9 @@ export interface ApplicationState {
   selectedApplicationId: string | null;
   selectedScreenId: string | null;
   selectedEntityId: string | null;
+  editingDefinitionId: string | null;
+  editingDefinitionName: string;
+  componentProperties: ComponentCustomProperty[];
 
   // Loading / error
   appsLoading: boolean;
@@ -109,6 +118,15 @@ export interface ApplicationState {
   ) => Promise<void>;
   selectEntity: (entityId: string | null) => void;
   createComponentFromSelection: (controlId: string, name: string) => Promise<void>;
+  createComponentFromTemplate: (
+    applicationId: string,
+    template: ComponentTemplateId,
+    name: string,
+  ) => Promise<ComponentDefinitionRecord>;
+  openComponentEditor: (applicationId: string, definitionId: string) => Promise<void>;
+  clearComponentEditor: () => void;
+  setComponentProperties: (properties: ComponentCustomProperty[]) => void;
+  saveComponentDefinition: () => Promise<SaveScreenResult>;
   insertComponentInstance: (definitionId: string) => void;
   saveScreen: () => Promise<SaveScreenResult>;
   selectApplication: (id: string) => void;
@@ -159,6 +177,9 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
   selectedApplicationId: null,
   selectedScreenId: null,
   selectedEntityId: null,
+  editingDefinitionId: null,
+  editingDefinitionName: "",
+  componentProperties: [],
   appsLoading: false,
   screensLoading: false,
   createScreenLoading: false,
@@ -215,6 +236,9 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
       entityFieldsByEntityId: {},
       connectors: [],
       selectedEntityId: null,
+      editingDefinitionId: null,
+      editingDefinitionName: "",
+      componentProperties: [],
       entitiesError: null,
       connectorsError: null,
       dataLoadError: null,
@@ -235,6 +259,9 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
   },
 
   loadControls: async (screenId: string) => {
+    if (get().editingDefinitionId || screenId === COMPONENT_DRAFT_SCREEN_ID) {
+      return;
+    }
     const seq = ++controlsLoadSeq;
     set({ controlsLoading: true, controlsError: null });
     try {
@@ -450,6 +477,83 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
     await get().loadComponentDefinitions(selectedApplicationId);
   },
 
+  createComponentFromTemplate: async (applicationId, template, name) => {
+    const created = await componentDefinitionsApi.create(applicationId, {
+      name,
+      definition: componentTemplate(template),
+    });
+    if (get().selectedApplicationId === applicationId) {
+      await get().loadComponentDefinitions(applicationId);
+    }
+    return created;
+  },
+
+  openComponentEditor: async (applicationId, definitionId) => {
+    if (get().selectedApplicationId !== applicationId) {
+      get().selectApplication(applicationId);
+    }
+    const definition = await componentDefinitionsApi.get(definitionId);
+    const snapshots = definition.definition_json?.controls ?? [];
+    set({
+      editingDefinitionId: definition.id,
+      editingDefinitionName: definition.name,
+      componentProperties: definition.definition_json?.properties ?? [],
+      selectedScreenId: COMPONENT_DRAFT_SCREEN_ID,
+      controls: controlsFromSnapshots(snapshots),
+      controlsLoading: false,
+      controlsError: null,
+    });
+    useStudioStore.getState().selectControl(null);
+    useStudioStore.getState().setActiveScreen(COMPONENT_DRAFT_SCREEN_ID, definition.name);
+    useStudioStore.getState().setDirty(false);
+    useStudioStore.getState().setSaveMessage(null);
+  },
+
+  clearComponentEditor: () => {
+    if (!get().editingDefinitionId) return;
+    set({
+      editingDefinitionId: null,
+      editingDefinitionName: "",
+      componentProperties: [],
+      selectedScreenId: null,
+      controls: [],
+    });
+    useStudioStore.getState().selectControl(null);
+  },
+
+  setComponentProperties: (properties) => {
+    set({ componentProperties: properties });
+    useStudioStore.getState().setDirty(true);
+    useStudioStore.getState().setSaveMessage(null);
+  },
+
+  saveComponentDefinition: async () => {
+    const { editingDefinitionId, editingDefinitionName, componentProperties, controls } = get();
+    if (!editingDefinitionId) {
+      return { success: false, errors: ["No component is open"] };
+    }
+    try {
+      await componentDefinitionsApi.update(editingDefinitionId, {
+        name: editingDefinitionName,
+        definition: {
+          properties: componentProperties,
+          controls: snapshotsFromControls(controls),
+        },
+      });
+      const applicationId = get().selectedApplicationId;
+      if (applicationId) {
+        await get().loadComponentDefinitions(applicationId);
+      }
+      useStudioStore.getState().setDirty(false);
+      return { success: true, errors: [] };
+    } catch (err) {
+      return {
+        success: false,
+        errors: [err instanceof Error ? err.message : "Failed to save component"],
+      };
+    }
+  },
+
   insertComponentInstance: (definitionId) => {
     const { controls, selectedScreenId, componentDefinitions, selectedApplicationId } = get();
     if (!selectedScreenId) {
@@ -489,6 +593,7 @@ export const useApplicationStore = create<ApplicationState>((set, get) => ({
       properties: {
         definition_id: { value: definition.id },
         definition_name: { value: definition.name },
+        ...instanceInputProperties(definition.definition_json?.properties ?? []),
       },
       deleted_at: null,
       CreatedOn: now,

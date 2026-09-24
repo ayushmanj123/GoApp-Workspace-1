@@ -131,7 +131,10 @@ export const Form: React.FC<{
   const resolvedTooltip = useResolvedPropertyText(tooltip);
   const isReadOnly =
     readOnly || disabled || formMode === "View" || chromeMode === "View" || chromeMode === "Disabled";
-  const hasSession = Boolean(sessionId && appId && controlId && !runtimeUnavailable);
+  const usesComponentItem = readItemFormula(item).includes("Component.");
+  const hasSession = Boolean(
+    sessionId && appId && controlId && !runtimeUnavailable && !usesComponentItem,
+  );
 
   const applySessionState = useCallback(
     (state: RuntimeFormState) => {

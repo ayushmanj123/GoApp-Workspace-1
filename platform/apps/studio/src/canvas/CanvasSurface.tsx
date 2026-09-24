@@ -9,6 +9,7 @@ import { DesignerProvider } from "./designer/DesignerProvider";
 import { DesignerNodeRenderer } from "./designer/DesignerNodeRenderer";
 import { buildDesignerNodeRegistry } from "./designer/DesignerNodeRegistry";
 import { designerFormulaEntry, useDesignerFormulaSync } from "./designer/designer-formula-cache";
+import { componentScopeDefaults } from "../../../runtime/src/formula/component-scope";
 import { useInteractionStore } from "./interaction/interactionStore";
 import { useCanvasEventRouter } from "./interaction/useCanvasEventRouter";
 import { hitTestContainerAtPoint } from "./interaction/HitTestService";
@@ -74,7 +75,12 @@ export function CanvasSurface() {
     [size.width, size.height, zoom],
   );
 
-  const formulaRevision = useDesignerFormulaSync(controls, appName);
+  const editingDefinitionId = useApplicationStore((s) => s.editingDefinitionId);
+  const componentProperties = useApplicationStore((s) => s.componentProperties);
+  const componentScope = editingDefinitionId
+    ? componentScopeDefaults(componentProperties)
+    : undefined;
+  const formulaRevision = useDesignerFormulaSync(controls, appName, componentScope);
   const designerNodes = useMemo(
     () => buildDesignerNodeRegistry(controls),
     [controls, formulaRevision],

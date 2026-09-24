@@ -1,13 +1,32 @@
 import { apiClient, PagedData } from "./metadata-client";
 
+export type ComponentPropertyDirection = "input" | "output" | "action";
+export type ComponentPropertyDataType =
+  | "text"
+  | "number"
+  | "boolean"
+  | "color"
+  | "record"
+  | "table";
+
+export interface ComponentCustomProperty {
+  name: string;
+  direction: ComponentPropertyDirection;
+  dataType: ComponentPropertyDataType;
+  formula?: string;
+}
+
+export interface ComponentDefinitionJson {
+  properties?: ComponentCustomProperty[];
+  controls: ComponentSnapshotControl[];
+}
+
 export interface ComponentDefinitionRecord {
   id: string;
   tenant_id: string;
   application_id: string;
   name: string;
-  definition_json: {
-    controls: ComponentSnapshotControl[];
-  };
+  definition_json: ComponentDefinitionJson;
   CreatedOn?: string;
   ModifiedOn?: string;
 }
@@ -27,9 +46,12 @@ export interface ComponentSnapshotControl {
 
 export interface CreateComponentDefinitionPayload {
   name: string;
-  definition: {
-    controls: ComponentSnapshotControl[];
-  };
+  definition: ComponentDefinitionJson;
+}
+
+export interface UpdateComponentDefinitionPayload {
+  name?: string;
+  definition: ComponentDefinitionJson;
 }
 
 export const componentDefinitionsApi = {
@@ -44,6 +66,12 @@ export const componentDefinitionsApi = {
   create: (applicationId: string, payload: CreateComponentDefinitionPayload) =>
     apiClient.post<ComponentDefinitionRecord>(
       `/applications/${applicationId}/component-definitions`,
+      payload,
+    ),
+
+  update: (definitionId: string, payload: UpdateComponentDefinitionPayload) =>
+    apiClient.put<ComponentDefinitionRecord>(
+      `/component-definitions/${definitionId}`,
       payload,
     ),
 };

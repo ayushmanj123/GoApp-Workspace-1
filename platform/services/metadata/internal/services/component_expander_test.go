@@ -71,3 +71,100 @@ func TestExpandComponentInstancesMaterializesChildren(t *testing.T) {
 		t.Fatalf("expected label child, got %s", expanded[1].ControlType)
 	}
 }
+
+func TestExpandComponentInstancesSubstitutesInputs(t *testing.T) {
+	instanceID := uuid.New()
+	screenID := uuid.New()
+	defID := uuid.New()
+	defJSON, err := json.Marshal(componentDefinitionPayload{
+		Properties: []componentCustomProperty{{
+			Name:      "Items",
+			Direction: "input",
+			DataType:  "table",
+		}},
+		Controls: []componentSnapshotControl{{
+			LocalID:     "gallery",
+			ControlType: "gallery",
+			Name:        "Gallery1",
+			Width:       200,
+			Height:      120,
+			Properties: map[string]interface{}{
+				"items": map[string]interface{}{"formula": "Component.Items"},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("marshal definition: %v", err)
+	}
+	flat := []contracts.RuntimeControl{{
+		ID:          instanceID,
+		ScreenID:    screenID,
+		ControlType: "component",
+		Name:        "CustomerList",
+		Properties: map[string]interface{}{
+			"definition_id": map[string]interface{}{"value": defID.String()},
+			"Items":         map[string]interface{}{"formula": "Customers"},
+		},
+	}}
+	expanded, err := expandComponentInstances(flat, []models.ComponentDefinition{{
+		ID:             defID,
+		Name:           "CustomerList",
+		DefinitionJSON: datatypes.JSON(defJSON),
+	}})
+	if err != nil {
+		t.Fatalf("expand: %v", err)
+	}
+	items, _ := expanded[1].Properties["items"].(map[string]interface{})
+	if items["formula"] != "Customers" {
+		t.Fatalf("expected substituted items formula, got %#v", items)
+	}
+	contract, _ := expanded[0].Properties["component_contract"].(map[string]interface{})
+	if contract["value"] == nil {
+		t.Fatalf("expected component contract on the instance")
+	}
+}
+
+func TestExpandComponentInstancesKeepsEvaluatedTableFormulas(t *testing.T) {
+	instanceID := uuid.New()
+	screenID := uuid.New()
+	defID := uuid.New()
+	defJSON, err := json.Marshal(componentDefinitionPayload{
+		Properties: []componentCustomProperty{{
+			Name:      "Items",
+			Direction: "input",
+			DataType:  "table",
+		}},
+		Controls: []componentSnapshotControl{{
+			LocalID:     "gallery",
+			ControlType: "gallery",
+			Name:        "Gallery1",
+			Properties: map[string]interface{}{
+				"items": map[string]interface{}{"formula": "Component.Items"},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("marshal definition: %v", err)
+	}
+	expanded, err := expandComponentInstances([]contracts.RuntimeControl{{
+		ID:          instanceID,
+		ScreenID:    screenID,
+		ControlType: "component",
+		Name:        "OpenCustomers",
+		Properties: map[string]interface{}{
+			"definition_id": map[string]interface{}{"value": defID.String()},
+			"Items":         map[string]interface{}{"formula": `Filter(Customers, Status = "Open")`},
+		},
+	}}, []models.ComponentDefinition{{
+		ID:             defID,
+		Name:           "OpenCustomers",
+		DefinitionJSON: datatypes.JSON(defJSON),
+	}})
+	if err != nil {
+		t.Fatalf("expand: %v", err)
+	}
+	items, _ := expanded[1].Properties["items"].(map[string]interface{})
+	if items["formula"] != "Component.Items" {
+		t.Fatalf("expected the table formula to stay on the component scope, got %#v", items)
+	}
+}

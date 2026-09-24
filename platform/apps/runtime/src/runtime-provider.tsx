@@ -57,8 +57,10 @@ export interface RuntimeContextValue {
   loading: boolean;
   loadError?: string | null;
   actionError?: string | null;
+  notice?: string | null;
   clearActionError?: () => void;
   reportActionError?: (message: string) => void;
+  reportNotice?: (message: string) => void;
   currentScreen?: string;
   navigate: (screenId: string, options?: { preserveState?: boolean }) => void;
   variables: Record<string, any>;
@@ -248,6 +250,7 @@ export const RuntimeProvider: React.FC<{
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [renderLoading, setRenderLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [sessionInitComplete, setSessionInitComplete] = useState(false);
@@ -260,6 +263,9 @@ export const RuntimeProvider: React.FC<{
   const clearActionError = useCallback(() => setActionError(null), []);
   const reportActionError = useCallback((message: string) => {
     setActionError(message);
+  }, []);
+  const reportNotice = useCallback((message: string) => {
+    setNotice(message);
   }, []);
   const bumpFormRefresh = useCallback(() => {
     setFormRefreshTick((value) => value + 1);
@@ -554,8 +560,10 @@ export const RuntimeProvider: React.FC<{
               loading: loading || renderLoading,
               loadError,
               actionError,
+              notice,
               clearActionError,
               reportActionError,
+              reportNotice,
               currentScreen,
               navigate,
               variables,

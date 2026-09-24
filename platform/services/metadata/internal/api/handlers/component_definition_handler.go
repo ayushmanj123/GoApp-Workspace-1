@@ -84,3 +84,27 @@ func (h *componentDefinitionHandler) Get(c *fiber.Ctx) error {
 	}
 	return c.JSON(api.APIResponse{Success: true, Data: def})
 }
+
+func (h *componentDefinitionHandler) Update(c *fiber.Ctx) error {
+	var req api.UpdateComponentDefinitionRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: err.Error()})
+	}
+	if err := h.v.Struct(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: err.Error()})
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(api.APIResponse{Success: false, Error: "invalid id"})
+	}
+	tid, err := tenant.GetTenantID(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(api.APIResponse{Success: false, Error: "tenant missing"})
+	}
+	ctx := context.Background()
+	def, err := h.svc.Update(ctx, tid, id, req.Name, req.Definition)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(api.APIResponse{Success: false, Error: err.Error()})
+	}
+	return c.JSON(api.APIResponse{Success: true, Data: def})
+}

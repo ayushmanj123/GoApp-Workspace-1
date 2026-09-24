@@ -23,6 +23,20 @@ export const RuntimeShell: React.FC = () => {
   return (
     <div style={{ padding: 12 }}>
       <ConnectorOAuthBanner pkg={ctx.pkg} onConnected={reload} />
+      {ctx.notice ? (
+        <div
+          role="status"
+          style={{
+            marginBottom: 12,
+            padding: "8px 12px",
+            background: "#e8f0fe",
+            color: "#1a56db",
+            borderRadius: 6,
+          }}
+        >
+          {ctx.notice}
+        </div>
+      ) : null}
       {ctx.actionError ? (
         <div
           role="alert"

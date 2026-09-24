@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import { useStudioStore } from "../../store/studioStore";
+import { useApplicationStore } from "../../store/applicationStore";
 import { TopBar } from "./TopBar";
 import { NavRail } from "./NavRail";
 import { ExplorerPanel } from "./ExplorerPanel";
@@ -20,7 +21,12 @@ import styles from "./StudioLayout.module.css";
 export function StudioLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { applicationId: routeApplicationId } = useParams<{ applicationId?: string }>();
+  const { applicationId: routeApplicationId, definitionId } = useParams<{
+    applicationId?: string;
+    definitionId?: string;
+  }>();
+  const openComponentEditor = useApplicationStore((s) => s.openComponentEditor);
+  const clearComponentEditor = useApplicationStore((s) => s.clearComponentEditor);
   const isLibraryView = location.pathname.startsWith("/studio/components");
   const propertiesCollapsed = useStudioStore((s) => s.propertiesCollapsed);
   const explorerCollapsed = useStudioStore((s) => s.explorerCollapsed);
@@ -42,6 +48,14 @@ export function StudioLayout() {
       navigate("/studio", { replace: true });
     }
   }, [isLibraryView, routeApplicationId, navigate]);
+
+  useEffect(() => {
+    if (!definitionId || !routeApplicationId) {
+      clearComponentEditor();
+      return;
+    }
+    void openComponentEditor(routeApplicationId, definitionId);
+  }, [definitionId, routeApplicationId, openComponentEditor, clearComponentEditor]);
 
   const handlePreview = () => {
     if (dirty) {

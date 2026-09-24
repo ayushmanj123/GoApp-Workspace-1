@@ -162,7 +162,11 @@ export const ControlRenderer: React.FC<Props> = ({
   } else if (typeKey === "DataCard") {
     props.templateControls = childControls;
     props.name = (control as any).name;
-  } else if (typeKey === "Component" || typeKey === "Container") {
+  } else if (typeKey === "Component") {
+    props.templateControls = childControls;
+    props.instanceProperties = (control as { properties?: Record<string, unknown> }).properties;
+    props.componentContract = (control as { properties?: Record<string, unknown> }).properties?.component_contract;
+  } else if (typeKey === "Container") {
     props.templateControls = childControls;
   } else if (typeKey === "Label" && inputId) {
     props.htmlFor = inputId;

@@ -93,6 +93,11 @@ type CreateComponentDefinitionRequest struct {
 	Definition map[string]interface{} `json:"definition" validate:"required"`
 }
 
+type UpdateComponentDefinitionRequest struct {
+	Name       string                 `json:"name" validate:"omitempty,min=1,max=200"`
+	Definition map[string]interface{} `json:"definition" validate:"required"`
+}
+
 // Entity DTOs
 type CreateEntityRequest struct {
 	Name              string `json:"name" validate:"required,min=1,max=200"`

@@ -39,34 +39,27 @@ function sanitizePowerFxValue(value: unknown): unknown {
   return undefined;
 }
 
-async function tryPowerFx(
-  formula: string,
-  context?: Record<string, unknown>,
-): Promise<unknown> {
+async function powerFxAvailable(): Promise<boolean> {
   if (!displayEngine) displayEngine = createDefaultFormulaEngine();
   if (!displayEngineReady) {
     const engine = displayEngine;
     displayEngineReady = engine.initialize().then(() => true).catch(() => false);
   }
-  if (!(await displayEngineReady)) {
-    throw new Error("Power Fx display engine is unavailable.");
-  }
-  return displayEngine.evaluate(formula, powerFxContext(context));
+  return displayEngineReady;
 }
 
 /**
  * Evaluates a property value formula.
- * Prefers the Power Fx service (same engine the formula editor validates against),
- * then the runtime session engine with the full client context.
+ * Uses the Power Fx service when it is up, and surfaces that engine's errors.
+ * The session engine is only used when the Power Fx service cannot be reached.
  */
 export async function evaluateDisplayFormula(
   formula: string,
   context: Record<string, unknown> | undefined,
   sessionEngine: FormulaEngine,
 ): Promise<unknown> {
-  try {
-    return await tryPowerFx(formula, context);
-  } catch {
-    return sessionEngine.evaluate(formula, context);
+  if (await powerFxAvailable()) {
+    return displayEngine!.evaluate(formula, powerFxContext(context));
   }
+  return sessionEngine.evaluate(formula, context);
 }

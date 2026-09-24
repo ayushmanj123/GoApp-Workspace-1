@@ -74,6 +74,22 @@ func (d *Dispatcher) Dispatch(rtCtx *RuntimeFormulaContext, formula string) (any
 		return d.execRefresh(rtCtx, trimmed)
 	case strings.HasPrefix(strings.ToUpper(trimmed), "IF("):
 		return d.execIf(rtCtx, trimmed)
+	case strings.HasPrefix(strings.ToUpper(trimmed), "NOTIFY("):
+		return d.execNotify(rtCtx, trimmed)
+	case strings.HasPrefix(strings.ToUpper(trimmed), "RESET("):
+		return d.execReset(rtCtx, trimmed)
+	case strings.HasPrefix(strings.ToUpper(trimmed), "SELECT("):
+		return d.execSelect(rtCtx, trimmed)
+	case strings.HasPrefix(strings.ToUpper(trimmed), "LAUNCH("):
+		return d.execLaunch(rtCtx, trimmed)
+	case strings.HasPrefix(strings.ToUpper(trimmed), "SORTBYCOLUMNS("):
+		return d.execSortByColumns(rtCtx, trimmed)
+	case strings.HasPrefix(strings.ToUpper(trimmed), "SORT("):
+		return d.execSort(rtCtx, trimmed)
+	case strings.HasPrefix(strings.ToUpper(trimmed), "SEARCH("):
+		return d.execSearch(rtCtx, trimmed)
+	case strings.HasPrefix(strings.ToUpper(trimmed), "FORALL("):
+		return d.execForAll(rtCtx, trimmed)
 	case strings.EqualFold(strings.TrimSpace(trimmed), "Back()"):
 		return d.execBack(rtCtx, trimmed)
 	default:
